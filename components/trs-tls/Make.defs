@@ -1,0 +1,11 @@
+
+CSRCS +=  trs_tls.c
+
+VPATH += trs-tls
+
+INCPATHS += trs-tls $(TOPDIR)/components/mbedtls/include
+
+
+
+
+
