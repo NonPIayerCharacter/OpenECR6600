@@ -24,7 +24,6 @@ SECTIONS
   .text : 
     {
 	KEEP(*(.vector_init ));
-	*libboard.a:(.text .text.*)
 	*libpsm.a:(.text .text.*)
 
 	TEXT_BEGIN_DRV = .;

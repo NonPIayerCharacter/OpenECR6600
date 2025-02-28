@@ -14,7 +14,7 @@ ifeq ($(CONFIG_LWIP),y)
 		autoip.c dhcp.c etharp.c icmp.c igmp.c raw.c  timeouts.c sys.c tcp.c \
 		tcp_in.c tcp_out.c udp.c mem.c memp.c netif.c pbuf.c  init.c \
 		api_lib.c api_msg.c err.c sockets.c tcpip.c ethernet.c netbuf.c netdb.c netifapi.c \
-		ping.c dhcpserver.c napt.c\
+		ping.c dhcpserver.c napt.c mqtt.c sntp.c \
 	
 	ifeq ($(CONFIG_IPV6),y)
 		CSRCS += dhcp6.c ethip6.c icmp6.c inet6.c ip6.c ip6_addr.c ip6_frag.c mld6.c nd6.c ping6.c
@@ -25,8 +25,11 @@ ifeq ($(CONFIG_LWIP),y)
 			:lwip/lwip-2.1.0/src/core \
 			:lwip/lwip-2.1.0/src/api \
 			:lwip/lwip-2.1.0/src/core/ipv4 \
-            :lwip/lwip-2.1.0/src/apps/ping \
+            		:lwip/lwip-2.1.0/src/apps/ping \
 			:lwip/lwip-2.1.0/src/apps/dhcpserver \
+			:lwip/lwip-2.1.0/src/apps/mqtt \
+			:lwip/lwip-2.1.0/src/apps/sntp \
+			:lwip/lwip-2.1.0/src/include \
 			
 	ifeq ($(CONFIG_IPV6),y)
 		VPATH += :lwip/lwip-2.1.0/src/core/ipv6 
