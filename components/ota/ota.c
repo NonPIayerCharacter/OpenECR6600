@@ -801,7 +801,7 @@ int ota_done(bool reset)
         hal_system_reset(RST_TYPE_OTA);
     }
 
-    download_mem_release(&g_ota_download);
+    //download_mem_release(&g_ota_download);
 
     return DOWNLOAD_NONE_ERR;
 }
