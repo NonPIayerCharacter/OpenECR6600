@@ -246,7 +246,7 @@ struct _partion_info
 struct _partion_dev
 {
 	unsigned int num;
-	unsigned int index_reserved;
+	unsigned int index_cfg;
 	unsigned int index_nv_customer;
 	unsigned int index_nv_develop;
 	unsigned int index_nv_amt;
@@ -709,16 +709,14 @@ signed int amt_get_env_blob(const char *key, void *value_buf, signed int buf_len
 
 signed int obk_get_env_blob(const char *key, void *value_buf, signed int buf_len, signed int *value_len)
 {
-	if(partionDev.index_reserved == 0)
+	if(partionDev.index_cfg == 0)
 	{
-        EF_INFO("partition table no reserved partition.\n");
+        EF_INFO("partition table no cfg partition.\n");
 
 		return 0xffffffff;
 	}
-    return ef_get_env_blob_partion(partionDev.index_reserved, key, value_buf, buf_len, value_len);
+    return ef_get_env_blob_partion(partionDev.index_cfg, key, value_buf, buf_len, value_len);
 }
-
-
 
 /**
  * Get an ENV value by key name.
@@ -1402,14 +1400,14 @@ EfErrCode amt_set_env_blob(const char *key, const void *value_buf, signed int bu
 
 EfErrCode obk_set_env_blob(const char* key, const void* value_buf, signed int buf_len)
 {
-	if(partionDev.index_reserved == 0)
+	if(partionDev.index_cfg == 0)
 	{
-		EF_INFO("partition table no reserved partition.\n");
+		EF_INFO("partition table no cfg partition.\n");
 
 		return EF_WRITE_ERR;
 	}
 
-	return ef_set_env_blob_partion(partionDev.index_reserved, key, value_buf, buf_len);
+	return ef_set_env_blob_partion(partionDev.index_cfg, key, value_buf, buf_len);
 }
 
 
@@ -1909,8 +1907,8 @@ EfErrCode ef_env_init(ef_env const *default_env, signed int default_env_size) {
         result = ef_env_init_index(partionDev.index_nv_customer);
 		if(result != EF_READ_ERR)
 		{
-			if(partionDev.index_reserved != 0)
-	        	ef_env_init_index(partionDev.index_reserved);
+			if(partionDev.index_cfg != 0)
+	        	ef_env_init_index(partionDev.index_cfg);
 			if(partionDev.index_nv_develop != 0)
 	        	ef_env_init_index(partionDev.index_nv_develop);
 			if(partionDev.index_nv_amt != 0)
@@ -1962,9 +1960,9 @@ int partion_parser(env_meta_data_t env)
 	
 	pPartion->length = strtol(data, NULL, 0);
 
-	if(!strncmp(env->name, PARTION_NAME_RESERVED, strlen(PARTION_NAME_RESERVED)))
+	if(!strncmp(env->name, PARTION_NAME_CFG, strlen(PARTION_NAME_CFG)))
 	{
-		partionDev.index_reserved = partionDev.num - 1;
+		partionDev.index_cfg = partionDev.num - 1;
 	}
 	if (!strncmp(env->name, PARTION_NAME_NV_CUSTOMER, strlen(PARTION_NAME_NV_CUSTOMER)))
 	{

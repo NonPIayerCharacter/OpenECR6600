@@ -145,7 +145,7 @@ void develop_print_env(void);
 #define PARTION_NAME_NV_CUSTOMER	"nv_customer"
 #define PARTION_NAME_NV_DEVELOP		"nv_develop"
 #define PARTION_NAME_NV_AMT			"nv_amt"
-#define PARTION_NAME_RESERVED		"reserved"
+#define PARTION_NAME_CFG		    "cfg"
 //#define PARTION_NAME_DATA_CERT		"data_cert"
 //#define PARTION_NAME_DATA_CA		"data_ca" // add by wangxia 20200226
 //#define PARTION_NAME_DATA_KEY		"data_key" // add by wangxia 20200226
