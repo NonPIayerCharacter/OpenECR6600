@@ -105,5 +105,6 @@ unsigned int drv_rtc_get_32K_cnt(void);
 unsigned int drv_rtc_set_alarm_relative(unsigned int value);
 int drv_rtc_get_alarm_cnt(void);
 unsigned int drv_rtc_get_interval_cnt(unsigned       int pre_rtc,unsigned int now_rtc);
+void calculate_rtc_task();
 #endif
 

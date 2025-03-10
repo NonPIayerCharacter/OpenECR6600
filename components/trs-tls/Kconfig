@@ -1,4 +1,4 @@
-menuconfig TRS_TLS
-    bool "trs_tls Component Support"
-    depends on MBEDTLS
-    default y
+
+#config TRS_TLS
+#    bool
+#    default n

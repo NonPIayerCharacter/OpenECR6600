@@ -20,8 +20,13 @@
 signed int psm_wakeup_func_cb(void)
 {
 	signed int ret = true;
-	/*for example hold gpio1 stats when sleep*/
-	if(!psm_hold_gpio_intf(GPIO_NUM_1,PSM_SLEEP_OUT))
+	/*for example hold gpio1 keep output when sleep*/
+	if(!psm_hold_gpio_intf(GPIO_NUM_1,PSM_SLEEP_OUT,DRV_GPIO_ARG_DIR_OUT))
+	{
+		ret = -1;
+	}
+	/*for example hold gpio0 keep input when sleep*/
+	if(!psm_hold_gpio_intf(GPIO_NUM_0,PSM_SLEEP_OUT,DRV_GPIO_ARG_DIR_IN))
 	{
 		ret = -1;
 	}
@@ -31,8 +36,13 @@ signed int psm_wakeup_func_cb(void)
 signed int psm_sleep_func_cb(void)
 {
 	signed int ret = true;
-	/*for example hold gpio1 stats when sleep*/
-	if(!psm_hold_gpio_intf(GPIO_NUM_1,PSM_SLEEP_IN))
+	/*for example hold gpio1 keep output when sleep*/
+	if(!psm_hold_gpio_intf(GPIO_NUM_1,PSM_SLEEP_IN,DRV_GPIO_ARG_DIR_OUT))
+	{
+		ret = -1;
+	}
+	/*for example hold gpio0 keep input when sleep*/
+	if(!psm_hold_gpio_intf(GPIO_NUM_0,PSM_SLEEP_IN,DRV_GPIO_ARG_DIR_IN))
 	{
 		ret = -1;
 	}

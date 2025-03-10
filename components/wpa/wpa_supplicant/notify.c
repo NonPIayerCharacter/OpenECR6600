@@ -26,6 +26,8 @@
 
 #include "bss.h"
 
+#include "common/ieee802_11_defs.h"
+
 #ifdef INCLUDE_STANDALONE
 void report_gtk_rekey_event(struct wpa_supplicant *wpa_s, int flag)
 {
@@ -43,7 +45,7 @@ void report_gtk_rekey_event(struct wpa_supplicant *wpa_s, int flag)
 
     sys_event_send(&evt);   
 }
-
+extern void wpa_scan_res_clear_fail(struct wpa_supplicant *wpa_s);
 static void wifi_event_report(struct wpa_supplicant *wpa_s, enum wpa_states new_state, enum wpa_states old_state)
 {
     static char gtk_rekey = 0;
@@ -85,7 +87,9 @@ static void wifi_event_report(struct wpa_supplicant *wpa_s, enum wpa_states new_
 	os_memset(&evt, 0, sizeof(evt));
 	if (new_state == WPA_COMPLETED) {
         if (bss) {
+            wpa_update_disconnect_reason(REASON_NO_ERROR);
             evt.event_id = SYSTEM_EVENT_STA_CONNECTED;
+            //wpa_scan_res_clear_fail(wpa_s);
             evt.event_info.connected.channel = bss->freq >= 2412 ? (1 + (bss->freq - 2412) / 5) : 0;
 
             if (!is_connected)
@@ -148,6 +152,7 @@ void wpas_notify_sta_4way_hs_failed(struct wpa_supplicant *wpa_s)
 
     os_memset(&evt, 0, sizeof(evt));
     evt.event_id = SYSTEM_EVENT_STA_4WAY_HS_FAIL;
+    wpa_update_disconnect_reason(WLAN_REASON_4WAY_HANDSHAKE_FAIL);
     if (wpa_s->ifname && strlen(wpa_s->ifname) == 3 /*wlX*/) {
         evt.vif = wpa_get_drv_idx_by_name(wpa_s->ifname);
     }

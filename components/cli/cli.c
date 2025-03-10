@@ -38,7 +38,7 @@ char *prompt_symbol_t[] = {
 	[3] = "transport", // E_TRANSPORT
 	[4] = "lmac_test", // E_LMAC_TEST
 	[5] = "at", // E_AT
-	/* ï¿½ï¿½ï¿½ï¿½Ê½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Âµï¿½Êµï¿½ï¿½ï¿½ï¿½ */
+	/* °´¸ñÊ½£¬Ìí¼ÓÐÂµÄÊµÀýÃû */
 };
 
 
@@ -535,6 +535,7 @@ void cli_buf_handle(void)
 
 				default:
 					if (c > 0x1F && c < 0x7F && p_cli_dev->cli_isr_index < CLI_CMD_RECEIVE_BUF_LEN)
+					//if (p_cli_dev->cli_isr_index < CLI_CMD_RECEIVE_BUF_LEN)
 					{
 						p_cli_dev->cli_isr_buffer[p_cli_dev->cli_isr_index++] = c;
 						if(p_cli_dev->echo_open)
@@ -631,15 +632,15 @@ void component_cli_init(E_DRV_UART_NUM uart_num)
 
 	if(E_UART_SELECT_BY_KCONFIG == uart_num)
 	{
-// #ifdef CONFIG_CLI_UART_0
-// 		uart_num = E_UART_NUM_0;
-// #endif
-// #ifdef CONFIG_CLI_UART_1
-// 		uart_num = E_UART_NUM_1;
-// #endif
-// #ifdef CONFIG_CLI_UART_2
+#ifdef CONFIG_CLI_UART_0
+		uart_num = E_UART_NUM_0;
+#endif
+#ifdef CONFIG_CLI_UART_1
+		uart_num = E_UART_NUM_1;
+#endif
+#ifdef CONFIG_CLI_UART_2
 		uart_num = E_UART_NUM_2;
-// #endif
+#endif
 	}
 	
 	switch(uart_num)

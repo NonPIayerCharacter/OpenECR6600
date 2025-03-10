@@ -11,5 +11,6 @@ ifeq ($(CONFIG_CLI),y)
 			$(TOPDIR)/os/freertos/FreeRTOS-Kernel/include \
 			$(TOPDIR)/os/freertos/FreeRTOS-Kernel/portable/ThirdParty/GCC/NDS32_ECR6600 \
 			$(TOPDIR)/components/ble_ctrl $(TOPDIR)/components/ble_ctrl/tuya_hci_adapt \
+			$(TOPDIR)/include/components/cli \
 
 endif

@@ -44,6 +44,8 @@
 #include "dce.h"
 #include "dce_commands.h"
 #include "at_def.h"
+#include "wifi_command.h"
+#include "hal_gpio.h"
 
 #define MACSTR_LEN 17
 #define SHOW_ECN              BIT0   
@@ -53,6 +55,7 @@
 #define SHOW_CHANNEL          BIT4
 #define SHOW_FREQ_OFFSET      BIT5
 #define SHOW_PAIRWISE_CIPHER  BIT6
+#define SHOW_PWD			BIT7
 
 #define DEF "_DEF"
 #define CUR "_CUR"
@@ -140,11 +143,30 @@ bool connect_check(ip_addr_t ip)
     return false;
 }
 
+extern uint8_t skylab_bleNet_flag;
+extern wifi_config_u skylab_conf;
+void Skylab_SaveWifi(wifi_config_u conf){
+	wifi_nv_info_t *sta_conn_info = get_wifi_nv_info();
+	wifi_info_t ap_info = {0};
+	wifi_get_wifi_info(&ap_info);
+	if(ap_info.ssid[0] == 0) {
+	  os_printf(LM_APP, LL_INFO, "ap_info.ssid[0] == 0\n");
+	  //return;
+	}
+    memcpy(sta_conn_info->sta_ssid, (char *)conf.sta.ssid,sizeof((conf.sta.ssid)));
+    memcpy(sta_conn_info->sta_pwd,conf.sta.password,sizeof((conf.sta.password)));
+    memcpy(sta_conn_info->sta_bssid,conf.sta.bssid,sizeof((conf.sta.bssid)));
+    sta_conn_info->channel = ap_info.channel;
+    wifi_save_nv_info(sta_conn_info);
+}
+
+
 static sys_err_t at_wifi_event_handler(void *ctx, system_event_t *event)
 {
     dce_t* dce = (dce_t*) ctx;
     arg_t args;
     wifi_info_t info;
+    unsigned int pass_through;
 
     char mac_str[MACSTR_LEN+1];
     switch (event->event_id) {
@@ -175,7 +197,7 @@ static sys_err_t at_wifi_event_handler(void *ctx, system_event_t *event)
         break;
 
     case SYSTEM_EVENT_STA_GOT_IP:
-        printf("SYSTEM_EVENT_STA_GOT_IP\n");
+        printf("test SYSTEM_EVENT_STA_GOT_IP\n");
         dns_server_depend_ap();
         dce_emit_extended_result_code(dce, "WIFI GOT IP", -1, 1);
         if(at_wifi_event_group) {
@@ -183,16 +205,26 @@ static sys_err_t at_wifi_event_handler(void *ctx, system_event_t *event)
         }
         extern int at_net_client_auto_start(void);
         at_net_client_auto_start();
+		if(skylab_bleNet_flag){
+			Skylab_SaveWifi(skylab_conf);
+			skylab_bleNet_flag = 0;
+		}
+		hal_gpio_write(GPIO_NUM_4,1);
         break;
 
     case SYSTEM_EVENT_STA_DISCONNECTED:
         printf("SYSTEM_EVENT_STA_DISCONNECTED\n");
         dce_emit_extended_result_code(dce, "WIFI DISCONNECT", -1, 1);
+        hal_system_get_config(CUSTOMER_NV_WIFI_IP_MODE, &(pass_through), sizeof(pass_through));
+        extern int at_net_close(int link_id);
+        if(pass_through == 0) {
+            at_net_close(MAX_CONN_NUM);
+        }
          if(at_wifi_event_group) {
              xEventGroupClearBits(at_wifi_event_group, CONNECTED_BIT);
              xEventGroupSetBits(at_wifi_event_group, DISCONNECTED_BIT);
          }
-
+		hal_gpio_write(GPIO_NUM_4,0);
         break;
      case SYSTEM_EVENT_AP_STACONNECTED:
         printf("SYSTEM_EVENT_AP_STACONNECTED\n");
@@ -372,13 +404,198 @@ dce_result_t dce_handle_CWMODE(dce_t* dce, void* group_ctx, int kind, size_t arg
     return DCE_OK;
 }
 
+
 uint8_t pci_en = 0;
+uint8_t chinese_ssid=0;
+extern int TG_strtohex(const char * data,int data_len);
+dce_result_t TG_dce_handle_CWJAP_api(dce_t* dce, void* group_ctx, int kind, size_t argc, arg_t* argv,uint8_t is_flash)
+{
+    wifi_work_mode_e mode = wifi_get_opmode();
+    wifi_config_u conf;
+    wifi_info_t ap_info = {0};
+    char handle[AT_CMD_MAX];
+	os_printf(LM_APP, LL_INFO, "canshu=%d\r\n",argc);
+	os_printf(LM_APP, LL_INFO, "ssid=%s\r\n",argv[0].value.string);
+
+    if (dce_handle_flashEn_arg(kind, &argc, argv, (bool *)&is_flash) != DCE_RC_OK) {
+        dce_emit_basic_result_code(dce, DCE_RC_ERROR);
+        return DCE_RC_ERROR;
+    }
+
+	
+    if (mode != WIFI_MODE_STA && mode != WIFI_MODE_AP_STA)
+    {
+        os_printf(LM_APP, LL_INFO, "not in sta or sta+ap mode\n");
+        dce_emit_basic_result_code(dce, DCE_RC_ERROR);
+        return DCE_RC_OK;
+    }
+    else if (kind == DCE_WRITE)
+    {
+        memset(&conf, 0, sizeof(wifi_config_u));
+        if (argc < 2 || argc > 5 ||
+            argv[0].type != ARG_TYPE_STRING ||
+            argv[1].type != ARG_TYPE_STRING || (strlen(argv[1].value.string) < 8 && strlen(argv[1].value.string) > 0) || strlen(argv[1].value.string) > 64 ||
+            strlen(argv[0].value.string) >= sizeof(conf.sta.ssid) ||
+            strlen(argv[1].value.string) >= sizeof(conf.sta.password))
+        {
+            os_printf(LM_APP, LL_INFO, "invalid arguments %d\n",__LINE__);
+            dce_emit_basic_result_code(dce, DCE_RC_ERROR);
+            return DCE_RC_OK;
+        }
+			
+			os_printf(LM_APP, LL_INFO, "argc=%d\r\n",argc);
+        if(argc == 3)
+        {
+        	os_printf(LM_APP, LL_INFO, "argc LINE= %d\n",__LINE__);
+            if(argv[2].type == ARG_TYPE_NUMBER && argv[2].value.number >= 0 && argv[2].value.number <= 1)
+            {
+            
+                chinese_ssid = argv[2].value.number;
+           
+            }
+            else
+            {
+                os_printf(LM_APP, LL_INFO, "invalid arguments %d\n",__LINE__);
+                dce_emit_basic_result_code(dce, DCE_RC_ERROR);
+                return DCE_RC_OK;
+            }
+        }
+		os_printf(LM_APP, LL_INFO, "chinese_ssid= %d\n",chinese_ssid);
+        if (0 == strlen(argv[0].value.string)) {
+            os_printf(LM_APP, LL_INFO, "invalid ssid arguments %d\n",__LINE__);
+            dce_emit_basic_result_code(dce, DCE_RC_ERROR);
+            return DCE_RC_OK;
+        }  
+
+		if(chinese_ssid==0)
+        	strcpy((char *)conf.sta.ssid, argv[0].value.string);
+		else
+			{
+				TG_strtohex( argv[0].value.string ,  strlen(argv[0].value.string) );
+				for(int i=0;i<strlen(argv[0].value.string)/2;i++)
+					{
+		
+						os_printf(LM_APP, LL_INFO, " write_buffer=%X\n",write_buffer[i]);
+					}		
+				
+				memcpy((char *)conf.sta.ssid,(char *)write_buffer,strlen(argv[0].value.string)/2);
+			}
+	
+
+		strcpy(conf.sta.password, argv[1].value.string);
+        //firstly disconnect from AP
+        wifi_stop_station();
+//        dce_emit_extended_result_code(dce, "WIFI DISCONNECT", -1, 1);
+        sys_err_t ret = wifi_start_station(&conf);
+        if (SYS_ERR_WIFI_MODE == ret || SYS_ERR_WIFI_BUSY == ret){
+            wifi_stop_station();
+            dce_emit_basic_result_code(dce, DCE_RC_ERROR);
+            return DCE_RC_OK;
+        }
+
+        EventBits_t uxBits;
+        const TickType_t xTicksToWait = 30000 / portTICK_PERIOD_MS;
+
+        uxBits = xEventGroupWaitBits(at_wifi_event_group, CONNECTED_BIT, true, true, xTicksToWait);
+        if((uxBits & CONNECTED_BIT ) != 0){
+            // dce_emit_extended_result_code(dce, "WIFI CONNECTED", -1, 1);
+        } else {
+            wifi_stop_station();
+            dce_emit_extended_result_code(dce, is_flash ? "+CWJAP_DEF:4" : "+CWJAP_CUR:4", -1, 1);
+            dce_emit_extended_result_code(dce, "FAIL", -1, 1);
+            return DCE_RC_OK;
+        }
+        uxBits = xEventGroupWaitBits(at_wifi_event_group, GOT_IP_BIT, true, true, xTicksToWait);
+        if((uxBits & GOT_IP_BIT ) != 0){
+            // dce_emit_extended_result_code(dce, "WIFI GOT IP", -1, 1);
+            /*\B1\A3\B4\E6\C1\AC\BD\D3\D0\C5息\B5\BDflash*/
+            wifi_nv_info_t *sta_conn_info = get_wifi_nv_info();
+            wifi_get_wifi_info(&ap_info);
+            if(ap_info.ssid[0] == 0) {
+                dce_emit_basic_result_code(dce, DCE_RC_OK);
+                return DCE_RC_OK;
+            }
+            memcpy(sta_conn_info->sta_ssid, (char *)conf.sta.ssid,sizeof((conf.sta.ssid)));
+            memcpy(sta_conn_info->sta_pwd,conf.sta.password,sizeof((conf.sta.password)));
+            memcpy(sta_conn_info->sta_bssid,conf.sta.bssid,sizeof((conf.sta.bssid)));
+            sta_conn_info->channel = ap_info.channel;
+			os_printf(LM_APP, LL_INFO, "wifi_save_nv_info=%d %d\r\n",is_flash,argc);
+            if(true == is_flash){
+	            if(argc == 2){
+	                wifi_get_wifi_info(&ap_info);
+	                memcpy(sta_conn_info->sta_bssid,ap_info.bssid,sizeof((ap_info.bssid)));
+	            }
+				os_printf(LM_APP, LL_INFO, "enter wifi_save_nv_info\r\n");
+	            wifi_save_nv_info(sta_conn_info);
+            }
+                
+        } else {
+            wifi_stop_station();
+            dce_emit_extended_result_code(dce, is_flash ? "+CWJAP_DEF:4" : "+CWJAP_CUR:4", -1, 1);
+            dce_emit_extended_result_code(dce, "FAIL", -1, 1);
+            return DCE_RC_OK;
+        }
+        dce_emit_basic_result_code(dce, DCE_RC_OK);
+
+        return DCE_RC_OK;
+    }
+    else
+    {
+        char mac_str[MACSTR_LEN+1];
+        wifi_nv_info_t ap_info_nv;
+
+        uint8_t ret = wifi_load_nv_info(&ap_info_nv);
+
+        if (ret == SYS_ERR) {
+            sprintf(handle, "%s", "CWJAP_DEF: FLASH IS NULL, PLEASE WRITE FIRST");
+            dce_emit_extended_result_code(dce, handle, -1, 1);
+        } else {
+            sprintf(mac_str, MACSTR, MAC2STR(ap_info_nv.sta_bssid));
+
+            arg_t args_def[] = {
+                {ARG_TYPE_STRING, .value.string = (char *)&ap_info_nv.sta_ssid[0]},
+                {ARG_TYPE_STRING, .value.string = (char *)&ap_info_nv.sta_pwd[0] }, // add 20240714
+                {ARG_TYPE_STRING, .value.string = mac_str},
+                {ARG_TYPE_NUMBER, .value.number = ap_info_nv.channel},
+                {ARG_TYPE_NUMBER, .value.number = 0},
+                
+            };
+            dce_emit_extended_result_code_with_args(dce, "CWJAP_DEF" , -1, args_def, 5, 1,false);//4
+        }
+
+        wifi_get_wifi_info(&ap_info);
+
+        if(ap_info.ssid[0] == 0) {
+            dce_emit_extended_result_code(dce, "CWJAP_CUR: NOT CONNECT", -1, 1);
+            return DCE_RC_OK;
+        }
+
+        sprintf(mac_str, MACSTR, MAC2STR(ap_info.bssid));
+		//system_printf("pwd=%s\r\n",(char *)&ap_info_nv.sta_pwd );
+        arg_t args_cur[] = {
+            {ARG_TYPE_STRING, .value.string = (char *)&ap_info.ssid[0]},
+			{ARG_TYPE_STRING, .value.string = (char *)&ap_info.pwd[0] }, // add 20240714
+            {ARG_TYPE_STRING, .value.string = mac_str},
+            {ARG_TYPE_NUMBER, .value.number = ap_info.channel},
+            {ARG_TYPE_NUMBER, .value.number = ap_info.rssi},
+
+        };
+        dce_emit_extended_result_code_with_args(dce, "CWJAP_CUR", -1, args_cur, 5, 1,false);
+
+    }
+
+    dce_emit_basic_result_code(dce, DCE_RC_OK);
+    return DCE_OK;
+}
+
 dce_result_t dce_handle_CWJAP_api(dce_t* dce, void* group_ctx, int kind, size_t argc, arg_t* argv,uint8_t is_flash)
 {
     wifi_work_mode_e mode = wifi_get_opmode();
     wifi_config_u conf;
     wifi_info_t ap_info = {0};
     char handle[AT_CMD_MAX];
+	os_printf(LM_APP, LL_INFO, "canshu=%d\r\n",argc);
+	os_printf(LM_APP, LL_INFO, "ssid=%s\r\n",argv[0].value.string);
 
     if (dce_handle_flashEn_arg(kind, &argc, argv, (bool *)&is_flash) != DCE_RC_OK) {
         dce_emit_basic_result_code(dce, DCE_RC_ERROR);
@@ -530,11 +747,13 @@ dce_result_t dce_handle_CWJAP_api(dce_t* dce, void* group_ctx, int kind, size_t 
 
             arg_t args_def[] = {
                 {ARG_TYPE_STRING, .value.string = (char *)&ap_info_nv.sta_ssid[0]},
+                {ARG_TYPE_STRING, .value.string = (char *)&ap_info_nv.sta_pwd[0] }, // add 20230714
                 {ARG_TYPE_STRING, .value.string = mac_str},
                 {ARG_TYPE_NUMBER, .value.number = ap_info_nv.channel},
                 {ARG_TYPE_NUMBER, .value.number = 0},
+                
             };
-            dce_emit_extended_result_code_with_args(dce, "CWJAP_DEF" , -1, args_def, 4, 1,false);
+            dce_emit_extended_result_code_with_args(dce, "CWJAP_DEF" , -1, args_def, 5, 1,false);//4
         }
 
         wifi_get_wifi_info(&ap_info);
@@ -548,12 +767,13 @@ dce_result_t dce_handle_CWJAP_api(dce_t* dce, void* group_ctx, int kind, size_t 
 
         arg_t args_cur[] = {
             {ARG_TYPE_STRING, .value.string = (char *)&ap_info.ssid[0]},
+			{ARG_TYPE_STRING, .value.string = (char *)&ap_info_nv.sta_pwd[0] }, // add 20240714
             {ARG_TYPE_STRING, .value.string = mac_str},
             {ARG_TYPE_NUMBER, .value.number = ap_info.channel},
             {ARG_TYPE_NUMBER, .value.number = ap_info.rssi},
 
         };
-        dce_emit_extended_result_code_with_args(dce, "CWJAP_CUR", -1, args_cur, 4, 1,false);
+        dce_emit_extended_result_code_with_args(dce, "CWJAP_CUR", -1, args_cur, 5, 1,false);
 
     }
 
@@ -569,7 +789,7 @@ dce_result_t dce_handle_CWJAP_CUR(dce_t* dce, void* group_ctx, int kind, size_t 
 
 dce_result_t dce_handle_CWJAP_DEF(dce_t* dce, void* group_ctx, int kind, size_t argc, arg_t* argv)
 {
-    dce_handle_CWJAP_api(dce, group_ctx, kind, argc, argv,false);
+    TG_dce_handle_CWJAP_api(dce, group_ctx, kind, argc, argv,false);
     return DCE_OK;
 }
 
@@ -1545,6 +1765,30 @@ dce_result_t dce_handle_CWAUTOCONN(dce_t* dce, void* group_ctx, int kind, size_t
     return DCE_OK;
 }
 
+extern uint8_t g_balconn;
+dce_result_t dce_handle_CWBALCONN(dce_t* dce, void* group_ctx, int kind, size_t argc, arg_t* argv)
+{
+    uint8_t bal_conn = 1;
+    if(kind == DCE_WRITE)
+    {
+        if (argc != 1 || argv[0].type != ARG_TYPE_NUMBER){
+            os_printf(LM_APP, LL_INFO, "invalid arguments %d\n",__LINE__);
+            dce_emit_basic_result_code(dce, DCE_RC_ERROR);
+            return DCE_OK;
+        }
+        bal_conn = argv[0].value.number;
+        if(bal_conn > 1)
+        {
+            dce_emit_basic_result_code(dce, DCE_RC_ERROR);
+            return DCE_OK;
+        }
+         g_balconn = bal_conn;
+         dce_emit_basic_result_code(dce, DCE_RC_OK);
+    }
+    return DCE_OK;
+}
+
+
 #if 0 //quxin
 static sc_result_t result;
 static void sc_callback(smartconfig_status_t status, void *pdata)
@@ -2019,6 +2263,7 @@ static const command_desc_t CW_commands[] = {
     {"CWDHCP"       , &dce_handle_CWDHCP,        DCE_WRITE | DCE_READ},
     {"CWDHCPS"      , &dce_handle_CWDHCPS,       DCE_WRITE | DCE_READ},
     {"CWAUTOCONN"   , &dce_handle_CWAUTOCONN,    DCE_WRITE},
+    {"CWBALCONN"   , &dce_handle_CWBALCONN,    DCE_WRITE},
 //    {"CWSTARTSMART" , &dce_handle_CWSTARTSMART,  DCE_EXEC},
 //    {"CWSTOPSMART"  , &dce_handle_CWSTOPSMART,   DCE_EXEC},
 //    {"CWHOSTNAME"   , &dce_handle_CWHOSTNAME,    DCE_WRITE | DCE_READ},

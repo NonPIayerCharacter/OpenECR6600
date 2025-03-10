@@ -19,6 +19,9 @@ extern "C" {
  */
 transport_handle_t transport_tcp_init();
 
+typedef struct {
+    int sock;
+} transport_tcp_t;
 
 #ifdef __cplusplus
 }

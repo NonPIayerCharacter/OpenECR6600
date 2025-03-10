@@ -551,6 +551,30 @@ ip4_input(struct pbuf *p, struct netif *inp)
   }
 #endif
 
+ /* packet consists of multiple fragments? */
+  if ((IPH_OFFSET(iphdr) & PP_HTONS(IP_OFFMASK | IP_MF)) != 0) {
+#if IP_REASSEMBLY /* packet fragment reassembly code present? */
+    LWIP_DEBUGF(IP_DEBUG, ("IP packet is a fragment (id=0x%04"X16_F" tot_len=%"U16_F" len=%"U16_F" MF=%"U16_F" offset=%"U16_F"), calling ip4_reass()\n",
+                           lwip_ntohs(IPH_ID(iphdr)), p->tot_len, lwip_ntohs(IPH_LEN(iphdr)), (u16_t)!!(IPH_OFFSET(iphdr) & PP_HTONS(IP_MF)), (u16_t)((lwip_ntohs(IPH_OFFSET(iphdr)) & IP_OFFMASK) * 8)));
+    /* reassemble the packet*/
+    p = ip4_reass(p);
+    /* packet not fully reassembled yet? */
+    if (p == NULL) {
+      return ERR_OK;
+    }
+    iphdr = (const struct ip_hdr *)p->payload;
+#else /* IP_REASSEMBLY == 0, no packet fragment reassembly code present */
+    pbuf_free(p);
+    LWIP_DEBUGF(IP_DEBUG | LWIP_DBG_LEVEL_SERIOUS, ("IP packet dropped since it was fragmented (0x%"X16_F") (while IP_REASSEMBLY == 0).\n",
+                lwip_ntohs(IPH_OFFSET(iphdr))));
+    IP_STATS_INC(ip.opterr);
+    IP_STATS_INC(ip.drop);
+    /* unsupported protocol feature */
+    MIB2_STATS_INC(mib2.ipinunknownprotos);
+    return ERR_OK;
+#endif /* IP_REASSEMBLY */
+  }
+
 #if IP_NAPT
     /* for unicast packet, check NAPT table and modify dest if needed */
     if (!inp->napt && ip4_addr_cmp(&iphdr->dest, &(inp->ip_addr.u_addr.ip4)))
@@ -668,7 +692,23 @@ ip4_input(struct pbuf *p, struct netif *inp)
     /* non-broadcast packet? */
     if (!ip4_addr_isbroadcast(ip4_current_dest_addr(), inp)) {
       /* try to forward IP packet on (other) interfaces */
+#ifdef ENABLE_LWIP_NAPT
+      unsigned int qlen = p->tot_len;
+      unsigned int qcnt = 100;
+      struct pbuf *q = NULL;
+      do {
+        q = pbuf_alloc(PBUF_TRANSPORT, qlen, PBUF_RAM);
+        if (q != NULL) {
+            pbuf_copy(q, p);
+            ip4_forward(q, (struct ip_hdr *)q->payload, inp);
+            pbuf_free(q);
+            break;
+        }
+        os_msleep(10);
+      } while (qcnt--);
+#else
       ip4_forward(p, (struct ip_hdr *)p->payload, inp);
+#endif
     } else
 #endif /* IP_FORWARD */
     {
@@ -678,29 +718,6 @@ ip4_input(struct pbuf *p, struct netif *inp)
     }
     pbuf_free(p);
     return ERR_OK;
-  }
-  /* packet consists of multiple fragments? */
-  if ((IPH_OFFSET(iphdr) & PP_HTONS(IP_OFFMASK | IP_MF)) != 0) {
-#if IP_REASSEMBLY /* packet fragment reassembly code present? */
-    LWIP_DEBUGF(IP_DEBUG, ("IP packet is a fragment (id=0x%04"X16_F" tot_len=%"U16_F" len=%"U16_F" MF=%"U16_F" offset=%"U16_F"), calling ip4_reass()\n",
-                           lwip_ntohs(IPH_ID(iphdr)), p->tot_len, lwip_ntohs(IPH_LEN(iphdr)), (u16_t)!!(IPH_OFFSET(iphdr) & PP_HTONS(IP_MF)), (u16_t)((lwip_ntohs(IPH_OFFSET(iphdr)) & IP_OFFMASK) * 8)));
-    /* reassemble the packet*/
-    p = ip4_reass(p);
-    /* packet not fully reassembled yet? */
-    if (p == NULL) {
-      return ERR_OK;
-    }
-    iphdr = (const struct ip_hdr *)p->payload;
-#else /* IP_REASSEMBLY == 0, no packet fragment reassembly code present */
-    pbuf_free(p);
-    LWIP_DEBUGF(IP_DEBUG | LWIP_DBG_LEVEL_SERIOUS, ("IP packet dropped since it was fragmented (0x%"X16_F") (while IP_REASSEMBLY == 0).\n",
-                lwip_ntohs(IPH_OFFSET(iphdr))));
-    IP_STATS_INC(ip.opterr);
-    IP_STATS_INC(ip.drop);
-    /* unsupported protocol feature */
-    MIB2_STATS_INC(mib2.ipinunknownprotos);
-    return ERR_OK;
-#endif /* IP_REASSEMBLY */
   }
 
 #if IP_OPTIONS_ALLOWED == 0 /* no support for IP options in the IP header? */

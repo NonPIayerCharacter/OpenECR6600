@@ -9,6 +9,11 @@
 #include "oshal.h"
 #include "string.h"
 #include "platform_tr6600.h"
+#include "hal_timer.h"
+#include "hal_gpio.h"
+#include "psm_mode_ctrl.h"
+#include "psm_user.h"
+
 
 typedef enum
 {
@@ -171,7 +176,7 @@ typedef enum
 #define AT_MQTT_TOPIC_MAX_LENGTH 128
 #define AT_MQTT_LWT_MSG_MAX_LENGTH 64
 #define AT_MQTT_KEEPALIVE_MAX 7200
-#define AT_MQTT_PUB_RAW_DATA_MAX_LEN 1024
+#define AT_MQTT_PUB_RAW_DATA_MAX_LEN 2048
 #define AT_MQTT_PUB_RAW_BUFFER_SIZE (AT_MQTT_PUB_RAW_DATA_MAX_LEN + 1)
 #define AT_MQTT_SUB_TOPIC_MAX_NUM (32)
 #define AT_MQTT_BUFFER_SIZE (AT_MQTT_PUB_RAW_DATA_MAX_LEN + AT_MQTT_TOPIC_MAX_LENGTH + 10)
@@ -1313,11 +1318,47 @@ static dce_result_t dce_handle_mqtt_connect(dce_t* dce, void* group_ctx, int kin
     {
         dce_code = DCE_RC_ERROR;
     }
-
+    else
+    {
+        sub_recv_dce_p = dce;
+    }
     dce_emit_basic_result_code(dce, dce_code);
     return result;
 }
+#if 1
 
+int TG_strtohex(const char * data,int data_len)
+{
+	
+	memset(write_buffer,0,4110);
+	//char ID1[12] = "012a3b4c5b6d";
+	//uint8_t mesh_id[6];
+   // uint8_t temp_id[12];
+	int i;
+	
+	for(i = 0; i < data_len ; i++) {
+        if(data[i] >= '0' && data[i] <= '9') {
+            write_buffer[i] = data[i] - '0';
+        } else {
+            write_buffer[i] = data[i] - 'a' + 10;
+        }
+      // os_printf(LM_OS, LL_INFO," %d = %d  ", i, write_buffer[i]);
+    }
+	
+    for(i = 0; i < data_len ;) {
+        write_buffer[i/2] = BUILD_UINT8(write_buffer[i+1], write_buffer[i]);
+        i += 2;
+    }
+	
+	//for(i = 0; i < 6 ; i++) {
+	//	os_printf(LM_OS, LL_INFO,"%02x\n", write_buffer[i]);
+//	}
+	
+	return 0;
+
+}
+
+#endif
 static AT_MQTT_RET_E at_mqtt_send_pub_msg(const char* topic, const char* data, int qos, int retain, MQTT_CFG_MSG_TYPE msg_type)
 {
     MQTT_CFG_MSG_ST msg_send = {0};
@@ -1337,7 +1378,12 @@ static AT_MQTT_RET_E at_mqtt_send_pub_msg(const char* topic, const char* data, i
     if (data != NULL)
     {
         data_len = strlen(data);
-        set_mqtt_msg(SET_DATA, &msg_send, data, data_len);
+		
+        os_printf(LM_APP, LL_INFO, "data_len=%d\r\n",data_len);
+		
+		TG_strtohex(data,data_len);
+		
+        set_mqtt_msg(SET_DATA, &msg_send, (char *)write_buffer, data_len/2);
     }
 
     msg_send.qos = qos;
@@ -1435,6 +1481,8 @@ static AT_MQTT_RET_E at_mqtt_handle_data_valid(arg_t argv, int *data_len)
         if (argv.value.string != NULL)
         {
             *data_len = strlen(argv.value.string);
+
+			
         }
     }
     else
@@ -2013,6 +2061,35 @@ static dce_result_t at_mqtt_handle_clean(size_t argc, arg_t* argv)
     return result;
 }
 
+void skylab_mqtt_cean_status(void){
+     if (at_mqtt_sub_list != NULL)
+    {
+        at_mqtt_sub_list_destroy(at_mqtt_sub_list);
+    }
+	 else
+		 os_printf(LM_APP, LL_INFO,"skylab_mqtt_cean_status at_mqtt_sub_list==NULL\r\n");
+	 
+	 if (at_mqtt_client == NULL)
+	 {
+		 os_printf(LM_APP, LL_INFO,"skylab_mqtt_cean_status at_mqtt_client==NULL\r\n");
+		 return;
+	 }
+		 
+	 MQTT_CFG_MSG_ST msg_send = {0};
+	 msg_send.cfg_type = CFG_MSG_TYPE_STOP;
+	 if (at_mqtt_client->cfg_queue_handle != NULL)
+	 {
+		 if(os_queue_send(at_mqtt_client->cfg_queue_handle, (char *)&msg_send, sizeof(msg_send), 0) == 0)
+		 {
+			 at_mqtt_client = NULL;
+			 os_printf(LM_APP, LL_INFO,"mqtt_cean success\r\n");
+		 }else
+		 	 os_printf(LM_APP, LL_INFO,"mqtt_cean fail\r\n");
+	 }
+	 else
+		 os_printf(LM_APP, LL_INFO,"at_mqtt_client->cfg_queue_handle == NULL\r\n");
+}
+
 static dce_result_t dce_handle_mqtt_clean(dce_t* dce, void* group_ctx, int kind, size_t argc, arg_t* argv)
 {
     dce_result_code_t dce_code = DCE_RC_OK;
@@ -2029,9 +2106,31 @@ static dce_result_t dce_handle_mqtt_clean(dce_t* dce, void* group_ctx, int kind,
     dce_emit_basic_result_code(dce, dce_code);
     return result;
 }
+unsigned char HexToAscii(unsigned char c){
+	if(c > 9){
+		return (c+55);     // 16进制 0A 对应的ascii 'A'，两者相差55  -- 可以比照ascii表理解
+	}else{
+		return (c+48);     // 16进制 01 对应的ascii '1'  两者相差48  -- 可以比照ascii表理解
+	}
+}
+
+int gpio_timer_handle=0;
+uint8_t skylab_timer_enable = 0;
+extern uint8_t psm_usr_sleep_mode_status;
+void Skylab_TimerOut_Icr(void * data){
+	hal_gpio_write(GPIO_NUM_3,0);
+	skylab_timer_enable = 0;
+	os_printf(LM_APP, LL_INFO,"Skylab_TimerOut_Icr\r\n");
+	hal_timer_stop(gpio_timer_handle);
+	hal_timer_delete(gpio_timer_handle);
+	if(psm_usr_sleep_mode_status){
+		psm_set_sleep_mode(LIGHT_SLEEP,7);
+	}
+}
 
 static void at_mqtt_write_sub_recv_data_to_uart(int topic_len, const char *topic, int data_len, const char *data)
 {
+	
     if (topic_len == 0)
     {
         return;
@@ -2055,18 +2154,64 @@ static void at_mqtt_write_sub_recv_data_to_uart(int topic_len, const char *topic
 
     memset(data_local, 0, data_len + 1);
     memcpy(data_local, data, data_len);
+	
+     unsigned char *a = os_malloc(4096);
+	if (a == NULL)
+    {
+        return;
+    }
+	os_printf(LM_OS, LL_INFO, "data_len=%d\r\n",data_len);
+	if(data_len>2048)
+		{
+	
+		data_len=2048;
+	}
+	//unsigned char temp;
+//	for(int i =0 ; i<data_len;i++)
+//	{
+//		
+//	//os_printf(LM_OS, LL_INFO, "data=%02x\r\n",*((unsigned char *)data+i));
+//	
+//	sprintf((char *)(a+2*i), "%02x",*((unsigned char *)data+i));
+//	
+//	//os_printf(LM_OS, LL_INFO, "a=%s\r\n",a);
+//	//temp = data[i] & 0xf0;   // 取16进制数高位放到 HexToAscii 函数中转成字符
+//	//*(a + i*3) = HexToAscii(temp >> 4);
+//	//temp = data[i] & 0x0f;   // 取16进制数低位放到 HexToAscii 函数中转成字符
+//	//*(a + i*3 + 1) = HexToAscii(temp);
+//	//*(a + i*3 + 2) = ' ';  // 添加空格进行区分
 
+//	}
+	if(psm_usr_sleep_mode_status){
+		psm_set_sleep_mode(SLEEP_OFF, 0);
+		os_printf(LM_OS, LL_INFO, "SLEEP_OFF\r\n");
+	}
     arg_t arg[AT_MQTT_SUB_RECV_PARA_MAX] = {
-        {ARG_TYPE_NUMBER, .value.number = 0},
+        {ARG_TYPE_NUMBER, .value.number = topic_len},
         {ARG_TYPE_STRING, .value.string = topic_local},
-        {ARG_TYPE_NUMBER, .value.number = data_len},
-        {ARG_TYPE_STRING, .value.string = data_local},
+        {ARG_TYPE_NUMBER, .value.number = data_len},		//data_len*2
+        {ARG_TYPE_STRING, .value.string = (char *)data},  //a
     };
-
     const char * handle = "MQTTSUBRECV";
-    dce_emit_extended_result_code_with_args(sub_recv_dce_p, handle, -1, arg, AT_MQTT_SUB_RECV_PARA_MAX, true, false);
+	os_printf(LM_OS, LL_INFO, "skylab_timer_enable=%d\r\n",skylab_timer_enable);
+	if(skylab_timer_enable == 0){
+		gpio_timer_handle = hal_timer_create(100000, Skylab_TimerOut_Icr, 0, 0);
+		if(gpio_timer_handle < 0){
+			os_printf(LM_APP, LL_INFO, "hal_timer_create error(%d)!\r\n", gpio_timer_handle);
+			skylab_timer_enable = 0;
+		}else
+			skylab_timer_enable = 0;		
+	}
+	if(skylab_timer_enable == 0){
+		skylab_timer_enable = 1;
+		hal_gpio_write(GPIO_NUM_3,1);
+		os_printf(LM_APP, LL_INFO, "hal_timer_start=%d\r\n",skylab_timer_enable);
+		hal_timer_start(gpio_timer_handle);
+	}
+    TG_dce_emit_extended_result_code_with_args(sub_recv_dce_p, handle, -1, arg, AT_MQTT_SUB_RECV_PARA_MAX, true, false,data_len); //data_len*2
     os_free(topic_local);
     os_free(data_local);
+	os_free(a);
 }
 
 
@@ -2116,7 +2261,7 @@ static int at_mqtt_event_handle(trs_mqtt_event_handle_t event)
                 }
                 else
                 {
-                    os_printf(LM_CMD, LL_ERR, "%s:%d: at_mqtt_sub_list is null!\r\n", __func__, __LINE__);
+                    os_printf(LM_APP, LL_INFO, "%s:%d: at_mqtt_sub_list is null!\r\n", __func__, __LINE__);
                 }
             }
             
@@ -2138,11 +2283,13 @@ static int at_mqtt_event_handle(trs_mqtt_event_handle_t event)
             break;
         
         case MQTT_EVENT_DATA:
+			
             os_printf(LM_CMD, LL_DBG, MQTT_DATA_STRING);
             at_mqtt_write_sub_recv_data_to_uart(event->topic_len, event->topic, event->data_len, event->data);
+		
             if (event->topic_len < PRINT_STRING_MAX_LEN)
             {
-                os_printf(LM_CMD, LL_DBG, "TOPIC=%.*s\r\n", event->topic_len, event->topic);
+                os_printf(LM_CMD, LL_INFO, "TOPIC=%.*s\r\n", event->topic_len, event->topic);
             }
             else
             {
@@ -2157,7 +2304,8 @@ static int at_mqtt_event_handle(trs_mqtt_event_handle_t event)
                 }
                 else
                 {
-                    os_printf(LM_APP, LL_INFO, "DATA=%.*s\r\n", event->data_len, event->data);
+                	
+                    os_printf(LM_APP, LL_INFO, "data_len =%d DATA=%.*s\r\n", event->data_len, (unsigned char *)event->data);
                 }
             }
             else
@@ -2178,7 +2326,7 @@ static int at_mqtt_event_handle(trs_mqtt_event_handle_t event)
     return 0;
 }
 
-
+extern void MqttReadLed(void);
 void dce_register_mqtt_commands(dce_t* dce)
 {
     dce_register_command_group(dce, "MQTT", mqtt_commands, sizeof(mqtt_commands) / sizeof(mqtt_commands[0]), 0);
@@ -2186,6 +2334,14 @@ void dce_register_mqtt_commands(dce_t* dce)
     at_mqtt_cfg.pub_handle = at_mqtt_pub_raw_handle;
     at_mqtt_cfg.buffer_size = AT_MQTT_BUFFER_SIZE;
     at_mqtt_pubraw_init();
+	//hal_gpio_init();
+	MqttReadLed();
+	gpio_timer_handle = hal_timer_create(100000, Skylab_TimerOut_Icr, 0, 0);
+	if(gpio_timer_handle < 0){
+		os_printf(LM_APP, LL_INFO, "hal_timer_create error(%d)!\r\n", gpio_timer_handle);
+		skylab_timer_enable = 0xFF;
+	}
+	skylab_timer_enable = 0;
     at_mqtt_sub_list = at_mqtt_sub_list_init();
     MEM_CHECK(at_mqtt_sub_list, {
         return ;

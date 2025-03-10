@@ -773,7 +773,7 @@ struct wpa_supplicant {
 #endif /* CONFIG_MACSEC */
 
 	/* WLAN_REASON_* reason codes. Negative if locally generated. */
-	int disconnect_reason;
+	u16 disconnect_reason;
 
 	/* WLAN_STATUS_* status codes from (Re)Association Response frame. */
 	u16 assoc_status_code;
@@ -1028,6 +1028,9 @@ void wnm_bss_keep_alive_deinit(struct wpa_supplicant *wpa_s);
 int wpa_supplicant_fast_associate(struct wpa_supplicant *wpa_s);
 struct wpa_bss * wpa_supplicant_pick_network(struct wpa_supplicant *wpa_s,
 					     struct wpa_ssid **selected_ssid);
+
+void wpa_update_disconnect_reason(u16 reason);
+
 
 /* eap_register.c */
 int eap_register_methods(void);

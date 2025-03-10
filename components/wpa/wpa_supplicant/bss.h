@@ -105,6 +105,8 @@ struct wpa_bss {
 	size_t ie_len;
 	/** Length of the following Beacon IE field in octets */
 	size_t beacon_ie_len;
+	/*record connect fail cnt*/
+	uint8_t fail_cnt;
 	/* followed by ie_len octets of IEs */
 	/* followed by beacon_ie_len octets of IEs */
 };

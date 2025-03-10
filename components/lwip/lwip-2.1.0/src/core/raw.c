@@ -59,6 +59,7 @@
 #include "lwip/ip6.h"
 #include "lwip/ip6_addr.h"
 #include "lwip/inet_chksum.h"
+#include "lwip/icmp.h"
 
 #include <string.h>
 
@@ -167,6 +168,12 @@ raw_input(struct pbuf *p, struct netif *inp)
     if ((pcb->protocol == proto) && raw_input_local_match(pcb, broadcast) &&
         (((pcb->flags & RAW_FLAGS_CONNECTED) == 0) ||
          ip_addr_cmp(&pcb->remote_ip, ip_current_src_addr()))) {
+      if (proto == IP_PROTO_ICMP) {
+        struct icmp_echo_hdr *iecho = (struct icmp_echo_hdr *)((u8_t *)p->payload + IPH_HL_BYTES((struct ip_hdr *)p->payload));
+        if (iecho->id == WIFI_HEARTBEAT_PING_ID || iecho->type == ICMP_ECHO) {
+          break;
+        }
+      }
       /* receive callback function available? */
       if (pcb->recv != NULL) {
         u8_t eaten;

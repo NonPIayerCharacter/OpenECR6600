@@ -374,6 +374,8 @@ iperf_handle_message_client(struct iperf_test *test)
 int
 iperf_connect(struct iperf_test *test)
 {
+    unsigned int recv_timeout = 2000;
+
     FD_ZERO(&test->read_set);
     FD_ZERO(&test->write_set);
 
@@ -394,6 +396,10 @@ iperf_connect(struct iperf_test *test)
         i_errno = IESETNODELAY;
         return -1;
     }
+
+#ifdef __TR_SW__
+   setsockopt(test->ctrl_sck, SOL_SOCKET, SO_RCVTIMEO, &recv_timeout, sizeof(unsigned int));
+#endif
 
     flag = 7;
     if (setsockopt(test->ctrl_sck, IPPROTO_IP, IP_TOS, (char *) &flag, sizeof(int))) {
@@ -553,8 +559,11 @@ iperf_run_client(struct iperf_test * test)
     struct iperf_time now;
 #ifdef __TR_SW__
     struct timeval poll;
+    struct timeval timeout;
+    int ret = 0;
+#else
+    struct timeval *timeout = NULL;
 #endif
-    struct timeval* timeout = NULL;
     struct iperf_stream *sp;
 
 #ifndef __TR_SW__
@@ -608,10 +617,10 @@ iperf_run_client(struct iperf_test * test)
 	timeout = tmr_timeout(&now);
 	result = select(test->max_fd + 1, &read_set, &write_set, NULL, timeout);
 #else
-    timeout = tmr_timeout(test, &now);
+	ret = tmr_timeout(test, &now, &timeout);
 	poll.tv_sec = 1;
 	poll.tv_usec = 0;
-	result = select(test->max_fd + 1, &read_set, &write_set, NULL, (timeout ? timeout : &poll));
+	result = select(test->max_fd + 1, &read_set, &write_set, NULL, (!ret ? &timeout : &poll));
 	//result = select(test->max_fd + 1, &read_set, &write_set, NULL, &poll);
 #endif
 	if (result < 0 && errno != EINTR) {

@@ -14,7 +14,7 @@ extern const volatile char ble_lib_compile_time[];
 
 int ble_main(void);
 int ble_destory();
-void ble_apps_init(void);
+int ble_apps_init(void);
 
 void psm_ble_sw_set_sleep_status(bool sleep_en);
 bool psm_ble_sw_get_sleep_status(void);

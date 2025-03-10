@@ -58,7 +58,7 @@ enum PSM_CTRL_INTF{
 };
 typedef signed int (*psm_func_cb)(void);
 
-void psm_wake_trigger_level(unsigned char mode);
+bool psm_wake_trigger_level(unsigned char mode);
 void psm_wake_clear_trigger_level();
 
 bool psm_gpio_wakeup_config(unsigned int pin, unsigned int enable);

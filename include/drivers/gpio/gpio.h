@@ -141,6 +141,7 @@ int drv_gpio_read(int gpio_num);
 int drv_gpio_write(int gpio_num, GPIO_LEVEL_VALUE gpio_level);
 int drv_gpio_dir_get(int gpio_num);
 int drv_gpio_ioctrl(int gpio_num, int event, int arg);
+int drv_gpio_pull_read(int gpio_num);
 extern unsigned int efuse_ft;
 
 #endif /* DRV_GPIO_H */

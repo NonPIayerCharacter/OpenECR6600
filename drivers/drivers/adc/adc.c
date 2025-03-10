@@ -1024,13 +1024,23 @@ void hal_tempsensor_process(void *arg)
 
 void time_check_temp()
 {
+#ifdef CONFIG_PSM_SURPORT
     xTimerTemperature = xTimerCreate
-                   ("Temperature detection",
-                   1000*60 / portTICK_PERIOD_MS,
-                   pdTRUE,
-                  ( void * ) 0,
-                  (TimerCallbackFunction_t)hal_tempsensor_process);
-	
+					("Temperature detection",
+					1000*5 / portTICK_PERIOD_MS,
+					pdTRUE,
+					( void * ) 0,
+					(TimerCallbackFunction_t)hal_tempsensor_process);
+#else
+	xTimerTemperature = xTimerCreate
+					("Temperature detection",
+					1000*60 / portTICK_PERIOD_MS,
+					pdTRUE,
+					( void * ) 0,
+					(TimerCallbackFunction_t)hal_tempsensor_process);
+
+#endif
+
 	if( xTimerTemperature != NULL ) {
         xTimerStart(xTimerTemperature, portMAX_DELAY);
 	}

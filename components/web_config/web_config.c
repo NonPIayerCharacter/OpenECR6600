@@ -7,27 +7,25 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 
-#include <esp_log.h>
-
 //add by wangfei
 #include "easyflash.h"
 #include "system_wifi.h"
-#include "oshal.h"
+#include "http_os.h"
 #include "cli.h"
 
 #ifndef MIN
 #define MIN(x,y) (x < y ? x : y)
 #endif
 
-typedef const char*  esp_event_base_t; /**< unique pointer to a subsystem that exposes events */
-typedef void*        esp_event_loop_handle_t; /**< a number that identifies an event with respect to a base */
-typedef void         (*esp_event_handler_t)(void* event_handler_arg,
-                                        esp_event_base_t event_base,
+typedef const char*  event_base_t; /**< unique pointer to a subsystem that exposes events */
+typedef void*        event_loop_handle_t; /**< a number that identifies an event with respect to a base */
+typedef void         (*event_handler_t)(void* event_handler_arg,
+                                        event_base_t event_base,
                                         int32_t event_id,
                                         void* event_data); /**< function called when an event is posted to the queue */
-typedef void*        esp_event_handler_instance_t; /**< context identifying an instance of a registered event handler */
+typedef void*        event_handler_instance_t; /**< context identifying an instance of a registered event handler */
 //add by wangfei
-#include <esp_http_server.h>
+#include <http_server_service.h>
 #include "setting_ssid.h"
 #include "cJSON.h"
 
@@ -35,13 +33,10 @@ typedef void*        esp_event_handler_instance_t; /**< context identifying an i
  * handlers for the web server.
  */
 
-static const char *TAG = "example";
-
-static esp_err_t setting_handler(httpd_req_t *req){
+static int setting_handler(httpd_req_t *req){
     httpd_resp_set_type(req, "text/html");
     httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
     return httpd_resp_send(req, (const char *)setting_ssid_html_gz, setting_ssid_html_gz_len); 
-
 }
 
 httpd_uri_t setting_get = {
@@ -53,7 +48,7 @@ httpd_uri_t setting_get = {
 
 
 /* An HTTP POST handler */
-static esp_err_t setting_post_handler(httpd_req_t *req)
+static int setting_post_handler(httpd_req_t *req)
 {
     char buf[100];
     int ret, remaining = req->content_len;
@@ -66,7 +61,7 @@ static esp_err_t setting_post_handler(httpd_req_t *req)
                 /* Retry receiving if timeout occurred */
                 continue;
             }
-            return ESP_FAIL;
+            return OS_FAIL;
         }
 
         /* Send back the same data */
@@ -92,7 +87,7 @@ static esp_err_t setting_post_handler(httpd_req_t *req)
 
     // End response
     httpd_resp_send_chunk(req, NULL, 0);
-    return ESP_OK;
+    return OS_SUCCESS;
 }
 
 static const httpd_uri_t setting_post = {
@@ -110,16 +105,16 @@ static httpd_handle_t start_webserver(void)
     config.lru_purge_enable = true;
 
     // Start the httpd server
-    ESP_LOGI(TAG, "Starting server on port: '%d'", config.server_port);
-    if (httpd_start(&server, &config) == ESP_OK) {
+    os_printf(LM_APP, LL_DBG, "Starting server on port: '%d'", config.server_port);
+    if (httpd_start(&server, &config) == OS_SUCCESS) {
         // Set URI handlers
-        ESP_LOGI(TAG, "Registering URI handlers");
+        os_printf(LM_APP, LL_DBG, "Registering URI handlers");
         httpd_register_uri_handler(server, &setting_get);
         httpd_register_uri_handler(server, &setting_post);
         return server; 
     }
 
-    ESP_LOGI(TAG, "Error starting server!");
+    os_printf(LM_APP, LL_DBG, "Error starting server!");
     return NULL; 
 }
 

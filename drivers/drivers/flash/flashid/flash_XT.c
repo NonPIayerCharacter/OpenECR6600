@@ -28,6 +28,7 @@
 #define XT25F08B			0x14400B
 #define XT25F16F			0x15400B 
 #define XT25F32F			0x16400B 
+#define XT25F64F			0x17400B 
 
 
 static const T_SPI_FLASH_PARAM xt_flash_params[] = 
@@ -61,6 +62,16 @@ static const T_SPI_FLASH_PARAM xt_flash_params[] =
 		.flash_otp_block_num  = FLASH_OTP_BLOCK_NUM_3,
 		.flash_otp_block_interval = FLASH_OTP_BLOCK_INTERNAL_4096_BYTE,
 	},
+
+	{
+		.flash_id = XT25F64F,
+		.flash_size = FLASH_SIZE_8_MB,
+		.flash_name = "XT25F64F",
+		.flash_otp_star_addr  = FLASH_OTP_START_ADDR_0x1000,
+		.flash_otp_block_size = FLASH_OTP_BLOCK_SIZE_1024_BYTE,
+		.flash_otp_block_num  = FLASH_OTP_BLOCK_NUM_3,
+		.flash_otp_block_interval = FLASH_OTP_BLOCK_INTERNAL_4096_BYTE,
+	},
 };
 
 
@@ -78,7 +89,7 @@ static int spiFlash_XT_check_addr(unsigned int flash_id, int addr, int length)
 			return FLASH_RET_PARAMETER_ERROR;
 		}
 	}
-	else if(flash_id == XT25F16F || flash_id == XT25F32F)
+	else if(flash_id == XT25F16F || flash_id == XT25F32F || flash_id == XT25F64F)
 	{
 		if(!((addr>=0x001000 && addr<=0x0013FF && (addr + length - 1) <= 0x0013FF)
 		    ||(addr>=0x002000 && addr<=0x0023FF && (addr + length - 1) <= 0x0023FF)
@@ -211,7 +222,7 @@ int spiFlash_XT_OTP_Lock(struct _T_SPI_FLASH_DEV *  p_flash_dev, int LB)
 				return FLASH_RET_PARAMETER_ERROR;
 		}
 	}
-	else if(flash_id == XT25F16F || flash_id == XT25F32F)
+	else if(flash_id == XT25F16F || flash_id == XT25F32F || flash_id == XT25F64F)
 	{		
 		switch (LB)
 		{
@@ -264,7 +275,7 @@ int spiFlash_XT_OTP_Se(struct _T_SPI_FLASH_DEV *  p_flash_dev, unsigned int addr
 			return FLASH_RET_PARAMETER_ERROR;
 		}
 	}
-	else if(flash_id == XT25F16F || flash_id == XT25F32F)
+	else if(flash_id == XT25F16F || flash_id == XT25F32F || flash_id == XT25F64F)
 	{
 		if(!((addr>=0x001000 && addr<=0x0013FF)||(addr>=0x002000 && addr<=0x0023FF)||(addr>=0x003000 && addr<=0x0033FF)))
 		{

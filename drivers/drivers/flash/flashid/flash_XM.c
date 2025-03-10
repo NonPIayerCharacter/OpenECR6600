@@ -28,6 +28,7 @@
 #define XM25QH80B			0x144020
 #define XM25QH16C			0x154020
 #define XM25QH32B			0x164020
+#define XM25QH64C			0x174020
 
 
 
@@ -62,13 +63,23 @@ static const T_SPI_FLASH_PARAM xm_flash_params[] =
 		.flash_otp_block_num  = FLASH_OTP_BLOCK_NUM_3,
 		.flash_otp_block_interval = FLASH_OTP_BLOCK_INTERNAL_4096_BYTE,
 	},
+	
+	{
+		.flash_id = XM25QH64C,
+		.flash_size = FLASH_SIZE_8_MB,
+		.flash_name = "XM25QH64C",
+		.flash_otp_star_addr  = FLASH_OTP_START_ADDR_0x1000,
+		.flash_otp_block_size = FLASH_OTP_BLOCK_SIZE_256_BYTE,
+		.flash_otp_block_num  = FLASH_OTP_BLOCK_NUM_3,
+		.flash_otp_block_interval = FLASH_OTP_BLOCK_INTERNAL_4096_BYTE,
+	},
 };
 
 
 
 static int spiFlash_XM_check_addr(unsigned int flash_id, int addr, int length)
 {
-	if (flash_id == XM25QH80B || flash_id == XM25QH16C || flash_id == XM25QH32B )
+	if (flash_id == XM25QH80B || flash_id == XM25QH16C || flash_id == XM25QH32B || flash_id == XM25QH64C )
 	{
 		if(!((addr>=0x001000 && addr<=0x0010FF && ((addr + length - 1) <= 0x0010FF))
 			||(addr>=0x002000 && addr<=0x0020FF && ((addr + length - 1) <= 0x0020FF))
@@ -189,7 +200,7 @@ int spiFlash_XM_OTP_Lock(struct _T_SPI_FLASH_DEV *  p_flash_dev, int LB)
 
 	//data = (data & 0xFF)<<8;
 
-	if (flash_id == XM25QH80B || flash_id == XM25QH16C || flash_id == XM25QH32B)
+	if (flash_id == XM25QH80B || flash_id == XM25QH16C || flash_id == XM25QH32B || flash_id == XM25QH64C )
 	{		
 		switch (LB)
 		{
@@ -234,7 +245,7 @@ int spiFlash_XM_OTP_Se(struct _T_SPI_FLASH_DEV *  p_flash_dev, unsigned int addr
 	unsigned int j, data,irq_flag;
 	unsigned int flash_id = p_flash_dev->flash_param.flash_id;
 
-	if (flash_id == XM25QH80B || flash_id == XM25QH16C || flash_id == XM25QH32B)
+	if (flash_id == XM25QH80B || flash_id == XM25QH16C || flash_id == XM25QH32B || flash_id == XM25QH64C )
 	{
 		if(!((addr>=0x001000 && addr<=0x0010FF)||(addr>=0x002000 && addr<=0x0020FF)||(addr>=0x003000 && addr<=0x0030FF)))
 		{

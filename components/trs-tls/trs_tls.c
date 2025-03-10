@@ -20,8 +20,7 @@
 #include "sys/types.h"
 #include "trs_debug.h"
 
-#include "../at/at_def.h"
-#include "url_parser.h"
+#include "at_def.h"
 
 // #include <http_parser.h>
 
@@ -37,20 +36,16 @@ static struct addrinfo *resolve_host_name(const char *host, size_t hostlen)
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
-    // char *use_host = strndup(host, hostlen);
-    // if (!use_host) {
-    //     return NULL;
-    // }
     char *use_host = malloc(hostlen + 1);
-    if (NULL == use_host) {
+    if (!use_host) {
         return NULL;
     }
-    strncpy(use_host, host, hostlen);
-    // strcpy(use_host, host);
+    strcpy(use_host, host);
     
     os_printf(LM_APP, LL_INFO, "host:%s: strlen %lu\n", use_host, (unsigned long)hostlen);
     struct addrinfo *res;
     if (getaddrinfo(use_host, NULL, &hints, &res)) {
+        os_printf(LM_APP, LL_INFO, "couldn't get hostname for :%s:\n", use_host);
         free(use_host);
         return NULL;
     }
@@ -250,8 +245,7 @@ static int create_ssl_handle(trs_tls_t *tls, const char *hostname, size_t hostle
     if (!use_host) {
         goto exit;
     }
-    strncpy(use_host, hostname, hostlen);
-    // strcpy(use_host, hostname);
+    strcpy(use_host, hostname);
     
     if ((ret = mbedtls_ssl_set_hostname(&tls->ssl, use_host)) != 0) {
         os_printf(LM_APP, LL_INFO, "mbedtls_ssl_set_hostname returned -0x%x\n", -ret);
@@ -498,8 +492,6 @@ trs_tls_t *trs_tls_conn_new(const char *hostname, int hostlen, int port, const t
  */
 int trs_tls_conn_new_async(const char *hostname, int hostlen, int port, const trs_tls_cfg_t *cfg , trs_tls_t *tls)
 {
-    os_printf(LM_WIFI, LL_INFO, "tls:%p &tls->sockfd:%p sizeof(mbedtls_ssl_context):%d\n", tls, &tls->sockfd, sizeof(mbedtls_ssl_context));
-
     return trs_tls_low_level_conn(hostname, hostlen, port, cfg, tls);
 }
 

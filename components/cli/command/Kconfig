@@ -113,3 +113,8 @@ config CMD_HTTPSERVER
 	select WEB_CONFIG
 	depends on CMD_WIFI
 	default n
+
+config CMD_MQTT
+	bool "add mqtt cmd"
+	depends on MQTT
+	default y

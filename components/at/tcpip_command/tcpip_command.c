@@ -40,7 +40,7 @@ extern void wifi_sta_connnect(const char *ssid, const char *pwd);
 
 uint8_t g_temporary_mac[MAC_LEN] = {0};
 uint8_t g_temporary_mac_flag = 0;
-
+uint32_t ssl_client_num = 0;
 uint32_t g_at_port = AT_UDP_MIN_PORT;
 extern int8_t fhost_cntrl_map_check(uint8_t vif_type);
 dce_result_t dce_handle_CIPMAC_api(dce_t* dce, void* group_ctx, int kind, size_t argc,
@@ -572,9 +572,8 @@ dce_result_t dce_handle_CIPSTATUS(dce_t* dce, void* group_ctx, int kind, size_t 
     int at_status;
     char str[10] = {0};
     client_db_t *client = NULL;
-    wifi_work_mode_e wifi_mode;
+    wifi_work_mode_e wifi_mode = wifi_get_opmode();
 
-    hal_system_get_config(CUSTOMER_NV_WIFI_OP_MODE, &wifi_mode, sizeof(wifi_mode));
     if(wifi_mode == WIFI_MODE_AP){
         status = wifi_get_ap_status();
     } else {
@@ -660,7 +659,11 @@ dce_result_t dce_handle_CIPSTART(dce_t* dce, void* group_ctx, int kind, size_t a
         return DCE_RC_ERROR;
     }
     ++i;
-
+    if((client.type == conn_type_ssl) && (ssl_client_num != 0)) {
+        dce_emit_basic_result_code(dce, DCE_RC_ERROR);
+        os_printf(LM_APP, LL_INFO, "Only one ssl client can be established at most \r\n");
+        return DCE_RC_ERROR;
+    }
     //remote ip
     AT_CHECK_ERROR_RETURN(argv[i].type != ARG_TYPE_STRING);
     
@@ -669,7 +672,7 @@ dce_result_t dce_handle_CIPSTART(dce_t* dce, void* group_ctx, int kind, size_t a
     }
     ++i;
 
-    if(mode == WIFI_MODE_STA && wifi_get_status(STATION_IF) != STA_STATUS_CONNECTED)
+    if((mode == WIFI_MODE_STA || mode == WIFI_MODE_AP_STA) && wifi_get_status(STATION_IF) != STA_STATUS_CONNECTED)
     {
         dce_emit_extended_result_code(dce, "no ip", -1, 1);
         dce_emit_basic_result_code(dce, DCE_RC_ERROR);
@@ -752,6 +755,10 @@ dce_result_t dce_handle_CIPSTART(dce_t* dce, void* group_ctx, int kind, size_t a
     if (ret) {
         dce_emit_basic_result_code(dce, DCE_RC_ERROR);
         return DCE_RC_ERROR;
+    } else {
+        if(client.type == conn_type_ssl) {
+            ssl_client_num++;
+        }
     }
     
 
@@ -808,9 +815,8 @@ dce_result_t dce_handle_CIPSEND_api(dce_t* dce, void* group_ctx, int kind, size_
 
 	int at_status;
 	wifi_status_e status = STATUS_ERROR;
-    wifi_work_mode_e wifi_mode;
+    wifi_work_mode_e wifi_mode = wifi_get_opmode();
 
-    hal_system_get_config(CUSTOMER_NV_WIFI_OP_MODE, &wifi_mode, sizeof(wifi_mode));
     if(wifi_mode == WIFI_MODE_AP){
         status = wifi_get_ap_status();
     } else {
@@ -1114,6 +1120,9 @@ dce_result_t dce_handle_CIPMUX(dce_t* dce, void* group_ctx, int kind, size_t arg
 
 dce_result_t dce_handle_CIPSERVER(dce_t* dce, void* group_ctx, int kind, size_t argc, arg_t* argv)
 {
+    wifi_work_mode_e wifi_mode;
+    wifi_mode = wifi_get_opmode();
+
     if (kind != DCE_WRITE){
         dce_emit_basic_result_code(dce, DCE_RC_ERROR);
         return DCE_OK;
@@ -1124,13 +1133,25 @@ dce_result_t dce_handle_CIPSERVER(dce_t* dce, void* group_ctx, int kind, size_t 
         dce_emit_basic_result_code(dce, DCE_RC_ERROR);
         return DCE_OK;
     }
-    if(wifi_get_status(STATION_IF) != STA_STATUS_CONNECTED && wifi_get_status(SOFTAP_IF) != AP_STATUS_STARTED)
-    {
-        os_printf(LM_APP, LL_INFO, "not connect wifi or set ap \r\n");
-        dce_emit_basic_result_code(dce, DCE_RC_ERROR);
-        return DCE_OK;
-    }
 
+    if((wifi_mode == WIFI_MODE_STA) || (wifi_mode == WIFI_MODE_AP))
+    {
+        if(wifi_get_status(STATION_IF) != STA_STATUS_CONNECTED && wifi_get_status(SOFTAP_IF) != AP_STATUS_STARTED)
+        {
+            os_printf(LM_APP, LL_INFO, "not connect wifi or set ap \r\n");
+            dce_emit_basic_result_code(dce, DCE_RC_ERROR);
+            return DCE_OK;
+        }
+    }
+    else if (wifi_mode == WIFI_MODE_AP_STA)
+    {
+        if(wifi_get_status(STATION_IF) != STA_STATUS_CONNECTED)
+        {
+            os_printf(LM_APP, LL_INFO, "not connect wifi in sta+ap mode\r\n");
+            dce_emit_basic_result_code(dce, DCE_RC_ERROR);
+            return DCE_OK;
+        }
+    }
 	int index = 0;
     server_db_t server;
     memset(&server, 0, sizeof(server));
@@ -1163,31 +1184,9 @@ dce_result_t dce_handle_CIPSERVER(dce_t* dce, void* group_ctx, int kind, size_t 
 			}
 		   
            if(mode == 0){
-                //close tcp/udp/ssl server
-                if (!list_empty(&cfg->server_list)) {
-                    client_db_t *client, *client_tmp;
-                    server_db_t *server_del, *server_tmp;
-                    list_for_each_entry_safe(server_del, server_tmp, &cfg->server_list, list) {
-                        if (server_del->type == server.type && server_del->ip_info.src_port == server.ip_info.src_port) {
-                            unsigned char *serverid = (server_del->type == conn_type_udp) ? &cfg->udp_server_id : &cfg->tcp_server_id;
-                            close(server_del->listen_fd);
-                            list_for_each_entry_safe(client, client_tmp, &server_del->client_list, list) {
-                                at_net_client_close(client);
-                            }
-
-                            if (server_del->type == conn_type_udp) {
-                                *serverid &= ~(1 << (server_del->id - MAX_CONN_NUM));
-                            } else {
-                                *serverid &= ~(1 << server_del->id);
-                            }
-                            list_del(&server_del->list);
-                            free(server_del);
-                        }
-                    }
-                }
-
-                dce_emit_basic_result_code(dce, DCE_RC_OK);
-                return DCE_OK;
+               at_net_server_stop(&server);
+               dce_emit_basic_result_code(dce, DCE_RC_OK);
+               return DCE_OK;
            } 
 		   else if(mode == 1 && 
                      argv[1].value.number < 65535 && 
@@ -1413,10 +1412,14 @@ dce_result_t dce_handle_CIPRECVDATA(dce_t* dce, void* group_ctx, int kind, size_
 						}
 					}
 				}
+                if (link_id == client_tcp->id)
+                {
+                    break;
+                }
 			}
             if (cfg->ipmux == 1) {
                 if (temp_len > 0)
-                    pos = sprintf(IPD_BUF,"+IPD,%d,%d\r\n",client_tcp->id, cfg->recv_buff.recv_data[client_tcp->id]->read_len);
+                    pos = sprintf(IPD_BUF,"+IPD,%d,%d\r\n",link_id, cfg->recv_buff.recv_data[link_id]->read_len);
                 else
                     pos = sprintf(IPD_BUF,"+IPD,%d,%d\r\n", link_id, 0);
             } else {

@@ -27,7 +27,7 @@
 #include "system_config.h"
 #include "bluetooth.h"
 #include "arch_irq.h"
-
+#include "ble_thread.h"
 
 /****************************************************************************************
  * 
@@ -501,7 +501,7 @@ static void _master_con_del_list(uint16_t conn_handle)
     if(cmd_master_con.head->conn_info.conn_handle == conn_handle)
     {
         p = cmd_master_con.head;
-        cmd_master_con.head = p->next;
+        cmd_master_con.head = NULL;
         os_free(p);
         cmd_master_con.num--;
         find = true;
@@ -686,7 +686,7 @@ static void _ble_proc_disconnect_evt(ECR_BLE_GAP_PARAMS_EVT_T *p_event)
                 dce_emit_information_response(ble_cmd_cxt.pdce, resp_buf, -1);
 			}
         }
-        _master_con_del_list(p_event->conn_handle);
+        if(con_info)_master_con_del_list(p_event->conn_handle);
     }
 
     if(cmd_slave_con.conn_handle == ECR_BLE_GATT_INVALID_HANDLE
@@ -1016,14 +1016,7 @@ static void _ble_eus_gatt_event_cb(ECR_BLE_GATT_PARAMS_EVT_T *p_event)
             if(p_event->conn_handle == cmd_slave_con.conn_handle && ble_cmd_cxt.ttmod == BLE_TRANSPARENT_MODE)
             {
                 if(p_event->gatt_event.write_report.char_handle == cmd_slave_con.rx_handle)
-                {                
-                    char resp_buf[50] = {0};
-
-                    if(CONFIG_LE_CONN > 1)
-                    {
-                        sprintf(resp_buf, "<%d>", p_event->conn_handle);
-                        dce_emit_pure_response(ble_cmd_cxt.pdce, resp_buf, strlen(resp_buf));
-                    }
+                {     
                     dce_emit_pure_response(ble_cmd_cxt.pdce, (char*)p_event->gatt_event.write_report.report.p_data, 
                     p_event->gatt_event.write_report.report.length);
                 }
@@ -1044,21 +1037,8 @@ static void _ble_eus_gatt_event_cb(ECR_BLE_GATT_PARAMS_EVT_T *p_event)
                        msg_send.conn_handle = p_event->conn_handle;
                        os_queue_send(ble_cmd_cxt.msg_queue, (char*)&msg_send, sizeof(BLE_CMD_MSG_ST), 0);
 					}
-					else if((ble_cmd_cxt.connected == false)||(ble_cmd_cxt.start_recon))
-					{
-					  if(!ble_cmd_cxt.start_recon)
-					  {
-	                      char resp_buf[50];
-	                      sprintf(resp_buf,"+CONNECTED[%d],%02X:%02X:%02X:%02X:%02X:%02X",p_event->conn_handle,con_info->peer_addr.addr[5],con_info->peer_addr.addr[4],con_info->peer_addr.addr[3],
-	                          con_info->peer_addr.addr[2], con_info->peer_addr.addr[1], con_info->peer_addr.addr[0]);                
-	                      dce_emit_basic_result_code(ble_cmd_cxt.pdce,DCE_RC_OK);
-						  dce_emit_information_response(ble_cmd_cxt.pdce, resp_buf, -1);
-					  }
-					  ble_cmd_cxt.reest_conn_time = 0;
-					  ble_cmd_cxt.reconn_time = 0;
-					  ble_cmd_cxt.connecting = false;
-                      ble_cmd_cxt.connected = true;
-					  _ble_switch_ttmod(BLE_TRANSPARENT_MODE);
+                    else
+                    {
   					  BLE_CMD_MSG_ST msg_send = {0};
                       msg_send.msg_type = BLE_CMD_MSG_EXH_MTU;
                       msg_send.conn_handle = p_event->conn_handle;
@@ -1112,9 +1092,10 @@ static void _ble_eus_gatt_event_cb(ECR_BLE_GATT_PARAMS_EVT_T *p_event)
                 {
                     _ble_proc_char_discovery_evt(p_event->conn_handle, &p_event->gatt_event.char_disc);
                 }
+                //Exanchge Client MTU
                 else if(p_event->result == BT_ERROR_DISC_DONE)
                 { 
-                    //start service char discovery
+                    //start discovery char disc
                     BLE_CMD_MSG_ST msg_send = {0};
                     msg_send.msg_type = BLE_CMD_MSG_DESC_DISC;
                     msg_send.conn_handle = p_event->conn_handle;
@@ -1128,18 +1109,35 @@ static void _ble_eus_gatt_event_cb(ECR_BLE_GATT_PARAMS_EVT_T *p_event)
             break;
 		case ECR_BLE_GATT_EVT_CHAR_DESC_DISCOVERY:
 			{
+                BLE_CON_LIST_T * con_info = NULL;
                 if(p_event->result == BT_ERROR_NO_ERROR)
                 {
                     _ble_proc_disc_discovery_evt(p_event->conn_handle, &p_event->gatt_event.desc_disc);
                 }
                 else if(p_event->result == BT_ERROR_DISC_DONE)
                 {
-					os_timer_stop(ble_cmd_cxt.conn_timeout);
-                    //start enable cccd
-                    BLE_CMD_MSG_ST msg_send = {0};
-                    msg_send.msg_type = BLE_CMD_MSG_CCCD_ENABLE;
-                    msg_send.conn_handle = p_event->conn_handle;
-                    os_queue_send(ble_cmd_cxt.msg_queue, (char*)&msg_send, sizeof(BLE_CMD_MSG_ST), 0);
+                    con_info = _master_con_get_by_conn(p_event->conn_handle);
+                    if(con_info == NULL)
+                    {
+                        os_printf(LM_CMD, LL_ERR, "con_info is NULL\n");
+                        return;
+                    }
+                    else if(con_info->cccd_num > 0)
+                    {
+                        os_timer_stop(ble_cmd_cxt.conn_timeout);
+                        //start enable cccd
+                        BLE_CMD_MSG_ST msg_send = {0};
+                        msg_send.msg_type = BLE_CMD_MSG_CCCD_ENABLE;
+                        msg_send.conn_handle = p_event->conn_handle;
+                        os_queue_send(ble_cmd_cxt.msg_queue, (char*)&msg_send, sizeof(BLE_CMD_MSG_ST), 0);
+                    }
+                    else
+                    {
+                        BLE_CMD_MSG_ST msg_send = {0};
+                        msg_send.msg_type = BLE_CMD_MSG_EXH_MTU;
+                        msg_send.conn_handle = p_event->conn_handle;
+                        os_queue_send(ble_cmd_cxt.msg_queue, (char*)&msg_send, sizeof(BLE_CMD_MSG_ST), 0);
+                    }
 				}
 				else
 				{
@@ -1153,14 +1151,8 @@ static void _ble_eus_gatt_event_cb(ECR_BLE_GATT_PARAMS_EVT_T *p_event)
                 BLE_CON_LIST_T * con_info = _master_con_get_by_conn(p_event->conn_handle);
                 
                 if(p_event->gatt_event.data_report.char_handle == con_info->conn_info.tx_handle)
-                {
-                    char resp_buf[50];                    
-
-                    if(CONFIG_LE_CONN > 1)
-                    {
-                        sprintf(resp_buf,"<%d>",p_event->conn_handle);
-                        dce_emit_pure_response(ble_cmd_cxt.pdce, resp_buf, strlen(resp_buf));
-                    }
+                {      
+                    os_printf(LM_BLE, LL_INFO, "master received slave data=%s\n",p_event->gatt_event.data_report.report.p_data);                
                     dce_emit_pure_response(ble_cmd_cxt.pdce, (char*)p_event->gatt_event.data_report.report.p_data, 
                     p_event->gatt_event.data_report.report.length);
                 }
@@ -1168,18 +1160,30 @@ static void _ble_eus_gatt_event_cb(ECR_BLE_GATT_PARAMS_EVT_T *p_event)
             break;
 		case ECR_BLE_GATT_EVT_MTU_RSP:
 			{
-			    #ifdef CONFIG_AT_UART_0
-		        arch_irq_unmask(VECTOR_NUM_UART0);
-		        #endif
-		        #ifdef CONFIG_AT_UART_1
-		        arch_irq_unmask(VECTOR_NUM_UART1);
-		        #endif
-		        #ifdef CONFIG_AT_UART_2
-		        arch_irq_unmask(VECTOR_NUM_UART2);
-		        #endif
-				ble_cmd_cxt.start_recon=false;
-				os_timer_changeperiod(ble_cmd_cxt.conn_timeout, BLE_CONNECT_TIMEOUT);
-				os_timer_stop(ble_cmd_cxt.conn_timeout);
+                BLE_CON_LIST_T * con_info = NULL;
+                con_info = _master_con_get_by_conn(p_event->conn_handle);
+                if(con_info != NULL)
+        		 {
+        		      if((ble_cmd_cxt.connected == false)||(ble_cmd_cxt.start_recon))
+                      {
+                           if(!ble_cmd_cxt.start_recon)
+                           {
+                              char resp_buf[50];
+                              sprintf(resp_buf,"+CONNECTED[%d],%02X:%02X:%02X:%02X:%02X:%02X",p_event->conn_handle,con_info->peer_addr.addr[5],con_info->peer_addr.addr[4],con_info->peer_addr.addr[3],
+                                  con_info->peer_addr.addr[2], con_info->peer_addr.addr[1], con_info->peer_addr.addr[0]);                
+                              dce_emit_basic_result_code(ble_cmd_cxt.pdce,DCE_RC_OK);
+                			  dce_emit_information_response(ble_cmd_cxt.pdce, resp_buf, -1);
+                           }
+                      }      
+                      ble_cmd_cxt.connecting = false;
+                      ble_cmd_cxt.connected = true;
+                      ble_cmd_cxt.reest_conn_time = 0;
+                	  ble_cmd_cxt.reconn_time = 0;
+                	  ble_cmd_cxt.start_recon=false;
+                      os_timer_changeperiod(ble_cmd_cxt.conn_timeout, BLE_CONNECT_TIMEOUT);
+                	  os_timer_stop(ble_cmd_cxt.conn_timeout);
+            		 _ble_switch_ttmod(BLE_TRANSPARENT_MODE);
+        		 }
 			}
 			break;
 		default:
@@ -1396,11 +1400,12 @@ static void _ble_app_init(void)
 	}
 
     #if defined(CONFIG_NV)
-	int status2 = hal_system_get_config(CUSTOMER_NV_BLE_ADVMODE, &ble_cmd_cxt.adv_mod, sizeof(ble_cmd_cxt.adv_mod));
+	//int status2 = hal_system_get_config(CUSTOMER_NV_BLE_ADVMODE, &ble_cmd_cxt.adv_mod, sizeof(ble_cmd_cxt.adv_mod));
+	int status2 = develop_get_env_blob("BleAdvMode", &ble_cmd_cxt.adv_mod, sizeof(ble_cmd_cxt.adv_mod),NULL);
 	if((0 == status2) || (0xffffffff == status2))
 	#endif
 	{
-	    ble_cmd_cxt.adv_mod = BLE_ADV_AUTO;
+	    ble_cmd_cxt.adv_mod = BLE_ADV_MANUAL;
 	}
 
     ecr_ble_reset();
@@ -1472,11 +1477,11 @@ void  _ble_process_msg_task(void* param)
                     BLE_CON_LIST_T * con_info = NULL;
                     con_info = _master_con_get_by_conn(msg_recv.conn_handle);
 					
-					uint8_t char_value[1] = {1}; 
+					uint8_t cccd_enable = 1; 
                     if(con_info != NULL)
                     {
                        con_info->cccd_num-=1;
-                       ecr_ble_gattc_write(con_info->conn_info.conn_handle, con_info->cccd_handle[con_info->cccd_num], char_value, 1);
+                       ecr_ble_gattc_write(con_info->conn_info.conn_handle, con_info->cccd_handle[con_info->cccd_num], &cccd_enable, 1);
                     }
                 }
 				break;
@@ -1499,15 +1504,6 @@ void  _ble_process_msg_task(void* param)
 					char resp_buf[50];
 					if(ble_cmd_cxt.reconn_time<AUTO_CONN_TIME)
 					{
-				        #ifdef CONFIG_AT_UART_0
-				        arch_irq_mask(VECTOR_NUM_UART0);
-				        #endif
-				        #ifdef CONFIG_AT_UART_1
-				        arch_irq_mask(VECTOR_NUM_UART1);
-				        #endif
-				        #ifdef CONFIG_AT_UART_2
-				        arch_irq_mask(VECTOR_NUM_UART2);
-				        #endif
 						ble_cmd_cxt.reconn_time++;
 						ble_cmd_cxt.start_recon=true;
 						os_timer_changeperiod(ble_cmd_cxt.conn_timeout, BLE_CONNECT_TIMEOUT/2);
@@ -1516,15 +1512,6 @@ void  _ble_process_msg_task(void* param)
 					}
 					else if(ble_cmd_cxt.reconn_time>=AUTO_CONN_TIME)
 					{
-				        #ifdef CONFIG_AT_UART_0
-				        arch_irq_unmask(VECTOR_NUM_UART0);
-				        #endif
-				        #ifdef CONFIG_AT_UART_1
-				        arch_irq_unmask(VECTOR_NUM_UART1);
-				        #endif
-				        #ifdef CONFIG_AT_UART_2
-				        arch_irq_unmask(VECTOR_NUM_UART2);
-				        #endif
 						ble_cmd_cxt.reconn_time = 0;
 						ble_cmd_cxt.start_recon=false;
 						ble_cmd_cxt.connected = false;
@@ -1619,7 +1606,8 @@ dce_result_t at_handle_ADVMOD_command(dce_t *dce,void *group_ctx,int kind,size_t
         {
             ble_cmd_cxt.adv_mod = argv[0].value.number;
 #if defined(CONFIG_NV)
-            hal_system_set_config(CUSTOMER_NV_BLE_ADVMODE, &ble_cmd_cxt.adv_mod, sizeof(ble_cmd_cxt.adv_mod));
+           // hal_system_set_config(CUSTOMER_NV_BLE_ADVMODE, &ble_cmd_cxt.adv_mod, sizeof(ble_cmd_cxt.adv_mod));
+			develop_set_env_blob("BleAdvMode",&ble_cmd_cxt.adv_mod,sizeof(ble_cmd_cxt.adv_mod));
 #endif
             sprintf(resp_buf,"+BLEADVMOD:%d", ble_cmd_cxt.adv_mod);        
             dce_emit_information_response(dce, resp_buf, -1);
@@ -2150,7 +2138,7 @@ void ble_at_init_func(dce_t* dce)
     #if defined(CONFIG_NV)
     if(hal_system_get_config(CUSTOMER_NV_UART_CONFIG, &(config), sizeof(config)))
     {
-       if(config.uart_baud_rate != BAUD_RATE_9600) 
+       if(config.uart_baud_rate != BAUD_RATE_9600)
        {
          //Calculate timeout 40bit 40*1/baud_rate*1000=x.xx ms =x+1 
          uart_recv_timeout = (uint32_t)(4*10*(1/config.uart_baud_rate)*1000)+1;
@@ -2172,7 +2160,36 @@ void ble_at_init_func(dce_t* dce)
     ble_cmd_cxt.conn_timeout = os_timer_create("connect_timeout", BLE_CONNECT_TIMEOUT, 0, _ble_connect_timeout, NULL);
     os_task_create("BLE_PROCESS_MSG", 8, 4096, (task_entry_t)_ble_process_msg_task, NULL);
 }
+static void ecr_ble_adv_start(void)
+{
+	ECR_BLE_GAP_ADV_PARAMS_T adv_param;
+	adv_param.adv_type=ECR_BLE_GAP_ADV_TYPE_CONN_SCANNABLE_UNDIRECTED;
+	memset(&(adv_param.direct_addr),0,sizeof(ECR_BLE_GAP_ADDR_T));
+	adv_param.adv_interval_max=64;
+	adv_param.adv_interval_min=64;
+	adv_param.adv_channel_map=0x07;
+	ecr_ble_gap_adv_start(&adv_param);
+}
 
+dce_result_t at_handle_apps_command(dce_t *dce,void* group_ctx,int kind,size_t argc,arg_t *argv)
+{
+	dce_result_t ret = DCE_RC_OK;
+	if(DCE_EXEC != kind)
+	{
+	    dce_emit_basic_result_code(dce, DCE_RC_ERROR);
+		ret = DCE_RC_ERROR;
+	}
+	ecr_ble_reset();
+	BLE_APPS_INIT();
+	ecr_ble_adv_start();
+    dce_emit_basic_result_code(dce, DCE_RC_OK);
+	ret = DCE_RC_OK;
+			
+		
+	return  ret;
+
+
+}
 
 static const command_desc_t BLE_commands[]={
    
@@ -2189,6 +2206,8 @@ static const command_desc_t BLE_commands[]={
     { "BLESCANSTOP" ,         &at_handle_SCANSTOP_command,           DCE_EXEC},    
     { "BLESCANRLT" ,          &at_handle_SCANRLT_command,           DCE_WRITE},
     { "BLECONN" ,             &at_handle_CONN_command,           DCE_WRITE},
+	{ "BLEAPPS",			&at_handle_apps_command,				DCE_EXEC}
+//	{ "BLEAPPS",			&at_handle_apps_command,				DCE_EXEC}
 };
 
 

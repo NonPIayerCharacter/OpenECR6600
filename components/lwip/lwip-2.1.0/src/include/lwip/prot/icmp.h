@@ -84,6 +84,10 @@ PACK_STRUCT_END
 #define ICMPH_TYPE_SET(hdr, t) ((hdr)->type = (t))
 #define ICMPH_CODE_SET(hdr, c) ((hdr)->code = (c))
 
+#ifndef WIFI_HEARTBEAT_PING_ID
+#define WIFI_HEARTBEAT_PING_ID        0xAFAE
+#endif
+
 #ifdef __cplusplus
 }
 #endif

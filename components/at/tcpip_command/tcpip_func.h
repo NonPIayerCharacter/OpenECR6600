@@ -6,7 +6,8 @@
 #include "lwip/sockets.h"
 #include "timers.h"
 #include "dce.h"
-#define MAX_CONN_NUM    5
+#include "wifi_command.h"
+
 #define MAX_RECONN_NUM	10
 #define AT_MAX_RECV_LEN  1472
 #define AT_MAX_RECV_DATA_LEN	2920
@@ -107,6 +108,7 @@ typedef struct {
     unsigned char    ssl_mode;
     unsigned int     ssl_buff_size;
     TimerHandle_t    uart_rx_timeout;       //from uart to socket tx timeout.
+    TimerHandle_t    reconnect_interval_times;
     QueueHandle_t    uart_rx_queue;
     unsigned char    tcp_server_id;
     unsigned char    udp_server_id;
@@ -125,6 +127,9 @@ client_db_t * at_net_find_client(unsigned char link_id);
 client_db_t * at_net_find_client_by_status(conn_stat_e state);
 int at_net_resolve_dns(const char *host, struct sockaddr_in *ip);
 int at_net_server_start(server_db_t *server);
+void at_net_server_stop(server_db_t *server_param);
+
+
 int at_net_close(int link_id);
 int at_net_abort_uart_rx(void);
 void at_net_iterate_client(client_iterate_cb func, void *in, void *out);

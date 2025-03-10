@@ -7,10 +7,12 @@
 #include "portmacro.h"
 
 #include "mqtt_client.h"
-
+#include "mqtt_command.h"
 
 #include "url_parser.h"
 #include "oshal.h"
+#include "at_common.h"
+
 
 /* using uri parser */
 
@@ -274,6 +276,7 @@ static int trs_mqtt_connect(trs_mqtt_client_handle_t client, int timeout_ms)
     switch (connect_rsp_code) {
         case CONNECTION_ACCEPTED:
             os_printf(LM_APP, LL_INFO, "MQTT:Connected\n");
+			target_dce_transmit("[DA]MQTT:1\r\n", strlen("[DA]MQTT:1\r\n"));
             return 0;
         case CONNECTION_REFUSE_PROTOCOL:
             os_printf(LM_APP, LL_INFO, "MQTT:Connection refused, bad protocol\n");
@@ -301,10 +304,12 @@ static int trs_mqtt_abort_connection(trs_mqtt_client_handle_t client)
     client->reconnect_tick = platform_tick_get_ms();
     client->state = MQTT_STATE_WAIT_TIMEOUT;
     os_printf(LM_APP, LL_INFO, "MQTT:Reconnect after %d ms\n", client->wait_timeout_ms);
+	target_dce_transmit("[DA]MQTT:0\r\n", strlen("[DA]MQTT:0\r\n"));
     client->event.event_id = MQTT_EVENT_DISCONNECTED;
     client->wait_for_ping_resp = false;
     client->heartbeat_count = 0;
     trs_mqtt_dispatch_event(client);
+	skylab_mqtt_cean_status();
     return 0;
 }
 
@@ -625,7 +630,7 @@ static int mqtt_process_receive(trs_mqtt_client_handle_t client)
     msg_qos = mqtt_get_qos(client->mqtt_state.in_buffer);
     msg_id = mqtt_get_id(client->mqtt_state.in_buffer, client->mqtt_state.in_buffer_length);
 
-    //os_printf(LM_APP, LL_ERR, "MQTT:msg_type=%d, msg_id=%d\n", msg_type, msg_id);
+    os_printf(LM_APP, LL_ERR, "MQTT:msg_type=%d, msg_id=%d\n", msg_type, msg_id);
     switch (msg_type)
     {
         case MQTT_MSG_TYPE_SUBACK:
@@ -652,7 +657,6 @@ static int mqtt_process_receive(trs_mqtt_client_handle_t client)
 
             if (msg_qos == 1 || msg_qos == 2) {
                 os_printf(LM_APP, LL_INFO, "MQTT:Queue response QoS: %d\n", msg_qos);
-
                 if (mqtt_write_data(client) != 0) {
                     os_printf(LM_APP, LL_ERR, "MQTT:Error write qos msg repsonse, qos = %d\n", msg_qos);
                     // TODO: Shoule reconnect?
@@ -892,6 +896,11 @@ int trs_mqtt_client_stop(trs_mqtt_client_handle_t client)
     client->run = false;
     os_printf(LM_APP, LL_INFO, "MQTT:current state is %d\n",client->state);
     client->state = MQTT_STATE_UNKNOWN;
+    client->mqtt_state.outbound_message = mqtt_msg_disconnect(&client->mqtt_state.mqtt_connection);
+    if (mqtt_write_data(client) != 0) {
+        os_printf(LM_APP, LL_ERR, "MQTT:Error send stop message\n");
+        return -1;
+    }
     return 0;
 }
 

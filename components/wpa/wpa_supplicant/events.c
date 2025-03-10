@@ -34,6 +34,10 @@
 #include "offchannel.h"
 #include "wpas_pmk.h"
 
+#include "system_event.h"
+
+uint8_t g_balconn = 0;
+
 #ifndef CONFIG_NO_SCAN_PROCESSING
 static int wpas_select_network_from_last_scan(struct wpa_supplicant *wpa_s,
 					      int new_scan, int own_request);
@@ -859,6 +863,57 @@ static int addr_in_list(const u8 *addr, const u8 *list, size_t num)
 }
 #endif /* COMPILE_WARNING_OPTIMIZE_WPA */
 
+void wpa_scan_res_mark_fail(struct wpa_supplicant *wpa_s)
+{
+    uint8_t *bssid;
+    if (wpa_s->wpa_state >= WPA_ASSOCIATED)
+    {
+        bssid = wpa_s->bssid;
+    }
+    else
+    {
+        bssid = wpa_s->pending_bssid;
+    }
+    if (g_balconn)
+    {
+        for (int i = 0; i < wpa_s->last_scan_res_used; i++) 
+        {
+            struct wpa_bss *bss = wpa_s->last_scan_res[i];
+            if (os_memcmp(bss->bssid, bssid, ETH_ALEN) == 0)
+            {
+                if (bss->fail_cnt < 0xff)
+                {
+                    bss->fail_cnt++;
+                }
+            }
+        }
+    }
+}
+
+void wpa_scan_res_clear_fail(struct wpa_supplicant *wpa_s)
+{
+    uint8_t *bssid;
+    if (wpa_s->wpa_state >= WPA_ASSOCIATED)
+    {
+        bssid = wpa_s->bssid;
+    }
+    else
+    {
+        bssid = wpa_s->pending_bssid;
+    }
+    if (g_balconn)
+    {
+        for (int i = 0; i < wpa_s->last_scan_res_used; i++) 
+        {
+            struct wpa_bss *bss = wpa_s->last_scan_res[i];
+            if (os_memcmp(bss->bssid, bssid, ETH_ALEN) == 0)
+            {
+                    bss->fail_cnt = 0;
+            }
+        }
+    }
+}
+
 
 struct wpa_ssid * wpa_scan_res_match(struct wpa_supplicant *wpa_s,
 				     int i, struct wpa_bss *bss,
@@ -1104,7 +1159,6 @@ struct wpa_ssid * wpa_scan_res_match(struct wpa_supplicant *wpa_s,
 	return NULL;
 }
 
-
 static struct wpa_bss *
 wpa_supplicant_select_bss(struct wpa_supplicant *wpa_s,
 			  struct wpa_ssid *group,
@@ -1114,7 +1168,9 @@ wpa_supplicant_select_bss(struct wpa_supplicant *wpa_s,
 	unsigned int i;
 	struct wpa_bss *selected_bss = NULL;
 	struct wpa_ssid *match_ssid = NULL;
+    
 	signed char rssi = -120;
+	uint8_t min_fail_cnt = 0xff;
 	/*if (only_first_ssid)
 		wpa_dbg(wpa_s, MSG_DEBUG, "Try to find BSS matching pre-selected network id=%d",
 			group->id);
@@ -1132,15 +1188,37 @@ wpa_supplicant_select_bss(struct wpa_supplicant *wpa_s,
 			" ssid='%s'",
 			MAC2STR(bss->bssid),
 			wpa_ssid_txt(bss->ssid, bss->ssid_len));
+		wpa_dbg(wpa_s,MSG_DEBUG,"fail_cnt = %d,"MACSTR"\n",bss->fail_cnt, MAC2STR(bss->bssid));
 
-		if(rssi <= (signed char)bss->level)
+		if (g_balconn)
 		{
-			rssi = (signed char )bss->level;
-			selected_bss = bss;
-			*selected_ssid = match_ssid;
+			if (bss->fail_cnt < min_fail_cnt)
+			{
+				min_fail_cnt = bss->fail_cnt;
+				rssi = (signed char )bss->level;
+				selected_bss = bss;
+				*selected_ssid = match_ssid;
+			}
+			else if (bss->fail_cnt == min_fail_cnt)
+			{
+				if(rssi <= (signed char)bss->level)
+				{
+					rssi = (signed char )bss->level;
+					selected_bss = bss;
+					*selected_ssid = match_ssid;
+				}
+			}
+		}
+		else
+		{
+			if(rssi <= (signed char)bss->level)
+			{
+				rssi = (signed char )bss->level;
+				selected_bss = bss;
+				*selected_ssid = match_ssid;
+			}
 		}
 	}
-
 	return selected_bss;
 }
 
@@ -1517,8 +1595,12 @@ static int _wpa_supplicant_event_scan_results(struct wpa_supplicant *wpa_s,
 			"scanning again");
 		wpa_supplicant_req_new_scan(wpa_s, 1, 0);
 
-        wpas_notify_scan_done(wpa_s, 1);
-     
+		wpas_notify_scan_done(wpa_s, 1);
+
+		if(wpa_s->last_scan_req == NORMAL_SCAN_REQ) {
+			wpa_update_disconnect_reason(WLAN_REASON_AP_NOT_FOUND);
+		}
+   
 		ret = -1;
 		goto scan_work_done;
 	}
@@ -2419,6 +2501,42 @@ static int could_be_psk_mismatch(struct wpa_supplicant *wpa_s, u16 reason_code,
 	return 1;
 }
 
+static wifi_discon_reason_e disconnect_reason_code = 0;
+void wpa_update_disconnect_reason(u16 reason)
+{
+    switch (reason)
+    {
+        case WLAN_REASON_CONNECTED:
+            disconnect_reason_code = REASON_NO_ERROR;
+            break;
+        case WLAN_REASON_4WAY_HANDSHAKE_FAIL:
+            disconnect_reason_code = REASON_PWD_ERROR;
+            break;
+        case WLAN_REASON_UNSPECIFIED | WLAN_RX_SELF_DEFINE_FLAG:
+            disconnect_reason_code = REASON_BEACON_LOST;
+            break;
+        case WLAN_REASON_DEAUTH_LEAVING | WLAN_RX_SELF_DEFINE_FLAG:
+            disconnect_reason_code = REASON_USER_DISCONNECT;
+            break;
+        case WLAN_REASON_DEAUTH_LEAVING:
+        case WLAN_REASON_CLASS2_FRAME_FROM_NONAUTH_STA:
+        case WLAN_REASON_CLASS3_FRAME_FROM_NONASSOC_STA:
+            disconnect_reason_code = REASON_AP_DISCONNECT;
+            break;
+        case WLAN_REASON_AP_NOT_FOUND:
+            disconnect_reason_code = REASON_SCAN_NOT_FOUND;
+            break;
+        default:
+            break;
+    }
+}
+
+wifi_discon_reason_e wpa_disconnect_reason()
+{	
+    return disconnect_reason_code;
+}
+
+
 #ifdef CONFIG_PSM_SUPER_LOWPOWER
 unsigned int fast_reconnect_freq = 0;
 #endif
@@ -2525,6 +2643,7 @@ static void wpa_supplicant_event_disassoc_finish(struct wpa_supplicant *wpa_s,
 		wpa_s->disconnect_reason = -reason_code;
 	else
 		wpa_s->disconnect_reason = reason_code;
+	wpa_update_disconnect_reason(locally_generated ? reason_code | WLAN_RX_SELF_DEFINE_FLAG :  reason_code);
 	//wpas_notify_disconnect_reason(wpa_s);
 	if (wpa_supplicant_dynamic_keys(wpa_s)) {
 		wpa_dbg(wpa_s, MSG_DEBUG, "Disconnect event - remove keys");
@@ -3420,6 +3539,10 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 		}
 		break;
 	case EVENT_DISASSOC:
+		if (data && (!data->disassoc_info.locally_generated))
+		{
+			wpa_scan_res_mark_fail(wpa_s);
+		}
 		wpas_event_disassoc(wpa_s,
 				    data ? &data->disassoc_info : NULL);
 		break;
@@ -3431,6 +3554,10 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 			break;
 		}
 #endif /* CONFIG_TESTING_OPTIONS */
+		if (data && (!data->deauth_info.locally_generated))
+		{
+			wpa_scan_res_mark_fail(wpa_s);
+		}
 		wpas_event_deauth(wpa_s,
 				  data ? &data->deauth_info : NULL);
 		break;
@@ -3504,6 +3631,7 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 		break;
 #endif /* CONFIG_IBSS_RSN */
 	case EVENT_ASSOC_REJECT:
+		wpa_scan_res_mark_fail(wpa_s);
 		if (data->assoc_reject.bssid)
 			wpa_msg(wpa_s, MSG_INFO, WPA_EVENT_ASSOC_REJECT
 				"bssid=" MACSTR	" status_code=%u%s",

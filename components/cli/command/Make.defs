@@ -102,8 +102,13 @@ ifeq ($(CONFIG_CLI),y)
 		CSRCS += cmd_httpserver.c
 	endif
 
+	ifeq ($(CONFIG_CMD_MQTT), y)
+		CSRCS += cmd_mqtt.c
+	endif
+
 	VPATH += :cli/command
 	INCPATHS += cli/command
+	INCPATHS += $(TOPDIR)/include/components/cli
 	INCPATHS += cli/command/include/
 	INCPATHS += ../PS/wifi/common/ke/api
 endif

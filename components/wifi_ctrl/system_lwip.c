@@ -44,6 +44,8 @@
 #include "spi_service_mem.h"
 #endif
 
+#define    NET_SEND_PACKET_WAIT_MAX_TIMEMS                              (50)
+
 static net_if_t lwip_net_if[MAX_IF];
 
 static rtos_semaphore l2_semaphore;
@@ -52,6 +54,11 @@ static rtos_mutex     l2_mutex;
 #define L2_PBUF_SIZE 384
 static struct pbuf *l2_pbuf;
 static struct pbuf_custom *l2_pbuf_cust;
+static struct pbuf_custom *net_send_cust;
+static rtos_semaphore net_send_semaphore;
+static uint8_t net_send_waiting = 0;
+
+
 
 extern void fhost_set_netif_by_idx(uint8_t idx, net_if_t *net_if);
 extern uint8_t fhost_tx_check_is_shram(void *p);
@@ -264,11 +271,28 @@ static int net_l2_init(void)
     return 0;
 }
 
+static int net_send_init(void)
+{
+    if (rtos_semaphore_create(&net_send_semaphore, true))
+    {
+        SYS_LOGE("---%s:%d--semaphore_create fail\n",__func__, __LINE__);
+    }
+
+    net_send_cust = (struct pbuf_custom*)mem_malloc(LWIP_MEM_ALIGN_SIZE(sizeof(*net_send_cust)));
+    if (net_send_cust == NULL)
+    {
+        SYS_LOGE("---%s:%d--l2_pbuf_cust alloc fail\n",__func__, __LINE__);
+    }
+
+    return 0;
+}
+
 static void lwip_handle_interfaces(void * param)
 {
     uint8_t addr[NETIF_MAX_HWADDR_LEN];
 
     net_l2_init();
+    net_send_init();
 
     fhost_set_netif_by_idx(STATION_IF, &lwip_net_if[STATION_IF]);
     hal_system_get_sta_mac(addr);
@@ -618,12 +642,41 @@ int net_l2_send(void *l2_if, const uint8_t *data, int data_len, uint16_t etherty
     return (status == ERR_OK ? 0 : -1);
 }
 
-int net_packet_send(int idx, const uint8_t *data, int data_len, uint8_t is_raw)
+static void net_packet_send_cfm(struct pbuf *p)
+{
+    os_printf(LM_WIFI, LL_INFO, "tx packet cfm\n");
+
+    if (net_send_waiting && net_send_semaphore) {
+        os_sem_post(net_send_semaphore);
+    }
+}
+
+sys_err_t net_packet_wait_send_done(unsigned int timeoutms)
+{
+    int ret;
+
+    if (!net_send_semaphore) {
+        return -1;
+    }
+
+    net_send_waiting = 1;
+    ret = os_sem_wait(net_send_semaphore, timeoutms);
+    net_send_waiting = 0;
+    if (ret == 0) {
+        return ERR_OK;
+    }
+
+    return -1;
+}
+
+int net_packet_send(int idx, const uint8_t *data, int data_len, uint8_t is_raw, uint8_t is_block)
 {
     struct pbuf *pbuf;
     err_t status = ERR_BUF;
     mem_size_t pbuf_data_len = data_len;
-	net_if_t *net_if;
+    net_if_t *net_if;
+    struct pbuf_custom *pbuf_cust;
+
     #ifndef CONFIG_CUSTOM_FHOSTAPD
     net_if = fhost_get_netif_by_idx(idx);
     #else
@@ -636,7 +689,7 @@ int net_packet_send(int idx, const uint8_t *data, int data_len, uint8_t is_raw)
         return -1;
     #endif
 
-    if (net_if == NULL || data == NULL || data_len >= net_if->mtu)
+    if (net_if == NULL || data == NULL || ((is_raw == 0) && (data_len > net_if->mtu + ETH_HDR_LEN)))
         return -1;
 
     // No data in this buffer as the payload is put in the custom pbuf
@@ -646,6 +699,17 @@ int net_packet_send(int idx, const uint8_t *data, int data_len, uint8_t is_raw)
     }
     memcpy(pbuf->payload, data, data_len);
 
+    if (is_block)
+    {
+        pbuf_cust = net_send_cust;
+
+        pbuf_alloced_custom(PBUF_RAW, 0, PBUF_REF, pbuf_cust, 0, 0);
+        pbuf_cust->custom_free_function = net_packet_send_cfm;
+
+        // Concatenate the two buffers
+        pbuf_cat(pbuf, &pbuf_cust->pbuf);
+    }
+
     if (fhost_tx_start(net_if, pbuf, is_raw) == 0)
     {
         status = ERR_OK;
@@ -654,6 +718,11 @@ int net_packet_send(int idx, const uint8_t *data, int data_len, uint8_t is_raw)
     {
         // Failed to push message to TX task, call pbuf_free only to decrease ref count
         fhost_tx_free(pbuf);
+    }
+
+    if ((status == ERR_OK) && is_block)
+    {
+        status = net_packet_wait_send_done(NET_SEND_PACKET_WAIT_MAX_TIMEMS);
     }
 
     return (status == ERR_OK ? 0 : -1);

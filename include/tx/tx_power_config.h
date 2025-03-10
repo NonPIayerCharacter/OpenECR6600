@@ -20,15 +20,19 @@
 #define CAL_INDEX 5
 
 
-__DFE uint32_t pa_bias_6600[DRV_ADC_TEMP_MAX]  __ARR1(0x47FF3CE,/*low temp*/ 0x47FF4CB,/*normal temp*/ 0x47FF3CE/*high temp*/);
+__DFE uint32_t pa_bias_6600[DRV_ADC_TEMP_MAX]  __ARR1(0x47FF3CE,/*low temp*/ 0x47FF3CE,/*normal temp*/ 0x47FF4CB/*high temp*/);
 __DFE uint32_t pa_bias_6600a_ldo[DRV_ADC_TEMP_MAX]  __ARR1(0x47FF3D3,/*low temp*/0x47FF3CF,/*normal temp*/ 0x47FF3CC/*high temp*/);
 __DFE uint32_t pa_bias_6600a_dcdc[DRV_ADC_TEMP_MAX]  __ARR1(0x47FF3D3,/*low temp*/0x47FF3CF,/*normal temp*/ 0x47FF3CC/*high temp*/);
-__DFE uint32_t g_cfo [DRV_ADC_TEMP_MAX]  __ARR1(0x144,/*low temp*/0x155,/*normal temp*/ 0x1cc/*high temp*/);
 
+#ifdef CONFIG_CUSTOM_YY
+__DFE uint32_t g_cfo [DRV_ADC_TEMP_MAX]  __ARR1(0x155,/*low temp*/0x166,/*normal temp*/ 0x177/*high temp*/);
+#else
+__DFE uint32_t g_cfo [DRV_ADC_TEMP_MAX]  __ARR1(0x144,/*low temp*/0x155,/*normal temp*/ 0x1cc/*high temp*/);
+#endif
 
 __DFE uint32_t pa_bias[DRV_ADC_TEMP_MAX] ;
 
-__DFE uint32_t fcc_var __VAR1(1);
+__DFE uint32_t fcc_var __VAR1(0);
 __DFE uint32_t fcc_var_ble __VAR1(0);
 
 
@@ -36,12 +40,21 @@ __DFE uint32_t fcc_var_ble __VAR1(0);
 //#if !defined(CONFIG_ESWIN_SDIO)
 //#include "amt_interface.h"
 //wifi tx power
+#ifdef CONFIG_CUSTOM_YY
+__DFE uint8_t g_calIndex[CAL_INDEX][MCS_NUM] __ARR3(__ARR2(0, 0, 0, 0, 0, 0, 0, 0),/* 11b mcs 1m - 11m */
+													__ARR2(0, 0, 0, 0, 0, 0, 0, 0),/* 11g 6m - 54m */
+													__ARR2(0, 0, 0, 0, 0, 0, 0, 0),/* 11n mcs 0 - 7 */
+													__ARR2(0, 0, 0, 0, 0, 0, 0, 0),/* 11n_40M mcs 0 - 7 */
+													__ARR2(0, 0, 0, 0, 0, 0, 0, 0),/* 11ax mcs 0 - 7 */
+													);
+#else
 __DFE uint8_t g_calIndex[CAL_INDEX][MCS_NUM] __ARR3(__ARR2(0, 0, 0, 0, 0, 0, 0, 0),/* 11b mcs 1m - 11m */
 													__ARR2(3, 3, 3, 2, 2, 2, 1, 1),/* 11g 6m - 54m */
 													__ARR2(3, 3, 3, 2, 2, 1, 0, 0),/* 11n mcs 0 - 7 */
 													__ARR2(2, 2, 2, 2, 2, 1, 0, 0),/* 11n_40M mcs 0 - 7 */
 													__ARR2(3, 3, 3, 2, 2, 1, 0, 0),/* 11ax mcs 0 - 7 */
 													);
+#endif
 //#endif
 
 /** Format: [15:13] Var, [12:8]:Dig [7:4]:DA [3:0]:PA 

@@ -23,7 +23,6 @@
 #include "rtc.h"
 #endif
 
-
 T_DRV_UART_CONFIG uart_dev_config[3]={{0}}; //uart0/1/2
 
 #ifdef CONFIG_FPGA
@@ -1281,5 +1280,10 @@ int drv_uart_set_flowcontrol(unsigned int regBase,unsigned int m_flow_control)
     }
     return 0;
 }
+
+int drv_uart_get_regbase(E_DRV_UART_NUM uart_num){
+	return (int)uart_dev[uart_num]->uart_reg_base;
+}
+
 
 

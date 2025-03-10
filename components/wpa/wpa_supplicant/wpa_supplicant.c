@@ -124,7 +124,7 @@ int wpa_supplicant_set_wpa_none_key(struct wpa_supplicant *wpa_s,
 	return ret;
 }
 
-
+extern void wpa_scan_res_mark_fail(struct wpa_supplicant *wpa_s);
 static void wpa_supplicant_timeout(void *eloop_ctx, void *timeout_ctx)
 {
 	struct wpa_supplicant *wpa_s = eloop_ctx;
@@ -137,6 +137,7 @@ static void wpa_supplicant_timeout(void *eloop_ctx, void *timeout_ctx)
 		MAC2STR(bssid));
 	wpa_sm_notify_disassoc(wpa_s->wpa);
 	wpa_supplicant_deauthenticate(wpa_s, WLAN_REASON_DEAUTH_LEAVING);
+	wpa_scan_res_mark_fail(wpa_s);
 	//wpa_s->reassociate = 1;
 
 	/*
@@ -611,7 +612,7 @@ void wpa_supplicant_set_state(struct wpa_supplicant *wpa_s,
 		//    old_state == WPA_COMPLETED)
 		//	wpas_notify_auth_changed(wpa_s);
 	}
-
+    
     if (WPA_INACTIVE == state)
         wpa_drv_wpa_states_inactive(wpa_s);
 }

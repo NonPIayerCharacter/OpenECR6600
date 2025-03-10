@@ -448,6 +448,11 @@ static ECR_BLE_SERVICE_PARAMS_T        ecr_ble_common_service[ECR_BLE_GATT_SERVI
 static ECR_BLE_CHAR_PARAMS_T           ecr_ble_common_char1[ECR_BLE_GATT_CHAR_MAX_NUM] = {0};
 static ECR_BLE_CHAR_PARAMS_T           ecr_ble_common_char2[ECR_BLE_GATT_CHAR_MAX_NUM] = {0};
 static ECR_BLE_CHAR_PARAMS_T           ecr_ble_common_char3[ECR_BLE_GATT_CHAR_MAX_NUM] = {0};
+static unsigned char BLE_CMD_SERVICE_UUID2[]={0xFB, 0x34, 0x9B, 0x5F, 0x80, 0x00, 0x3e, 0x80, 0x00, 0x10, 0xad, 0x00, 0x00, 0xFE, 0x00, 0x00};
+
+
+
+
 
 #define BLE_TMR_PRIV_ADDR_MIN                             (0x003C)
 #define BLE_TMR_PRIV_ADDR_MAX                             (0x0384)
@@ -455,7 +460,7 @@ static ECR_BLE_CHAR_PARAMS_T           ecr_ble_common_char3[ECR_BLE_GATT_CHAR_MA
 #define  COMMON_SERVICE_MAX_NUM      (3)
 #define  COMMON_CHAR_MAX_NUM         (3)
  
-#define  BLE_CMD_SERVICE_UUID                 (0x180b)
+#define  BLE_CMD_SERVICE_UUID1                 (0x180b)
 #define  BLE_CMD_WRITE_CHAR_UUID              (0x2a2d)
 #define  BLE_CMD_READ_CHAR_UUID               (0x2a2e)
 #define  BLE_CMD_NOTIFY_CHAR_UUID             (0x2a2f)
@@ -712,6 +717,7 @@ static int ble_set_dev_config(cmd_tbl_t *t, int argc, char *argv[])
 }
 CLI_SUBCMD_F(ble, set_dev_config, ble_set_dev_config, "set device config", "ble set_dev_config", false);
 
+
 static int ble_init(cmd_tbl_t *t, int argc, char *argv[])
 {
 	if(argc != 2)
@@ -742,7 +748,7 @@ static int ble_init(cmd_tbl_t *t, int argc, char *argv[])
 			ECR_BLE_SERVICE_PARAMS_T *p_common_service = ecr_ble_common_service;
 			p_common_service->handle = ECR_BLE_GATT_INVALID_HANDLE;
 			p_common_service->svc_uuid.uuid_type   =  ECR_BLE_UUID_TYPE_16;
-			p_common_service->svc_uuid.uuid.uuid16 =  BLE_CMD_SERVICE_UUID;
+			p_common_service->svc_uuid.uuid.uuid16 =  BLE_CMD_SERVICE_UUID1;
 			p_common_service->type     = ECR_BLE_UUID_SERVICE_PRIMARY;
 			p_common_service->char_num = COMMON_CHAR_MAX_NUM;
 			p_common_service->p_char   = ecr_ble_common_char1;
@@ -780,8 +786,10 @@ static int ble_init(cmd_tbl_t *t, int argc, char *argv[])
 			/*Second service add*/
 			ECR_BLE_SERVICE_PARAMS_T *p_common_service_2 = &ecr_ble_common_service[1];
 			p_common_service_2->handle = ECR_BLE_GATT_INVALID_HANDLE;
-			p_common_service_2->svc_uuid.uuid_type   =  ECR_BLE_UUID_TYPE_16;
-			p_common_service_2->svc_uuid.uuid.uuid16 =  BLE_CMD_SERVICE_UUID;
+			//p_common_service_2->svc_uuid.uuid_type   =  ECR_BLE_UUID_TYPE_16;
+			p_common_service_2->svc_uuid.uuid_type   =  ECR_BLE_UUID_TYPE_128;
+			//p_common_service_2->svc_uuid.uuid.uuid16 =  BLE_CMD_SERVICE_UUID;
+			memcpy(&p_common_service_2->svc_uuid.uuid.uuid128,BLE_CMD_SERVICE_UUID2,sizeof(BLE_CMD_SERVICE_UUID2));
 			p_common_service_2->type     = ECR_BLE_UUID_SERVICE_PRIMARY;
 			p_common_service_2->char_num = COMMON_CHAR_MAX_NUM;
 			p_common_service_2->p_char   = ecr_ble_common_char2;
@@ -820,7 +828,7 @@ static int ble_init(cmd_tbl_t *t, int argc, char *argv[])
 			ECR_BLE_SERVICE_PARAMS_T *p_common_service_3 = &ecr_ble_common_service[2];
 			p_common_service_3->handle = ECR_BLE_GATT_INVALID_HANDLE;
 			p_common_service_3->svc_uuid.uuid_type   =  ECR_BLE_UUID_TYPE_16;
-			p_common_service_3->svc_uuid.uuid.uuid16 =  BLE_CMD_SERVICE_UUID;
+			p_common_service_3->svc_uuid.uuid.uuid16 =  BLE_CMD_SERVICE_UUID1;
 			p_common_service_3->type     = ECR_BLE_UUID_SERVICE_PRIMARY;
 			p_common_service_3->char_num = COMMON_CHAR_MAX_NUM;
 			p_common_service_3->p_char   = ecr_ble_common_char3;

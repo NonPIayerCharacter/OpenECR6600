@@ -37,6 +37,7 @@ typedef long long int64_t;
 #endif
 #endif
 #include "iperf_time.h"
+#include "sockets.h"
 
 /* TimerClientData is an opaque value that tags along with a timer.  The
 ** client can use it for whatever, and it gets passed to the callback when
@@ -73,7 +74,7 @@ typedef struct TimerStruct
 #ifdef __TR_SW__
 Timer* tmr_create(void *handle, struct iperf_time* nowP, TimerProc* timer_proc, TimerClientData client_data,
     int64_t usecs, int periodic );
-struct timeval* tmr_timeout(void *handle, struct iperf_time *nowP);
+int tmr_timeout(void *handle, struct iperf_time *nowP, struct timeval *timeout);
 void tmr_run(void *handle, struct iperf_time *nowP);
 void tmr_reset(void *handle, struct iperf_time *nowP, Timer *t);
 void tmr_cancel(void *handle, Timer *t);

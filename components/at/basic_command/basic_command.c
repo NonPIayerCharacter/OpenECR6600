@@ -23,6 +23,7 @@
 #include "reg_macro_def.h"
 #include "flash.h"
 #include "system_config.h"
+#include "Psm_user.h"
 static E_DRV_UART_NUM     uart_num = E_UART_NUM_1;
 
 struct AT_GPIO_PIN
@@ -509,11 +510,11 @@ dce_result_t dce_handle_SLEEP(dce_t* dce, void* group_ctx, int kind, size_t argc
         }*/
         if(psm_check_psm_enable())
         {
-			if(PSM_SLEEP_GET(LIGHT_SLEEP))
+			if(PSM_SLEEP_GET(LIGHT_SLEEP_EN))
 			{
 				sleep_mode = 1;
 			}
-			else if(PSM_SLEEP_GET(MODEM_SLEEP))
+			else if(PSM_SLEEP_GET(MODEM_SLEEP_EN))
 			{
 				sleep_mode = 2;
 			}
@@ -546,15 +547,15 @@ dce_result_t dce_handle_SLEEP(dce_t* dce, void* group_ctx, int kind, size_t argc
         else if(argv[0].value.number == 1)  // 进入lightsleep模式
         {
 			psm_set_psm_enable(1);
-			PSM_SLEEP_SET(LIGHT_SLEEP);
-			PSM_SLEEP_CLEAR(MODEM_SLEEP);
+			PSM_SLEEP_SET(LIGHT_SLEEP_EN);
+			PSM_SLEEP_CLEAR(MODEM_SLEEP_EN);
             os_printf(LM_APP, LL_INFO, "set lightsleep\r\n");
         }
         else if(argv[0].value.number == 2)  // 进入modemsleep模式
         {
 			psm_set_psm_enable(1);
-			PSM_SLEEP_SET(MODEM_SLEEP);
-			PSM_SLEEP_CLEAR(LIGHT_SLEEP);
+			PSM_SLEEP_SET(MODEM_SLEEP_EN);
+			PSM_SLEEP_CLEAR(LIGHT_SLEEP_EN);
             os_printf(LM_APP, LL_INFO, "set modemsleep\r\n");
         }
         else
@@ -1018,6 +1019,23 @@ dce_result_t dce_handle_SYSADC(dce_t* dce, void* group_ctx, int kind, size_t arg
 
 #define GPIO_GET_MODE(reg, offset, mask) ((READ_REG(reg)>>offset)&mask)
 
+void MqttReadLed(void){
+	struct _iomux cfg = {0,0,0};
+	get_iomux_cfg(GPIO_NUM_3, &cfg);
+	PIN_MUX_SET(cfg.reg, cfg.msk, cfg.off, 1);
+	drv_gpio_ioctrl(GPIO_NUM_3, DRV_GPIO_CTRL_PULL_TYPE, DRV_GPIO_ARG_PULL_DOWN);
+	hal_gpio_dir_set(GPIO_NUM_3, 1);
+	hal_gpio_write(GPIO_NUM_3, 0);
+
+	struct _iomux cfg_4 = {0,0,0};
+	get_iomux_cfg(GPIO_NUM_4, &cfg_4);
+	PIN_MUX_SET(cfg_4.reg, cfg_4.msk, cfg_4.off, 1);
+	drv_gpio_ioctrl(GPIO_NUM_4, DRV_GPIO_CTRL_PULL_TYPE, DRV_GPIO_ARG_PULL_DOWN);
+	hal_gpio_dir_set(GPIO_NUM_4, 1);
+	hal_gpio_write(GPIO_NUM_4, 0);
+	
+}
+
 dce_result_t dce_handle_SYSIOSETCFG(dce_t* dce, void* group_ctx, int kind, size_t argc, arg_t* argv)
 {
     if (argc == 3 && 
@@ -1029,7 +1047,7 @@ dce_result_t dce_handle_SYSIOSETCFG(dce_t* dce, void* group_ctx, int kind, size_
         unsigned int mode = argv[1].value.number;
 		unsigned int pull = argv[2].value.number;
 
-		if((pin > GPIO_NUM_MAX) || (mode > 7) || (pull > DRV_GPIO_PULL_TYPE_MAX))
+		if((pin > GPIO_NUM_MAX) || (pin == GPIO_NUM_19 ) || (mode > 7) || (pull >= DRV_GPIO_PULL_TYPE_MAX))
 		{
 	        os_printf(LM_APP, LL_INFO, "invalid arguments\n");
 	        dce_emit_basic_result_code(dce, DCE_RC_ERROR);
@@ -1043,11 +1061,11 @@ dce_result_t dce_handle_SYSIOSETCFG(dce_t* dce, void* group_ctx, int kind, size_
 		// quxin config.GPIO_PullEn   = (pull ? (DRV_GPIO_PULL_ENABLE)1 : (DRV_GPIO_PULL_ENABLE)0);
 		if(pull == 1)
 		{
-    	    drv_gpio_ioctrl(pin, DRV_GPIO_CTRL_PULL_TYPE, 0);
+    	    drv_gpio_ioctrl(pin, DRV_GPIO_CTRL_PULL_TYPE, DRV_GPIO_ARG_PULL_UP);
 		}
 		else
 		{
-			drv_gpio_ioctrl(pin, DRV_GPIO_CTRL_PULL_TYPE, 1);
+			drv_gpio_ioctrl(pin, DRV_GPIO_CTRL_PULL_TYPE, DRV_GPIO_ARG_PULL_DOWN);
 		}
 
 	}
@@ -1070,7 +1088,7 @@ dce_result_t dce_handle_SYSIOGETCFG(dce_t* dce, void* group_ctx, int kind, size_
     	arg_t result[3];
         unsigned int pin  = argv[0].value.number;
 
-		if(pin > GPIO_NUM_MAX)
+		if((pin > GPIO_NUM_MAX ) || (pin == GPIO_NUM_19 ))
 		{
 	        os_printf(LM_APP, LL_INFO, "invalid arguments\n");
 	        dce_emit_basic_result_code(dce, DCE_RC_ERROR);
@@ -1094,12 +1112,8 @@ dce_result_t dce_handle_SYSIOGETCFG(dce_t* dce, void* group_ctx, int kind, size_
 		result[2].type = ARG_TYPE_NUMBER;
 		result[0].value.number = pin;
 		result[1].value.number = GPIO_GET_MODE(cfg.reg,cfg.off,cfg.msk);
-	
-		// quxin result[1].value.number = GPIO_GET_MODE(cfg.reg,cfg.off,cfg.msk);
-		 if(READ_REG(AON_PULLUP_GPIO_REG) & (1<<pin))
-			result[2].value.number = 1;
-		 else
-		 	result[2].value.number = 0;
+
+		result[2].value.number = drv_gpio_pull_read(pin);
 
 		dce_emit_extended_result_code_with_args(dce, "SYSIOGETCFG", -1, result, 3, 1, false);
 
@@ -1387,7 +1401,7 @@ dce_result_t dce_handle_SYSFLASH(dce_t *dce, void *group_ctx, int kind, size_t a
 		end_addr   = nv_customer_addr + nv_customer_len;
 
        if ((flash_op_info.len == 0) || (argv[3].value.number > flash_op_info.len) || ((argv[2].value.number + argv[3].value.number) > flash_op_info.len)  || \
-	   	    (argv[0].value.number != 2 && (flash_op_info.addr < start_addr || flash_op_info.addr > end_addr)))
+	   	    (argv[0].value.number != 2 && (flash_op_info.addr < start_addr || flash_op_info.addr >= end_addr)))
        {
             dce_emit_basic_result_code(dce, DCE_RC_ERROR);
             return DCE_OK;
@@ -1443,6 +1457,34 @@ dce_result_t dce_handle_SYSFLASH(dce_t *dce, void *group_ctx, int kind, size_t a
     return DCE_OK;
 }
 
+extern uint8_t psm_usr_sleep_mode_status;
+dce_result_t dce_handle_SYS_LIGHTSEELP(dce_t* dce, void* group_ctx, int kind, size_t argc, arg_t* argv)
+{
+	uint16_t time  = argv[0].value.number;
+	target_dce_transmit("[DA]SLEEP:1\r\n", strlen("[DA]SLEEP:1\r\n"));
+	os_printf(LM_APP, LL_INFO, "dce_handle_SYS_SEELP(%d)=%s\r\n",time,argv[0].value.string);
+	psm_set_sleep_mode(LIGHT_SLEEP,7);
+	psm_usr_sleep_mode_status = 1;
+	return DCE_OK;
+}
+
+dce_result_t dce_handle_SYS_VER(dce_t* dce, void* group_ctx, int kind, size_t argc, arg_t* argv)
+{
+	char line[32] = {0};
+    if (kind == DCE_READ)
+    {
+        sprintf(line, "VER:W0327.1.2");
+        dce_emit_extended_result_code(dce, line, -1, 1);
+    }
+    else
+    {
+        dce_emit_basic_result_code(dce, DCE_RC_ERROR);
+        return DCE_OK;
+    }
+    dce_emit_basic_result_code(dce, DCE_RC_OK);
+	return DCE_OK;
+}
+
 dce_result_t dce_handle_SYSTEMP(dce_t *dce, void *group_ctx, int kind, size_t argc, arg_t *argv)
 {
     char line[32] = {0};
@@ -1463,12 +1505,13 @@ dce_result_t dce_handle_SYSTEMP(dce_t *dce, void *group_ctx, int kind, size_t ar
 
 static const command_desc_t basic_commands[] = {
     {"SYSRAM",       &dce_handle_SYSRAM,       DCE_READ},
-    // {"SYSADC",    &dce_handle_SYSADC,       DCE_READ},
+    {"VER",    	 &dce_handle_SYS_VER,       DCE_READ},
     {"SYSIOSETCFG",  &dce_handle_SYSIOSETCFG,  DCE_WRITE},
     {"SYSIOGETCFG",  &dce_handle_SYSIOGETCFG,  DCE_READ},
     {"SYSGPIODIR",   &dce_handle_SYSGPIODIR,   DCE_WRITE},
     {"SYSGPIOWRITE", &dce_handle_SYSGPIOWRITE, DCE_WRITE},
     {"SYSGPIOREAD",  &dce_handle_SYSGPIOREAD,  DCE_READ},
+    {"SYS_SLEEP",  	 &dce_handle_SYS_LIGHTSEELP,  DCE_WRITE},
 //    {"SYSMSG_CUR",   &dce_handle_SYSMSG_CUR,   DCE_READ},
 //    {"SYSMSG_DEF",   &dce_handle_SYSMSG_DEF,   DCE_READ},
     {"SYSTEMP",      &dce_handle_SYSTEMP,      DCE_READ},

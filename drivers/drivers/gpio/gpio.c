@@ -257,6 +257,53 @@ int drv_gpio_write(int gpio_num, GPIO_LEVEL_VALUE gpio_level)
 }
 
 
+/**    @brief       Read GPIO PULL value.
+ *     @details     Read GPIO_ Num corresponding to the pull value and return.
+ *     @param[in]   gpio_num--The GPIO number you want to operate on. 
+ *     @return      0/1 pull value; other--error.
+ */
+int drv_gpio_pull_read(int gpio_num)
+{
+	if((gpio_num < GPIO_NUM_0 ) || (gpio_num > GPIO_NUM_25 ) || (gpio_num == GPIO_NUM_19 ))
+	{
+		return GPIO_RET_PARAMETER_ERROR;
+	}
+
+	unsigned  int fuse_ft = 0;
+	unsigned int pull_value = 0;
+
+	drv_efuse_read(EFUSE_FT_ADDR, &fuse_ft, EFUSE_FT_LENG);
+	if((fuse_ft & EFUSE_FT_MASK) == EFUSE_FT_TYPE_1600)
+	{
+		unsigned  int * pull_en 	  = (unsigned  int *)AON_PULLUP_GPIO_REG;
+		unsigned  int * pull_select   = (unsigned  int *)AON_PULLDOWN_GPIO_REG;
+		
+		if((gpio_num == GPIO_NUM_14) || (gpio_num == GPIO_NUM_15))
+		{
+			pull_value = (*pull_en & (1 << gpio_num)) >> gpio_num;
+		}
+		else
+		{
+			pull_value = (*pull_select & (1 << gpio_num))>> gpio_num;
+		}
+	}
+	else
+	{
+		unsigned  int * pull_down = (unsigned  int *)AON_PULLDOWN_GPIO_REG;
+		unsigned  int * pull_up   = (unsigned  int *)AON_PULLUP_GPIO_REG;
+		if((gpio_num == GPIO_NUM_14) || (gpio_num == GPIO_NUM_15))
+		{
+			pull_value = (*pull_down & (1 << gpio_num))>> gpio_num;
+		}
+		else
+		{
+			pull_value = (*pull_up & (1 << gpio_num))>> gpio_num;
+		}
+	}
+	return pull_value;
+}
+
+
 /**    @brief       Initialize gpio related configuration.
  *     @details     Initialization of gpio configuration before using gpio, The initialization operation only needs one time.
  *     @return      0--ok , -1--error.

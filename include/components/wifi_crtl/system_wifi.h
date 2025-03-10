@@ -93,6 +93,14 @@ typedef enum {
 	DEFAULT_MAC,
 } wifi_read_mac_mode_e;
 
+typedef enum {
+    REASON_NO_ERROR,
+    REASON_USER_DISCONNECT ,
+    REASON_BEACON_LOST,
+    REASON_AP_DISCONNECT,
+    REASON_SCAN_NOT_FOUND,
+    REASON_PWD_ERROR,
+} wifi_discon_reason_e;
 
 typedef struct {
     uint8_t   ssid[WIFI_SSID_MAX_LEN];

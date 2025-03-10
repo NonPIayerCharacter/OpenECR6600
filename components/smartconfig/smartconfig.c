@@ -626,7 +626,6 @@ static void sc_process_sequence(int type,unsigned short length)
         if(sc_context->seq_success_map_cmp == sc_context->seq_success_map)
         {
             int i;
-            sc_info("ssid len %d\n",sc_context->ssid_len);
             sc_debug("User data is :");
             for(i=0;i<sc_context->total_len; i++) { //sc_context->pswd_len + 1
                 sc_debug("%02x ",sc_context->usr_data[i]);
@@ -658,8 +657,16 @@ static void sc_process_sequence(int type,unsigned short length)
                 sc_context->ssid_len = sc_context->total_len - sc_context->pswd_len - 1;
                 memcpy(sc_context->ssid, &sc_context->usr_data[sc_context->pswd_len + 1], sc_context->ssid_len);
             } else {
-                sc_context->ssid_len = strlen(sc_context->ssid);
+                if ((sc_context->total_len - sc_context->pswd_len - 1) != 0) {
+                    sc_context->ssid_len = sc_context->total_len - sc_context->pswd_len - 1;
+                    memset(sc_context->ssid, 0, ZC_MAX_SSID_LEN);
+                    memcpy(sc_context->ssid, &sc_context->usr_data[sc_context->pswd_len + 1], sc_context->ssid_len);
+                    sc_info("connecting A config B\n");
+                } else {
+                    sc_context->ssid_len = strlen(sc_context->ssid);
+                }
             }
+            sc_info("ssid len %d\n",sc_context->ssid_len);
             sc_info("connect ssid: %s\n",sc_context->ssid);
             sc_context->random_num = sc_context->usr_data[sc_context->pswd_len];
             memcpy(sc_context->pwd, sc_context->usr_data, sc_context->pswd_len);
@@ -1238,7 +1245,7 @@ void connect_wifi_task(void *param)
     wifi_config_u config={0};
 
     g_connectWifiTimeoutFlag = false;
-    /* ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½30sï¿½Ä³ï¿½Ê±ï¿½ï¿½â£¬30sÃ»ï¿½Ð»ï¿½È¡ï¿½ï¿½ipï¿½ï¿½É¾ï¿½ï¿½connect_wifi_task */
+    /* ´´½¨Ò»¸ö30sµÄ³¬Ê±¼ì²â£¬30sÃ»ÓÐ»ñÈ¡µ½ip£¬É¾³ýconnect_wifi_task */
     connect_wifi_timer = os_timer_create("ConnectWifiTimer", 30 * 1000, pdFALSE, connect_wifi_timeout_func, NULL);
     os_timer_start(connect_wifi_timer);
 

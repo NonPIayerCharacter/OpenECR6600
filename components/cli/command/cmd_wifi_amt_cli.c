@@ -57,6 +57,8 @@ extern int AmtRfGetResult(int argc, char *argv[]);
 extern int AmtRfSetTxDeltaGain(int argc, char *argv[]);
 #endif
 extern int AmtTempEnable(int argc, char *argv[]);
+extern int AmtFccEnable(int argc, char *argv[]);
+
 static int AmtStart(cmd_tbl_t *t, int argc, char *argv[])
 {
     int ret;
@@ -68,7 +70,11 @@ static int AmtStart(cmd_tbl_t *t, int argc, char *argv[])
 
     return CMD_RET_SUCCESS;
 }
+#ifdef CONFIG_CUSTOM_YY
+CLI_CMD_M(amt_start, AmtStart, "amtStart", "amtStart", E_ALL);
+#else 
 CLI_CMD_M(amt_start, AmtStart, "amtStart", "amtStart", E_STANDALONE | E_AMT | E_TRANSPORT | E_LMAC_TEST | E_AT);
+#endif
 
 #ifndef NX_ESWIN_SDIO
 static int AmtStop(cmd_tbl_t *t, int argc, char *argv[])
@@ -106,7 +112,21 @@ static int AmtTempStart(cmd_tbl_t *t, int argc, char *argv[])
 
     return CMD_RET_SUCCESS;
 }
+
 CLI_CMD_M(amt_temp_start, AmtTempStart, "amtTempStart", "amtTempStart", E_AMT);
+
+static int AmtFccStart(cmd_tbl_t *t, int argc, char *argv[])
+{
+    int ret;
+
+    ret = AmtFccEnable(argc, argv);
+    if (ret != CMD_RET_SUCCESS) {
+        return CMD_RET_FAILURE;
+    }
+
+    return CMD_RET_SUCCESS;
+}
+CLI_CMD_M(amt_fcc_start, AmtFccStart, "amtFccStart", "amtFccStart", E_AMT);
 
 static int AmtTxStart(cmd_tbl_t *t, int argc, char *argv[])
 {

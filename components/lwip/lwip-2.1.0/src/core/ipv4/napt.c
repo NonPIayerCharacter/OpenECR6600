@@ -207,11 +207,14 @@ static u8_t ip_napt_find_port(u8_t proto, u16_t port)
 
 static u8_t tcp_listening(u16_t port)
 {
-    struct tcp_pcb_listen *t;
+    struct tcp_pcb *t;
+    int i;
     
-    for (t = tcp_listen_pcbs.listen_pcbs; t; t = t->next) {
-        if (t->local_port == port)
-            return 1;
+    for (i = 0; i < LWIP_ARRAYSIZE(tcp_pcb_lists); i++) {
+        for (t = *tcp_pcb_lists[i]; t != NULL; t = t->next) {
+            if (t->local_port == PP_HTONS(port))
+                return 1;
+        }
     }
        
     return 0;
@@ -223,7 +226,7 @@ static u8_t udp_listening(u16_t port)
 {
     struct udp_pcb *pcb;
     for (pcb = udp_pcbs; pcb; pcb = pcb->next) {
-        if (pcb->local_port == port) {
+        if (pcb->local_port == PP_HTONS(port)) {
             return 1;
         }
     }
@@ -235,7 +238,7 @@ static u8_t udp_listening(u16_t port)
 static u16_t ip_napt_new_port(u8_t proto, u16_t port)
 {
     if (PP_NTOHS(port) >= IP_NAPT_PORT_RANGE_START && PP_NTOHS(port) <= IP_NAPT_PORT_RANGE_END) {
-        if (!ip_napt_find_port(proto, port) && !tcp_listening(port)) {
+        if (!ip_napt_find_port(proto, port) && !tcp_listening(port) && !udp_listening(port)) {
             return port;
         }
     }
@@ -674,7 +677,9 @@ err_t ip_napt_forward(struct pbuf *p, struct ip_hdr *iphdr, struct netif *inp, s
 void napt_debug_print(void)
 {
   int i, next, num = 0;
+  u32_t now = sys_now();
 
+  os_printf(LM_APP, LL_INFO, "napt tcp timeout %dms udp timeout %dms now %d\n", ip_napt_tcp_timeout, ip_napt_udp_timeout, now);
   os_printf(LM_APP, LL_INFO, "\n\nNAPT table:\n");
   os_printf(LM_APP, LL_INFO, " src.sport --> dest.dport  proto mport\n");
   for (i = napt_list; i != NO_IDX; i = next) {
@@ -682,10 +687,10 @@ void napt_debug_print(void)
     next = t->next;
 
     ++num;
-    os_printf(LM_APP, LL_INFO, "[%d]:%d: %d.%d.%d.%d[%-5d] --> %d.%d.%d.%d[%-5d] %-5d\n", num, t->proto,
+    os_printf(LM_APP, LL_INFO, "[%d]:%d: %d.%d.%d.%d[%-5d] --> %d.%d.%d.%d[%-5d] %-5d lasttime %d\n", num, t->proto,
         (t->src) & 0xff, (t->src >> 8) & 0xff, (t->src >> 16) & 0xff, (t->src >> 24) & 0xff, PP_HTONS(t->sport),
         (t->dest) & 0xff, (t->dest >> 8) & 0xff, (t->dest >> 16) & 0xff, (t->dest >> 24) & 0xff, PP_HTONS(t->dport),
-        PP_HTONS(t->mport));
+        PP_HTONS(t->mport), t->last);
     if (IP_PROTO_TCP == t->proto) {
         os_printf(LM_APP, LL_INFO, "\t\tfin1[%d], fin2[%d], finack1[%d], finack2[%d], synack[%d], rst[%d]\n", t->fin1,
             t->fin2, t->finack1, t->finack2, t->synack, t->rst);

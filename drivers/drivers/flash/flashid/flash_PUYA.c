@@ -29,6 +29,7 @@
 //#define P25Q16H			0x156085
 #define P25Q16SH			0x156085
 #define P25Q16SH_OLD		0x154285
+#define P25Q16HB			0x152085
 #define P25Q32SH			0x166085
 
 
@@ -75,6 +76,16 @@ static const T_SPI_FLASH_PARAM puya_flash_params[] =
 	},
 
 	{
+		.flash_id = P25Q16HB,
+		.flash_size = FLASH_SIZE_2_MB,
+		.flash_name = "P25Q16HB",
+		.flash_otp_star_addr  = FLASH_OTP_START_ADDR_0x1000,
+		.flash_otp_block_size = FLASH_OTP_BLOCK_SIZE_1024_BYTE,
+		.flash_otp_block_num  = FLASH_OTP_BLOCK_NUM_3,
+		.flash_otp_block_interval = FLASH_OTP_BLOCK_INTERNAL_4096_BYTE,
+	},
+
+	{
 		.flash_id = P25Q32SH,
 		.flash_size = FLASH_SIZE_4_MB,
 		.flash_name = "P25Q32SH",
@@ -110,7 +121,7 @@ static int spiFlash_PUYA_check_addr(unsigned int flash_id, int addr, int length)
 			system_irq_restore(irq_flag);
 		}
 	}
-	else if(flash_id == P25Q16SH || flash_id == P25Q16SH_OLD || flash_id == P25Q32SH) 
+	else if(flash_id == P25Q16SH || flash_id == P25Q16SH_OLD || flash_id == P25Q32SH || flash_id == P25Q16HB) 
 	{
 		if(!((addr>=0x001000 && addr<=0x0013FF && ((addr + length - 1) <= 0x0013FF))
 			||(addr>=0x002000 && addr<=0x0023FF && ((addr + length - 1) <= 0x0023FF))
@@ -257,7 +268,7 @@ int spiFlash_PUYA_OTP_Lock(struct _T_SPI_FLASH_DEV *  p_flash_dev, int LB)
 		spiFlash_cmd_wrSR_1(data);
 		system_irq_restore(irq_flag);
 	}
-	else if(flash_id == P25Q16SH || flash_id == P25Q16SH_OLD || flash_id == P25Q32SH) 
+	else if(flash_id == P25Q16SH || flash_id == P25Q16SH_OLD || flash_id == P25Q32SH || flash_id == P25Q16HB) 
 	{		
 	    data = data>>8;
 		switch (LB)
@@ -311,7 +322,7 @@ int spiFlash_PUYA_OTP_Se(struct _T_SPI_FLASH_DEV *  p_flash_dev, unsigned int ad
 			return FLASH_RET_PARAMETER_ERROR;
 		}
 	}
-    else if(flash_id == P25Q16SH || flash_id == P25Q16SH_OLD || flash_id == P25Q32SH) 
+    else if(flash_id == P25Q16SH || flash_id == P25Q16SH_OLD || flash_id == P25Q32SH || flash_id == P25Q16HB) 
 	{
 		if(!((addr>=0x001000 && addr<=0x0013FF)||(addr>=0x002000 && addr<=0x0023FF)||(addr>=0x003000 && addr<=0x0033FF)))
 		{

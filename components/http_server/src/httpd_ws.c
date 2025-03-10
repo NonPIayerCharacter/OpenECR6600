@@ -1,5 +1,3 @@
-// Copyright 2020 Espressif Systems (Shanghai) PTE LTD
-//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,18 +14,12 @@
 
 #include <stdlib.h>
 #include <string.h>
-//#include <sys/random.h>
-#include <esp_log.h>
-#include <esp_err.h>
-//#include <mbedtls/sha1.h>
 #include <mbedtls/base64.h>
 
-#include <esp_http_server.h>
-#include "esp_httpd_priv.h"
+#include <http_server_service.h>
+#include "httpd_priv.h"
 
 #ifdef CONFIG_HTTPD_WS_SUPPORT
-
-static const char *TAG="httpd_ws";
 
 /*
  * Bit masks for WebSocket frames.
@@ -67,7 +59,7 @@ static bool httpd_ws_get_response_subprotocol(const char *supported_subprotocol,
     }
 
     if (supported_subprotocol == NULL) {
-        ESP_LOGW(TAG, "Sec-WebSocket-Protocol %s not supported, URI do not support any subprotocols", subprotocol);
+        os_printf(LM_APP, LL_WARN, "Sec-WebSocket-Protocol %s not supported, URI do not support any subprotocols", subprotocol);
         return false;
     }
 
@@ -76,53 +68,53 @@ static bool httpd_ws_get_response_subprotocol(const char *supported_subprotocol,
     char *s = strtok_r(subprotocol, ", ", &rest);
     do {
         if (strncmp(s, supported_subprotocol, sizeof(subprotocol)) == 0) {
-            ESP_LOGD(TAG, "Requested subprotocol supported: %s", s);
+            os_printf(LM_APP, LL_DBG, "Requested subprotocol supported: %s", s);
             return true;
         }
     } while ((s = strtok_r(NULL, ", ", &rest)) != NULL);
 
-    ESP_LOGW(TAG, "Sec-WebSocket-Protocol %s not supported, supported subprotocol is %s", subprotocol, supported_subprotocol);
+    os_printf(LM_APP, LL_WARN, "Sec-WebSocket-Protocol %s not supported, supported subprotocol is %s", subprotocol, supported_subprotocol);
 
     /* No matches */
     return false;
 
 }
 
-esp_err_t httpd_ws_respond_server_handshake(httpd_req_t *req, const char *supported_subprotocol)
+int httpd_ws_respond_server_handshake(httpd_req_t *req, const char *supported_subprotocol)
 {
     /* Probe if input parameters are valid or not */
     if (!req || !req->aux) {
-        ESP_LOGW(TAG, LOG_FMT("Argument is invalid"));
-        return ESP_ERR_INVALID_ARG;
+        os_printf(LM_APP, LL_WARN, LOG_FMT("Argument is invalid"));
+        return ERR_INVALID_ARG;
     }
 
     /* Detect handshake - reject if handshake was ALREADY performed */
     struct httpd_req_aux *req_aux = req->aux;
     if (req_aux->sd->ws_handshake_done) {
-        ESP_LOGW(TAG, LOG_FMT("State is invalid - Handshake has been performed"));
-        return ESP_ERR_INVALID_STATE;
+        os_printf(LM_APP, LL_WARN, LOG_FMT("State is invalid - Handshake has been performed"));
+        return ERR_INVALID_STATE;
     }
 
     /* Detect WS version existence */
     char version_val[3] = { '\0' };
-    if (httpd_req_get_hdr_value_str(req, "Sec-WebSocket-Version", version_val, sizeof(version_val)) != ESP_OK) {
-        ESP_LOGW(TAG, LOG_FMT("\"Sec-WebSocket-Version\" is not found"));
-        return ESP_ERR_NOT_FOUND;
+    if (httpd_req_get_hdr_value_str(req, "Sec-WebSocket-Version", version_val, sizeof(version_val)) != OS_SUCCESS) {
+        os_printf(LM_APP, LL_WARN, LOG_FMT("\"Sec-WebSocket-Version\" is not found"));
+        return ERR_NOT_FOUND;
     }
 
     /* Detect if WS version is "13" or not.
      * WS version must be 13 for now. Please refer to RFC6455 Section 4.1, Page 18 for more details. */
     if (strcasecmp(version_val, "13") != 0) {
-        ESP_LOGW(TAG, LOG_FMT("\"Sec-WebSocket-Version\" is not \"13\", it is: %s"), version_val);
-        return ESP_ERR_INVALID_VERSION;
+        os_printf(LM_APP, LL_WARN, LOG_FMT("\"Sec-WebSocket-Version\" is not \"13\", it is: %s"), version_val);
+        return ERR_INVALID_VERSION;
     }
 
     /* Grab Sec-WebSocket-Key (client key) from the header */
     /* Size of base64 coded string is equal '((input_size * 4) / 3) + (input_size / 96) + 6' including Z-term */
     char sec_key_encoded[28] = { '\0' };
-    if (httpd_req_get_hdr_value_str(req, "Sec-WebSocket-Key", sec_key_encoded, sizeof(sec_key_encoded)) != ESP_OK) {
-        ESP_LOGW(TAG, LOG_FMT("Cannot find client key"));
-        return ESP_ERR_NOT_FOUND;
+    if (httpd_req_get_hdr_value_str(req, "Sec-WebSocket-Key", sec_key_encoded, sizeof(sec_key_encoded)) != OS_SUCCESS) {
+        os_printf(LM_APP, LL_WARN, LOG_FMT("Cannot find client key"));
+        return ERR_NOT_FOUND;
     }
 
     /* Prepare server key (Sec-WebSocket-Accept), concat the string */
@@ -133,7 +125,7 @@ esp_err_t httpd_ws_respond_server_handshake(httpd_req_t *req, const char *suppor
     strcpy(server_raw_text, sec_key_encoded);
     strcat(server_raw_text, ws_magic_uuid);
 
-    ESP_LOGD(TAG, LOG_FMT("Server key before encoding: %s"), server_raw_text);
+    os_printf(LM_APP, LL_DBG, LOG_FMT("Server key before encoding: %s"), server_raw_text);
 
     /* Generate SHA-1 first and then encode to Base64 */
     size_t key_len = strlen(server_raw_text);
@@ -143,11 +135,11 @@ esp_err_t httpd_ws_respond_server_handshake(httpd_req_t *req, const char *suppor
     mbedtls_base64_encode((uint8_t *)server_key_encoded, sizeof(server_key_encoded), &encoded_len,
                           server_key_hash, sizeof(server_key_hash));
 
-    ESP_LOGD(TAG, LOG_FMT("Generated server key: %s"), server_key_encoded);
+    os_printf(LM_APP, LL_DBG, LOG_FMT("Generated server key: %s"), server_key_encoded);
 
     char subprotocol[50] = { '\0' };
-    if (httpd_req_get_hdr_value_str(req, "Sec-WebSocket-Protocol", subprotocol, sizeof(subprotocol) - 1) == ESP_ERR_HTTPD_RESULT_TRUNC) {
-        ESP_LOGW(TAG, "Sec-WebSocket-Protocol length exceeded buffer size of %d, was trunctated", sizeof(subprotocol));
+    if (httpd_req_get_hdr_value_str(req, "Sec-WebSocket-Protocol", subprotocol, sizeof(subprotocol) - 1) == ERR_HTTPD_RESULT_TRUNC) {
+        os_printf(LM_APP, LL_WARN, "Sec-WebSocket-Protocol length exceeded buffer size of %d, was trunctated", sizeof(subprotocol));
     }
 
 
@@ -160,98 +152,98 @@ esp_err_t httpd_ws_respond_server_handshake(httpd_req_t *req, const char *suppor
                            "Sec-WebSocket-Accept: %s\r\n", server_key_encoded);
 
     if (fmt_len < 0 || fmt_len > sizeof(tx_buf)) {
-        ESP_LOGW(TAG, LOG_FMT("Failed to prepare Tx buffer"));
-        return ESP_FAIL;
+        os_printf(LM_APP, LL_WARN, LOG_FMT("Failed to prepare Tx buffer"));
+        return OS_FAIL;
     }
 
     if ( httpd_ws_get_response_subprotocol(supported_subprotocol, subprotocol, sizeof(subprotocol))) {
-        ESP_LOGD(TAG, "subprotocol: %s", subprotocol);
+        os_printf(LM_APP, LL_DBG, "subprotocol: %s", subprotocol);
         int r = snprintf(tx_buf + fmt_len, sizeof(tx_buf) - fmt_len, "Sec-WebSocket-Protocol: %s\r\n", supported_subprotocol);
         if (r <= 0) {
-            ESP_LOGE(TAG, "Error in response generation"
+            os_printf(LM_APP, LL_ERR, "Error in response generation"
                           "(snprintf of subprotocol returned %d, buffer size: %d", r, sizeof(tx_buf));
-            return ESP_FAIL;
+            return OS_FAIL;
         }
 
         fmt_len += r;
 
         if (fmt_len >= sizeof(tx_buf)) {
-            ESP_LOGE(TAG, "Error in response generation"
+            os_printf(LM_APP, LL_ERR, "Error in response generation"
                           "(snprintf of subprotocol returned %d, desired response len: %d, buffer size: %d", r, fmt_len, sizeof(tx_buf));
-            return ESP_FAIL;
+            return OS_FAIL;
         }
     }
 
     int r = snprintf(tx_buf + fmt_len, sizeof(tx_buf) - fmt_len, "\r\n");
     if (r <= 0) {
-        ESP_LOGE(TAG, "Error in response generation"
+        os_printf(LM_APP, LL_ERR, "Error in response generation"
                         "(snprintf of subprotocol returned %d, buffer size: %d", r, sizeof(tx_buf));
-        return ESP_FAIL;
+        return OS_FAIL;
     }
     fmt_len += r;
     if (fmt_len >= sizeof(tx_buf)) {
-        ESP_LOGE(TAG, "Error in response generation"
+        os_printf(LM_APP, LL_ERR, "Error in response generation"
                        "(snprintf of header terminal returned %d, desired response len: %d, buffer size: %d", r, fmt_len, sizeof(tx_buf));
-        return ESP_FAIL;
+        return OS_FAIL;
     }
 
     /* Send off the response */
     if (httpd_send(req, tx_buf, fmt_len) < 0) {
-        ESP_LOGW(TAG, LOG_FMT("Failed to send the response"));
-        return ESP_FAIL;
+        os_printf(LM_APP, LL_WARN, LOG_FMT("Failed to send the response"));
+        return OS_FAIL;
     }
 
-    return ESP_OK;
+    return OS_SUCCESS;
 }
 
-static esp_err_t httpd_ws_check_req(httpd_req_t *req)
+static int httpd_ws_check_req(httpd_req_t *req)
 {
     /* Probe if input parameters are valid or not */
     if (!req || !req->aux) {
-        ESP_LOGW(TAG, LOG_FMT("Argument is null"));
-        return ESP_ERR_INVALID_ARG;
+        os_printf(LM_APP, LL_WARN, LOG_FMT("Argument is null"));
+        return ERR_INVALID_ARG;
     }
 
     /* Detect handshake - reject if handshake was NOT YET performed */
     struct httpd_req_aux *req_aux = req->aux;
     if (!req_aux->sd->ws_handshake_done) {
-        ESP_LOGW(TAG, LOG_FMT("State is invalid - No handshake performed"));
-        return ESP_ERR_INVALID_STATE;
+        os_printf(LM_APP, LL_WARN, LOG_FMT("State is invalid - No handshake performed"));
+        return ERR_INVALID_STATE;
     }
 
-    return ESP_OK;
+    return OS_SUCCESS;
 }
 
-static esp_err_t httpd_ws_unmask_payload(uint8_t *payload, size_t len, const uint8_t *mask_key)
+static int httpd_ws_unmask_payload(uint8_t *payload, size_t len, const uint8_t *mask_key)
 {
     if (len < 1 || !payload) {
-        ESP_LOGW(TAG, LOG_FMT("Invalid payload provided"));
-        return ESP_ERR_INVALID_ARG;
+        os_printf(LM_APP, LL_WARN, LOG_FMT("Invalid payload provided"));
+        return ERR_INVALID_ARG;
     }
 
     for (size_t idx = 0; idx < len; idx++) {
         payload[idx] = (payload[idx] ^ mask_key[idx % 4]);
     }
 
-    return ESP_OK;
+    return OS_SUCCESS;
 }
 
-esp_err_t httpd_ws_recv_frame(httpd_req_t *req, httpd_ws_frame_t *frame, size_t max_len)
+int httpd_ws_recv_frame(httpd_req_t *req, httpd_ws_frame_t *frame, size_t max_len)
 {
-    esp_err_t ret = httpd_ws_check_req(req);
-    if (ret != ESP_OK) {
+    int ret = httpd_ws_check_req(req);
+    if (ret != OS_SUCCESS) {
         return ret;
     }
 
     struct httpd_req_aux *aux = req->aux;
     if (aux == NULL) {
-        ESP_LOGW(TAG, LOG_FMT("Invalid Aux pointer"));
-        return ESP_ERR_INVALID_ARG;
+        os_printf(LM_APP, LL_WARN, LOG_FMT("Invalid Aux pointer"));
+        return ERR_INVALID_ARG;
     }
 
     if (!frame) {
-        ESP_LOGW(TAG, LOG_FMT("Frame pointer is invalid"));
-        return ESP_ERR_INVALID_ARG;
+        os_printf(LM_APP, LL_WARN, LOG_FMT("Frame pointer is invalid"));
+        return ERR_INVALID_ARG;
     }
 
     /* Assign the frame info from the previous reading */
@@ -261,8 +253,8 @@ esp_err_t httpd_ws_recv_frame(httpd_req_t *req, httpd_ws_frame_t *frame, size_t 
     /* Grab the second byte */
     uint8_t second_byte = 0;
     if (httpd_recv_with_opt(req, (char *)&second_byte, sizeof(second_byte), false) <= 0) {
-        ESP_LOGW(TAG, LOG_FMT("Failed to receive the second byte"));
-        return ESP_FAIL;
+        os_printf(LM_APP, LL_WARN, LOG_FMT("Failed to receive the second byte"));
+        return OS_FAIL;
     }
 
     /* Parse the second byte */
@@ -278,8 +270,8 @@ esp_err_t httpd_ws_recv_frame(httpd_req_t *req, httpd_ws_frame_t *frame, size_t 
         /* Case 2: If length byte is 126, then this frame's length bit is 16 bits */
         uint8_t length_bytes[2] = { 0 };
         if (httpd_recv_with_opt(req, (char *)length_bytes, sizeof(length_bytes), false) <= 0) {
-            ESP_LOGW(TAG, LOG_FMT("Failed to receive 2 bytes length"));
-            return ESP_FAIL;
+            os_printf(LM_APP, LL_WARN, LOG_FMT("Failed to receive 2 bytes length"));
+            return OS_FAIL;
         }
 
         frame->len = ((uint32_t)(length_bytes[0] << 8U) | (length_bytes[1]));
@@ -287,8 +279,8 @@ esp_err_t httpd_ws_recv_frame(httpd_req_t *req, httpd_ws_frame_t *frame, size_t 
         /* Case 3: If length is byte 127, then this frame's length bit is 64 bits */
         uint8_t length_bytes[8] = { 0 };
         if (httpd_recv_with_opt(req, (char *)length_bytes, sizeof(length_bytes), false) <= 0) {
-            ESP_LOGW(TAG, LOG_FMT("Failed to receive 2 bytes length"));
-            return ESP_FAIL;
+            os_printf(LM_APP, LL_WARN, LOG_FMT("Failed to receive 2 bytes length"));
+            return OS_FAIL;
         }
 
         frame->len = (((uint64_t)length_bytes[0] << 56U) |
@@ -303,60 +295,60 @@ esp_err_t httpd_ws_recv_frame(httpd_req_t *req, httpd_ws_frame_t *frame, size_t 
 
     /* We only accept the incoming packet length that is smaller than the max_len (or it will overflow the buffer!) */
     if (frame->len > max_len) {
-        ESP_LOGW(TAG, LOG_FMT("WS Message too long"));
-        return ESP_ERR_INVALID_SIZE;
+        os_printf(LM_APP, LL_WARN, LOG_FMT("WS Message too long"));
+        return ERR_INVALID_SIZE;
     }
 
     /* If this frame is masked, dump the mask as well */
     uint8_t mask_key[4] = { 0 };
     if (masked) {
         if (httpd_recv_with_opt(req, (char *)mask_key, sizeof(mask_key), false) <= 0) {
-            ESP_LOGW(TAG, LOG_FMT("Failed to receive mask key"));
-            return ESP_FAIL;
+            os_printf(LM_APP, LL_WARN, LOG_FMT("Failed to receive mask key"));
+            return OS_FAIL;
         }
     } else {
         /* If the WS frame from client to server is not masked, it should be rejected.
          * Please refer to RFC6455 Section 5.2 for more details. */
-        ESP_LOGW(TAG, LOG_FMT("WS frame is not properly masked."));
-        return ESP_ERR_INVALID_STATE;
+        os_printf(LM_APP, LL_WARN, LOG_FMT("WS frame is not properly masked."));
+        return ERR_INVALID_STATE;
     }
 
     /* Receive buffer */
     /* If there's nothing to receive, return and stop here. */
     if (frame->len == 0) {
-        return ESP_OK;
+        return OS_SUCCESS;
     }
 
     if (frame->payload == NULL) {
-        ESP_LOGW(TAG, LOG_FMT("Payload buffer is null"));
-        return ESP_FAIL;
+        os_printf(LM_APP, LL_WARN, LOG_FMT("Payload buffer is null"));
+        return OS_FAIL;
     }
 
     if (httpd_recv_with_opt(req, (char *)frame->payload, frame->len, false) <= 0) {
-        ESP_LOGW(TAG, LOG_FMT("Failed to receive payload"));
-        return ESP_FAIL;
+        os_printf(LM_APP, LL_WARN, LOG_FMT("Failed to receive payload"));
+        return OS_FAIL;
     }
 
     /* Unmask payload */
     httpd_ws_unmask_payload(frame->payload, frame->len, mask_key);
 
-    return ESP_OK;
+    return OS_SUCCESS;
 }
 
-esp_err_t httpd_ws_send_frame(httpd_req_t *req, httpd_ws_frame_t *frame)
+int httpd_ws_send_frame(httpd_req_t *req, httpd_ws_frame_t *frame)
 {
-    esp_err_t ret = httpd_ws_check_req(req);
-    if (ret != ESP_OK) {
+    int ret = httpd_ws_check_req(req);
+    if (ret != OS_SUCCESS) {
         return ret;
     }
     return httpd_ws_send_frame_async(req->handle, httpd_req_to_sockfd(req), frame);
 }
 
-esp_err_t httpd_ws_send_frame_async(httpd_handle_t hd, int fd, httpd_ws_frame_t *frame)
+int httpd_ws_send_frame_async(httpd_handle_t hd, int fd, httpd_ws_frame_t *frame)
 {
     if (!frame) {
-        ESP_LOGW(TAG, LOG_FMT("Argument is invalid"));
-        return ESP_ERR_INVALID_ARG;
+        os_printf(LM_APP, LL_WARN, LOG_FMT("Argument is invalid"));
+        return ERR_INVALID_ARG;
     }
 
     /* Prepare Tx buffer - maximum length is 14, which includes 2 bytes header, 8 bytes length, 4 bytes mask key */
@@ -392,37 +384,37 @@ esp_err_t httpd_ws_send_frame_async(httpd_handle_t hd, int fd, httpd_ws_frame_t 
 
     struct sock_db *sess = httpd_sess_get(hd, fd);
     if (!sess) {
-        return ESP_ERR_INVALID_ARG;
+        return ERR_INVALID_ARG;
     }
 
     /* Send off header */
     if (sess->send_fn(hd, fd, (const char *)header_buf, tx_len, 0) < 0) {
-        ESP_LOGW(TAG, LOG_FMT("Failed to send WS header"));
-        return ESP_FAIL;
+        os_printf(LM_APP, LL_WARN, LOG_FMT("Failed to send WS header"));
+        return OS_FAIL;
     }
 
     /* Send off payload */
     if(frame->len > 0 && frame->payload != NULL) {
         if (sess->send_fn(hd, fd, (const char *)frame->payload, frame->len, 0) < 0) {
-            ESP_LOGW(TAG, LOG_FMT("Failed to send WS payload"));
-            return ESP_FAIL;
+            os_printf(LM_APP, LL_WARN, LOG_FMT("Failed to send WS payload"));
+            return OS_FAIL;
         }
     }
 
-    return ESP_OK;
+    return OS_SUCCESS;
 }
 
-esp_err_t httpd_ws_get_frame_type(httpd_req_t *req)
+int httpd_ws_get_frame_type(httpd_req_t *req)
 {
-    esp_err_t ret = httpd_ws_check_req(req);
-    if (ret != ESP_OK) {
+    int ret = httpd_ws_check_req(req);
+    if (ret != OS_SUCCESS) {
         return ret;
     }
 
     struct httpd_req_aux *aux = req->aux;
     if (aux == NULL) {
-        ESP_LOGW(TAG, LOG_FMT("Invalid Aux pointer"));
-        return ESP_ERR_INVALID_ARG;
+        os_printf(LM_APP, LL_WARN, LOG_FMT("Invalid Aux pointer"));
+        return ERR_INVALID_ARG;
     }
 
     /* Read the first byte from the frame to get the FIN flag and Opcode */
@@ -431,13 +423,13 @@ esp_err_t httpd_ws_get_frame_type(httpd_req_t *req)
     if (httpd_recv_with_opt(req, (char *)&first_byte, sizeof(first_byte), false) <= 0) {
         /* If the recv() return code is <= 0, then this socket FD is invalid (i.e. a broken connection) */
         /* Here we mark it as a Close message and close it later. */
-        ESP_LOGW(TAG, LOG_FMT("Failed to read header byte (socket FD invalid), closing socket now"));
+        os_printf(LM_APP, LL_WARN, LOG_FMT("Failed to read header byte (socket FD invalid), closing socket now"));
         aux->ws_final = true;
         aux->ws_type = HTTPD_WS_TYPE_CLOSE;
-        return ESP_OK;
+        return OS_SUCCESS;
     }
 
-    ESP_LOGD(TAG, LOG_FMT("First byte received: 0x%02X"), first_byte);
+    os_printf(LM_APP, LL_DBG, LOG_FMT("First byte received: 0x%02X"), first_byte);
 
     /* Decode the FIN flag and Opcode from the byte */
     aux->ws_final = (first_byte & HTTPD_WS_FIN_BIT) != 0;
@@ -445,7 +437,7 @@ esp_err_t httpd_ws_get_frame_type(httpd_req_t *req)
 
     /* Reply to PING. For PONG and CLOSE, it will be handled elsewhere. */
     if(aux->ws_type == HTTPD_WS_TYPE_PING) {
-        ESP_LOGD(TAG, LOG_FMT("Got a WS PING frame, Replying PONG..."));
+        os_printf(LM_APP, LL_DBG, LOG_FMT("Got a WS PING frame, Replying PONG..."));
 
         /* Read the rest of the PING frame, for PONG to reply back. */
         /* Please refer to RFC6455 Section 5.5.2 for more details */
@@ -454,9 +446,9 @@ esp_err_t httpd_ws_get_frame_type(httpd_req_t *req)
         memset(&frame, 0, sizeof(httpd_ws_frame_t));
         frame.payload = frame_buf;
 
-        if(httpd_ws_recv_frame(req, &frame, 126) != ESP_OK) {
-            ESP_LOGD(TAG, LOG_FMT("Cannot receive the full PING frame"));
-            return ESP_ERR_INVALID_STATE;
+        if(httpd_ws_recv_frame(req, &frame, 126) != OS_SUCCESS) {
+            os_printf(LM_APP, LL_DBG, LOG_FMT("Cannot receive the full PING frame"));
+            return ERR_INVALID_STATE;
         }
 
         /* Now turn the frame to PONG */
@@ -464,7 +456,7 @@ esp_err_t httpd_ws_get_frame_type(httpd_req_t *req)
         return httpd_ws_send_frame(req, &frame);
     }
 
-    return ESP_OK;
+    return OS_SUCCESS;
 }
 
 httpd_ws_client_info_t httpd_ws_get_fd_info(httpd_handle_t hd, int fd)

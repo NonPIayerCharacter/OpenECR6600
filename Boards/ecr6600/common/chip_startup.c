@@ -15,6 +15,7 @@
 #include "hal_system.h"
 #include "hal_rtc.h"
 #include "chip_configuration.h"
+#include "psm_system.h"
 
 void chip_c_init(void)
 {
@@ -92,6 +93,10 @@ extern int main(void);
 	
 #ifdef CONFIG_SYSTEM_IRQ
 	sys_irq_sw_set();
+#endif
+
+#ifdef CONFIG_PSM_SURPORT
+	psm_pad_gpio_status_init();
 #endif
 	main();
 }

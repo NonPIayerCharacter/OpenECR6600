@@ -29,7 +29,12 @@
 //#ifndef OUT32
 //#define OUT32(offset,value) (*(volatile unsigned int *)(offset) = (unsigned int)(value));
 //#endif 
+#define REBOOT_HANDLERS_NUM  (3)
 
+typedef struct {
+	void *arg;
+	reset_handler_t cb;
+}reset_handlers_t;
 
 
 #define BOOT_REASON_ADDR 	(0x201234)
@@ -39,8 +44,8 @@
 #define EXTPAD_RST_EN_OFFSET		(0x10)
 
 RST_TYPE g_system_reboot_reason = RST_TYPE_UNKOWN;
-
-
+static reset_handlers_t        reset_handlers[REBOOT_HANDLERS_NUM];
+void hal_system_reset_handlers_process(void);
 
 void hal_system_reset_key_enable()
 {
@@ -69,8 +74,10 @@ void hal_system_reset(RST_TYPE type)
 	PIN_FUNC_SET(IO_MUX_GPIO2, FUNC_GPIO2_GPIO2);
 	hal_gpio_dir_set(GPIO_NUM_2, DRV_GPIO_ARG_DIR_OUT);
 	hal_gpio_write(GPIO_NUM_2, LEVEL_HIGH);
-	
 	#endif
+	
+	hal_system_reset_handlers_process();
+
 	if(type <= RST_TYPE_UNKOWN)
 	{
 		hal_set_reset_type(type);
@@ -206,3 +213,50 @@ int hal_system_get_mac(unsigned char type, unsigned char *mac)
 	return ret;
 }
 #endif
+
+void hal_system_reset_handlers_process(void)
+{
+	int idx;
+
+	for (idx = 0; idx < REBOOT_HANDLERS_NUM; idx++)
+	{
+		if (reset_handlers[idx].cb)
+		{
+			reset_handlers[idx].cb(reset_handlers[idx].arg);
+		}
+	}
+}
+
+int hal_system_register_reset_handler(reset_handler_t handle, void *arg)
+{
+	int idx;
+
+	for (idx = 0; idx < REBOOT_HANDLERS_NUM; idx++)
+	{
+		if (!reset_handlers[idx].cb)
+		{
+			reset_handlers[idx].cb = handle;
+			reset_handlers[idx].arg = arg;
+			return 0;
+		}
+	}
+
+	return -1;
+}
+int hal_system_unregister_reset_handler(reset_handler_t handle)
+{
+	int idx;
+
+	for (idx = 0; idx < REBOOT_HANDLERS_NUM; idx++)
+	{
+		if (reset_handlers[idx].cb == handle)
+		{
+			reset_handlers[idx].cb = NULL;
+			reset_handlers[idx].arg = NULL;
+			return 0;
+		}
+	}
+
+	return -1;
+}
+

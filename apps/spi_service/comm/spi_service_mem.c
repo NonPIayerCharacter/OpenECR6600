@@ -7,21 +7,23 @@
 #include "cli.h"
 #endif
 
-#define SPI_SERVICE_MEM_SIZE (32*1024)
-uint8_t g_service_rxmem[SPI_SERVICE_MEM_SIZE] __SHAREDRAM;
-uint8_t g_service_txmem[SPI_SERVICE_MEM_SIZE] __SHAREDRAM;
+#define SPI_SERVICE_RX_MEM_SIZE (16*1024)
+#define SPI_SERVICE_TX_MEM_SIZE (20*1024)
+
+uint8_t g_service_rxmem[SPI_SERVICE_RX_MEM_SIZE] __SHAREDRAM;
+uint8_t g_service_txmem[SPI_SERVICE_TX_MEM_SIZE] __SHAREDRAM;
 struct mblock_free *g_service_fblk[SPI_SERVICE_MEM_MAX];
 
 void spi_service_mem_init(void)
 {
     g_service_fblk[SPI_SERVICE_MEM_RX] = (struct mblock_free *)CO_ALIGN4_HI((uint32_t)g_service_rxmem);
-    g_service_fblk[SPI_SERVICE_MEM_RX]->free_size = ((uint32_t)&g_service_rxmem[SPI_SERVICE_MEM_SIZE] & (~3)) - (uint32_t)g_service_fblk[SPI_SERVICE_MEM_RX];
+    g_service_fblk[SPI_SERVICE_MEM_RX]->free_size = ((uint32_t)&g_service_rxmem[SPI_SERVICE_RX_MEM_SIZE] & (~3)) - (uint32_t)g_service_fblk[SPI_SERVICE_MEM_RX];
     g_service_fblk[SPI_SERVICE_MEM_RX]->next = NULL;
     g_service_fblk[SPI_SERVICE_MEM_RX]->previous = NULL;
     g_service_fblk[SPI_SERVICE_MEM_RX]->corrupt_check = KE_LIST_PATTERN;
 
     g_service_fblk[SPI_SERVICE_MEM_TX] = (struct mblock_free *)CO_ALIGN4_HI((uint32_t)g_service_txmem);
-    g_service_fblk[SPI_SERVICE_MEM_TX]->free_size = ((uint32_t)&g_service_txmem[SPI_SERVICE_MEM_SIZE] & (~3)) - (uint32_t)g_service_fblk[SPI_SERVICE_MEM_TX];
+    g_service_fblk[SPI_SERVICE_MEM_TX]->free_size = ((uint32_t)&g_service_txmem[SPI_SERVICE_TX_MEM_SIZE] & (~3)) - (uint32_t)g_service_fblk[SPI_SERVICE_MEM_TX];
     g_service_fblk[SPI_SERVICE_MEM_TX]->next = NULL;
     g_service_fblk[SPI_SERVICE_MEM_TX]->previous = NULL;
     g_service_fblk[SPI_SERVICE_MEM_TX]->corrupt_check = KE_LIST_PATTERN;
@@ -40,12 +42,12 @@ struct mblock_free *spi_service_mem_range_check(void *memPtr)
 {
     ASSERT_ERR(memPtr != NULL);
     if ((uint32_t)g_service_fblk[SPI_SERVICE_MEM_RX] <= (uint32_t)memPtr &&
-        (uint32_t)memPtr < (uint32_t)g_service_fblk[SPI_SERVICE_MEM_RX] + SPI_SERVICE_MEM_SIZE) {
+        (uint32_t)memPtr < (uint32_t)g_service_fblk[SPI_SERVICE_MEM_RX] + SPI_SERVICE_RX_MEM_SIZE) {
         return g_service_fblk[SPI_SERVICE_MEM_RX];
     }
 
     if ((uint32_t)g_service_fblk[SPI_SERVICE_MEM_TX] <= (uint32_t)memPtr &&
-        (uint32_t)memPtr < (uint32_t)g_service_fblk[SPI_SERVICE_MEM_TX] + SPI_SERVICE_MEM_SIZE) {
+        (uint32_t)memPtr < (uint32_t)g_service_fblk[SPI_SERVICE_MEM_TX] + SPI_SERVICE_TX_MEM_SIZE) {
         return g_service_fblk[SPI_SERVICE_MEM_TX];
     }
 

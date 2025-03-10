@@ -12,10 +12,7 @@
 
 #include "platform_tr6600.h"
 #include "transport_tcp.h"
-
-typedef struct {
-    int sock;
-} transport_tcp_t;
+#include "mqtt_client.h"
 
 static int resolve_dns(const char *host, struct sockaddr_in *ip) {
 
@@ -58,6 +55,18 @@ static int tcp_connect(transport_handle_t t, const char *host, int port, int tim
 
     remote_ip.sin_family = AF_INET;
     remote_ip.sin_port = htons(port);
+
+    struct sockaddr_in local_ip = {0};
+    if(g_mqtt_cli_port != 0) {
+        local_ip.sin_family = AF_INET;
+        local_ip.sin_port = htons(g_mqtt_cli_port);
+        local_ip.sin_addr.s_addr = htonl(INADDR_ANY);
+        if(bind(tcp->sock, (struct sockaddr *)&local_ip, sizeof(local_ip)) != 0){
+            close(tcp->sock);
+            tcp->sock = -1;
+        return -1;
+        }
+    }
 
     ms_to_timeval(timeout_ms, &tv);
 

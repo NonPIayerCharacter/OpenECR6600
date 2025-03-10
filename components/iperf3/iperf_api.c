@@ -1725,13 +1725,6 @@ iperf_exchange_parameters(struct iperf_test *test)
 int
 iperf_exchange_results(struct iperf_test *test)
 {
-#ifdef SO_RCVTIMEO
-#ifdef __TR_SW__
-    unsigned int recv_timeout = 2000;
-    setsockopt(test->ctrl_sck, SOL_SOCKET, SO_RCVTIMEO, &recv_timeout, sizeof(unsigned int));
-#endif
-#endif
-
     if (test->role == 'c') {
         /* Send results to server. */
 	if (send_results(test) < 0)

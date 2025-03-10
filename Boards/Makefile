@@ -61,7 +61,9 @@ all: $(OUTPUTDIR_LIB)/$(LIBTARGET) $(OUTPUTDIR_LIB)/$(LIBVERSION) $(OUTPUTDIR_LI
 #		generate ld script
 #
 ###########################################
-ifeq ($(CONFIG_LD_SCRIPT_XIP),y)
+ifeq ($(CONFIG_FUNC_TRIM),y)
+LD_SCRIPTS      :=ld_xip_yy.script.S
+else ifeq ($(CONFIG_LD_SCRIPT_XIP),y)
 LD_SCRIPTS	:=ld_xip.script.S
 else
 LD_SCRIPTS	:=ld_ram.script.S

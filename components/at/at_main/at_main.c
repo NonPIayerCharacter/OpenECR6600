@@ -42,13 +42,13 @@
 #include "cli.h"
 #define COMMAND_TASK_PRIORITY 0
 #define COMMAND_QUEUE_SIZE    1
-#define COMMAND_LINE_LENGTH   256
+#define COMMAND_LINE_LENGTH   4608
 
 static dce_t* dce;
 
 static os_queue_handle_t command_queue = NULL;
 
-static E_DRV_UART_NUM     uart_num = E_UART_NUM_1;
+E_DRV_UART_NUM     uart_num = E_UART_NUM_1;
 
 void  AT_command_callback(char c)
 {
@@ -424,7 +424,11 @@ void AT_command_init(void)
     #if defined(CONFIG_MQTT)
     dce_register_mqtt_commands(dce);
     #endif
-    //init_done();
+    init_done();
+	int va=0;int ret=0;
+	ret=develop_get_env_blob("BleAdvMode", &va, sizeof(va),NULL);
+	if (ret==0xffffffff || ret==0){
+	develop_set_env_blob("BleAdvMode",&va,sizeof(va));}
 
     callback.uart_callback = cli_uart_isr;
     callback.uart_data     = (void *)dce;

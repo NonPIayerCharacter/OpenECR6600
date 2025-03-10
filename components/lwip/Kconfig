@@ -12,6 +12,10 @@ menuconfig IPV6
 	default n
 
 if LWIP
+	config LWIP_NAPT
+	bool "lwip napt enable"
+	default n
+
 	config LWIP_MEM_SIZE
 	int "lwip mem size"
 	range 16384 65536

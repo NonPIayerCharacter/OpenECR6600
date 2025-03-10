@@ -38,6 +38,8 @@ extern "C" {
 
 #define PRINT_STRING_MAX_LEN (CLI_PRINT_BUFFER_SIZE - 32) 
 
+extern uint16_t g_mqtt_cli_port;
+
 typedef enum{
     MQTT_PUB_SUCCESS = 0,
     MQTT_PUB_FAILED   

@@ -17,17 +17,15 @@
 #include <stdbool.h>
 #include <fcntl.h>
 
-// #include "../mbedtls/mbedtls/include/mbedtls/platform.h"
-#include "../mbedtls/mbedtls/include/mbedtls/platform.h"
-#include "../mbedtls/mbedtls/include/mbedtls/net_sockets.h"
-#include "../mbedtls/port/include/mbedtls/trs_debug.h"
-#include "../mbedtls/mbedtls/include/mbedtls/ssl.h"
-#include "../mbedtls/mbedtls/include/mbedtls/entropy.h"
-#include "../mbedtls/mbedtls/include/mbedtls/ctr_drbg.h"
-#include "../mbedtls/mbedtls/include/mbedtls/error.h"
-#include "../mbedtls/mbedtls/include/mbedtls/certs.h"
+#include "mbedtls/platform.h"
+#include "mbedtls/net_sockets.h"
+//#include "trs_debug.h"
+#include "mbedtls/ssl.h"
+#include "mbedtls/entropy.h"
+#include "mbedtls/ctr_drbg.h"
+#include "mbedtls/error.h"
+#include "mbedtls/certs.h"
 #include "lwip/netdb.h"
-#include "url_parser.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -103,7 +101,6 @@ typedef struct trs_tls_cfg {
 /**
  * @brief      TRS-TLS Connection Handle 
  */
-#pragma pack(1)
 typedef struct trs_tls {
     mbedtls_ssl_context ssl;                                                    /*!< TLS/SSL context */
  
@@ -142,7 +139,7 @@ typedef struct trs_tls {
 
     fd_set wset;                                                                /*!< write file descriptors */
 } trs_tls_t;
-#pragma pack()
+
 /**
  * @brief      Create a new blocking TLS/SSL connection
  *

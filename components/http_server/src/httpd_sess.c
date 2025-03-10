@@ -1,5 +1,3 @@
-// Copyright 2018 Espressif Systems (Shanghai) PTE LTD
-//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,13 +12,9 @@
 
 
 #include <stdlib.h>
-#include <esp_log.h>
-#include <esp_err.h>
 
-#include <esp_http_server.h>
-#include "esp_httpd_priv.h"
-
-static const char *TAG = "httpd_sess";
+#include <http_server_service.h>
+#include "httpd_priv.h"
 
 bool httpd_is_sess_available(struct httpd_data *hd)
 {
@@ -56,13 +50,13 @@ struct sock_db *httpd_sess_get(struct httpd_data *hd, int sockfd)
     return NULL;
 }
 
-esp_err_t httpd_sess_new(struct httpd_data *hd, int newfd)
+int httpd_sess_new(struct httpd_data *hd, int newfd)
 {
-    ESP_LOGD(TAG, LOG_FMT("fd = %d"), newfd);
+    os_printf(LM_APP, LL_DBG, LOG_FMT("fd = %d"), newfd);
 
     if (httpd_sess_get(hd, newfd)) {
-        ESP_LOGE(TAG, LOG_FMT("session already exists with fd = %d"), newfd);
-        return ESP_FAIL;
+        os_printf(LM_APP, LL_ERR, LOG_FMT("session already exists with fd = %d"), newfd);
+        return OS_FAIL;
     }
 
     int i;
@@ -76,18 +70,18 @@ esp_err_t httpd_sess_new(struct httpd_data *hd, int newfd)
 
             /* Call user-defined session opening function */
             if (hd->config.open_fn) {
-                esp_err_t ret = hd->config.open_fn(hd, hd->hd_sd[i].fd);
-                if (ret != ESP_OK) {
+                int ret = hd->config.open_fn(hd, hd->hd_sd[i].fd);
+                if (ret != OS_SUCCESS) {
                     httpd_sess_delete(hd, hd->hd_sd[i].fd);
-                    ESP_LOGD(TAG, LOG_FMT("open_fn failed for fd = %d"), newfd);
+                    os_printf(LM_APP, LL_DBG, LOG_FMT("open_fn failed for fd = %d"), newfd);
                     return ret;
                 }
             }
-            return ESP_OK;
+            return OS_SUCCESS;
         }
     }
-    ESP_LOGD(TAG, LOG_FMT("unable to launch session for fd = %d"), newfd);
-    return ESP_FAIL;
+    os_printf(LM_APP, LL_DBG, LOG_FMT("unable to launch session for fd = %d"), newfd);
+    return OS_FAIL;
 }
 
 void httpd_sess_free_ctx(void *ctx, httpd_free_ctx_fn_t free_fn)
@@ -210,7 +204,7 @@ void httpd_sess_delete_invalid(struct httpd_data *hd)
 {
     for (int i = 0; i < hd->config.max_open_sockets; i++) {
         if (hd->hd_sd[i].fd != -1 && !fd_is_valid(hd->hd_sd[i].fd)) {
-            ESP_LOGW(TAG, LOG_FMT("Closing invalid socket %d"), hd->hd_sd[i].fd);
+            os_printf(LM_APP, LL_WARN, LOG_FMT("Closing invalid socket %d"), hd->hd_sd[i].fd);
             httpd_sess_delete(hd, hd->hd_sd[i].fd);
         }
     }
@@ -218,7 +212,7 @@ void httpd_sess_delete_invalid(struct httpd_data *hd)
 
 int httpd_sess_delete(struct httpd_data *hd, int fd)
 {
-    ESP_LOGD(TAG, LOG_FMT("fd = %d"), fd);
+    os_printf(LM_APP, LL_DBG, LOG_FMT("fd = %d"), fd);
     int i;
     int pre_sess_fd = -1;
     for (i = 0; i < hd->config.max_open_sockets; i++) {
@@ -276,7 +270,7 @@ bool httpd_sess_pending(struct httpd_data *hd, int fd)
 {
     struct sock_db *sd = httpd_sess_get(hd, fd);
     if (! sd) {
-        return ESP_FAIL;
+        return OS_FAIL;
     }
 
     if (sd->pending_fn) {
@@ -290,34 +284,34 @@ bool httpd_sess_pending(struct httpd_data *hd, int fd)
     return (sd->pending_len != 0);
 }
 
-/* This MUST return ESP_OK on successful execution. If any other
+/* This MUST return OS_SUCCESS on successful execution. If any other
  * value is returned, everything related to this socket will be
  * cleaned up and the socket will be closed.
  */
-esp_err_t httpd_sess_process(struct httpd_data *hd, int newfd)
+int httpd_sess_process(struct httpd_data *hd, int newfd)
 {
     struct sock_db *sd = httpd_sess_get(hd, newfd);
     if (! sd) {
-        return ESP_FAIL;
+        return OS_FAIL;
     }
 
-    ESP_LOGD(TAG, LOG_FMT("httpd_req_new"));
-    if (httpd_req_new(hd, sd) != ESP_OK) {
-        return ESP_FAIL;
+    os_printf(LM_APP, LL_DBG, LOG_FMT("httpd_req_new"));
+    if (httpd_req_new(hd, sd) != OS_SUCCESS) {
+        return OS_FAIL;
     }
-    ESP_LOGD(TAG, LOG_FMT("httpd_req_delete"));
-    if (httpd_req_delete(hd) != ESP_OK) {
-        return ESP_FAIL;
+    os_printf(LM_APP, LL_DBG, LOG_FMT("httpd_req_delete"));
+    if (httpd_req_delete(hd) != OS_SUCCESS) {
+        return OS_FAIL;
     }
-    ESP_LOGD(TAG, LOG_FMT("success"));
+    os_printf(LM_APP, LL_DBG, LOG_FMT("success"));
     sd->lru_counter = httpd_sess_get_lru_counter();
-    return ESP_OK;
+    return OS_SUCCESS;
 }
 
-esp_err_t httpd_sess_update_lru_counter(httpd_handle_t handle, int sockfd)
+int httpd_sess_update_lru_counter(httpd_handle_t handle, int sockfd)
 {
     if (handle == NULL) {
-        return ESP_ERR_INVALID_ARG;
+        return ERR_INVALID_ARG;
     }
 
     /* Search for the socket database entry */
@@ -326,13 +320,13 @@ esp_err_t httpd_sess_update_lru_counter(httpd_handle_t handle, int sockfd)
     for (i = 0; i < hd->config.max_open_sockets; i++) {
         if (hd->hd_sd[i].fd == sockfd) {
             hd->hd_sd[i].lru_counter = httpd_sess_get_lru_counter();
-            return ESP_OK;
+            return OS_SUCCESS;
         }
     }
-    return ESP_ERR_NOT_FOUND;
+    return ERR_NOT_FOUND;
 }
 
-esp_err_t httpd_sess_close_lru(struct httpd_data *hd)
+int httpd_sess_close_lru(struct httpd_data *hd)
 {
     uint64_t lru_counter = UINT64_MAX;
     int lru_fd = -1;
@@ -343,14 +337,14 @@ esp_err_t httpd_sess_close_lru(struct httpd_data *hd)
          * session
          */
         if (hd->hd_sd[i].fd == -1) {
-            return ESP_OK;
+            return OS_SUCCESS;
         }
         if (hd->hd_sd[i].lru_counter < lru_counter) {
             lru_counter = hd->hd_sd[i].lru_counter;
             lru_fd = hd->hd_sd[i].fd;
         }
     }
-    ESP_LOGD(TAG, LOG_FMT("fd = %d"), lru_fd);
+    os_printf(LM_APP, LL_DBG, LOG_FMT("fd = %d"), lru_fd);
     struct sock_db *sd = httpd_sess_get(hd, lru_fd);
     sd->lru_socket = true;
     return httpd_sess_trigger_close(hd, lru_fd);
@@ -384,7 +378,7 @@ static void httpd_sess_close(void *arg)
     struct sock_db *sock_db = (struct sock_db *)arg;
     if (sock_db) {
         if (sock_db->lru_counter == 0 && !sock_db->lru_socket) {
-            ESP_LOGD(TAG, "Skipping session close for %d as it seems to be a race condition", sock_db->fd);
+            os_printf(LM_APP, LL_DBG, "Skipping session close for %d as it seems to be a race condition", sock_db->fd);
             return;
         }
         int fd = sock_db->fd;
@@ -395,12 +389,12 @@ static void httpd_sess_close(void *arg)
     }
 }
 
-esp_err_t httpd_sess_trigger_close(httpd_handle_t handle, int sockfd)
+int httpd_sess_trigger_close(httpd_handle_t handle, int sockfd)
 {
     struct sock_db *sock_db = httpd_sess_get(handle, sockfd);
     if (sock_db) {
         return httpd_queue_work(handle, httpd_sess_close, sock_db);
     }
 
-    return ESP_ERR_NOT_FOUND;
+    return ERR_NOT_FOUND;
 }

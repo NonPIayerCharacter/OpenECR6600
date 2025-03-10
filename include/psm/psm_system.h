@@ -48,15 +48,17 @@ enum psm_dbg_wifi_cnt
 
 enum psm_state_bit_pos
 {
-	PSM_MODEM_SLEEP	=0,
-	PSM_WFI_SLEEP,
-	PSM_LIGHT_SLEEP,
-	PSM_DEEP_SLEEP,
+	MODEM_SLEEP_EN	=0,
+	WFI_SLEEP_EN,
+	LIGHT_SLEEP_EN,
+	DEEP_SLEEP_EN,
 };
 
-#define PSM_SLEEP_GET(bit_pos) psm_sleep_get_op(PSM_##bit_pos)
-#define PSM_SLEEP_SET(bit_pos) psm_sleep_set_op(PSM_##bit_pos)
-#define PSM_SLEEP_CLEAR(bit_pos) psm_sleep_clear_op(PSM_##bit_pos)
+
+#define PSM_SLEEP_GET(bit_pos) psm_sleep_mode_get(bit_pos)
+#define PSM_SLEEP_SET(bit_pos) psm_sleep_mode_set(bit_pos)
+#define PSM_SLEEP_CLEAR(bit_pos) psm_sleep_mode_clear(bit_pos)
+
 #define CONFIG_ECR_BLE_PSM 1 
 
 //#define IO_DEBUG 1		//for scope debug,default 0 else 1
@@ -276,11 +278,19 @@ struct psm_dbg_info
 };
 
 struct psm_dbg_handler_t{
-    const char *module;
     const char *cmd;
     int (*func)(int argc, char *argv[]);
 };
-#define _PSM_HANDLE_DEF_(m, cmd, f) #m, #cmd, psm_ ## m ## _ ## f
+struct psm_timer_param
+{
+	unsigned int pt_timer_cnt;
+	unsigned int rtc_timer_cnt;
+
+	unsigned int pt_interval;
+	unsigned int pt_cnt;
+	bool pt_info;
+};
+#define _PSM_HANDLE_DEF_(cmd, f)	#cmd, psm_ ## cmd ## _ ## f
 
 #define _PSM_DBG_RCD_(mode) psm_dbg_rcd_op(dbg_cnt_ ## mode)
 #define _PSM_DBG_CLR_(mode) psm_dbg_clr_op(dbg_cnt_ ## mode)
@@ -360,7 +370,7 @@ unsigned char psm_get_listen_interval();
 unsigned int psm_set_wifi_status(NETWORK_STATUS status);
 unsigned int psm_get_wifi_status();
 void psm_tx_pkt_cnt_inc();
-bool psm_hold_gpio_intf(unsigned int gpio_num,unsigned char psm_stat);
+bool psm_hold_gpio_intf(unsigned int gpio_num,unsigned char psm_stat,unsigned char direction);
 bool psm_proc_init_cb(unsigned char psm_stat,psm_func_cb psm_cb);
 bool psm_gpio_hold_stat(unsigned int gpio_num);
 
@@ -375,9 +385,9 @@ unsigned int psm_cb_time_op(bool isSet, unsigned int value, int index);
 int psm_nulldata_op(bool isSet, int value);
 int psm_nulldata_cnt_op(bool isSet, int value);
 unsigned char psm_sleep_mode_ena_op(bool isSet, unsigned char value);
-unsigned char psm_sleep_get_op(enum psm_state_bit_pos bit_pos);
-void psm_sleep_set_op(enum psm_state_bit_pos bit_pos);
-void psm_sleep_clear_op(enum psm_state_bit_pos bit_pos);
+unsigned char PSM_SLEEP_GET(enum psm_state_bit_pos bit_pos);
+void PSM_SLEEP_SET(enum psm_state_bit_pos bit_pos);
+void PSM_SLEEP_CLEAR(enum psm_state_bit_pos bit_pos);
 unsigned int psm_pit_when_sleep_op(bool isSet, unsigned int value);
 bool psm_is_rtc_update_op(bool isSet, bool value);
 unsigned int psm_uart_last_time_op(bool isSet, unsigned int value);
@@ -385,4 +395,5 @@ unsigned int psm_cnt_rec_beacon_op(bool isSet, unsigned int value);
 void psm_dbg_rcd_op(enum psm_dbg_wifi_cnt value);
 void psm_dbg_clr_op(enum psm_dbg_wifi_cnt value);
 unsigned int psm_sleep_next_time_point_op(bool isSet, unsigned char value);
+void psm_pad_gpio_status_init();
 #endif

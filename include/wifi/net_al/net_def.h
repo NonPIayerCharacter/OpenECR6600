@@ -20,11 +20,13 @@
 #ifdef CONFIG_WIFI_FHOST
 #include "lwip/tcpip.h"
 #endif
-
+#include "lwip/prot/ethernet.h"
 /*
  * DEFINITIONS
  ****************************************************************************************
  */
+#define ETH_HDR_LEN SIZEOF_ETH_HDR
+
 /// Net interface
 typedef struct netif        net_if_t;
 

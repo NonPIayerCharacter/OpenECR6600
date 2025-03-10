@@ -28,6 +28,9 @@
 #include "system_wifi.h"
 #include "common.h"
 #endif
+#ifdef ENABLE_LWIP_NAPT
+#include "system_lwip.h"
+#endif
 
 #define MAC_LEN 17
 /*--------------------------------------------------------------------------
@@ -99,6 +102,28 @@ static int cmd_wifi_sta(cmd_tbl_t *t, int argc, char *argv[])
 }
 CLI_CMD(wifi_sta, cmd_wifi_sta,  "connect wifi as station", "wifi_sta <ssid> [password]");
 
+
+static int cmd_chineses_wifi_sta(cmd_tbl_t * t, int argc, char * argv[])
+{
+
+	wifi_config_u config;
+
+	memset(&config,0,sizeof(config));
+
+	if(0== strcmp(argv[1],"test1"))
+		strcpy((char *)config.sta.ssid,"!@#￥%*\\");
+	else if(0== strcmp(argv[1],"test2"))
+		
+		strcpy((char *)config.sta.ssid,"中文测试SSID");
+
+	strncpy(config.sta.password,argv[2],sizeof(config.sta.password)-1);
+
+
+	wifi_stop_station();
+	os_msleep(500);
+	return wifi_start_station(&config) ? CMD_RET_FAILURE:CMD_RET_SUCCESS;
+}
+CLI_CMD(wifi_chinenese_sta, cmd_chineses_wifi_sta,  "connect wifi as station", "wifi_sta <ssid> [password]");
 extern uint16_t get_macsw_sta_max_cnt(void);
 static int cmd_wifi_softap(cmd_tbl_t * t, int argc, char * argv[])
 {
@@ -601,8 +626,27 @@ CLI_CMD(sniffer_stop, set_sniffer_stop, "set_sniffer_stop", "set_sniffer_stop");
 
 #endif // CONFIG_WIFI_PRODUCT_FHOST
 
+#ifdef ENABLE_LWIP_NAPT
+extern void napt_debug_print();
+int lwip_napt_set(cmd_tbl_t *t, int argc, char *argv[])
+{
+    if (argc < 2)
+        return CMD_RET_USAGE;
 
+    if (0 == strcmp("enable", argv[1])) {
+        enable_lwip_napt(SOFTAP_IF, 1);
+    } else if (0 == strcmp("disable", argv[1])) {
+        enable_lwip_napt(SOFTAP_IF, 0);
+    } else if (0 == strcmp("show", argv[1])) {
+        napt_debug_print();
+    } else {
+        return CMD_RET_USAGE;
+    }
 
+    return CMD_RET_SUCCESS;
+}
+CLI_CMD(napt, lwip_napt_set, "lwip napt", "napt enable/disable/show");
+#endif
 
 extern int call_wifi_dbg_func(int argc, char *argv[]);
 int wifi_dbg_cmd(cmd_tbl_t *t, int argc, char *argv[])

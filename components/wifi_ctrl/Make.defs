@@ -11,6 +11,7 @@ ifeq ($(CONFIG_SYSTEM_WIFI_CTRL),y)
 				$(TOPDIR)/components/lwip/lwip-2.1.0/src \
 				$(TOPDIR)/components/lwip/lwip-2.1.0/src/include \
 				$(TOPDIR)/components/wpa/src \
+				$(TOPDIR)/components/wpa/src/common \
 				$(TOPDIR)/PS/wifi/ecr6600/modules \
 				$(TOPDIR)/apps/spi_service/comm
 else

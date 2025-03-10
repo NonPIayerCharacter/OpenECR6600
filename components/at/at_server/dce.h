@@ -36,7 +36,8 @@ typedef enum {
 typedef enum {
     COMMAND_STATE = 1,
     ONLINE_DATA_STATE = 2,
-    ONLINE_COMMAND_STATE = 3
+    ONLINE_COMMAND_STATE = 3,
+    TCP_ONLINE_DATA_STATE = 4
 } state_t;
 
 typedef enum {
@@ -98,6 +99,7 @@ struct dce_
 
 void dce_register_command_group(dce_t* dce, const char* groupname, const command_desc_t* desc, int ndesc, void* ctx);
 void dce_emit_extended_result_code_with_args(dce_t* dce, const char* command_name, size_t size, const arg_t* args, size_t argc, int reset_command_pending,  bool arg_in_brackets);
+void TG_dce_emit_extended_result_code_with_args(dce_t* dce, const char* command_name, size_t size, const arg_t* args, size_t argc, int reset_command_pending,  bool arg_in_brackets,int data_len);
 
 void dce_init_defaults(dce_t* dce);
 void dce_emit_response_prefix(dce_t* dce);

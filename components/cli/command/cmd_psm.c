@@ -63,10 +63,11 @@
 
 static int psm_dbg_cmd(cmd_tbl_t *t, int argc, char *argv[])
 {
+	os_printf(LM_APP, LL_INFO, "psm_dbg_cmd(%d)=%s\r\n",argc - 1,argv + 1);
 	psm_dbg_func_cb(argc - 1, argv + 1);
 	return CMD_RET_SUCCESS;
 }
-CLI_CMD(psm, psm_dbg_cmd, "power save debug", "such as:\n\tpsm set common [on|off|modemsleep|lightsleep|deepsleep]\n\tpsm ctrl pt [off|time(s)]");
+CLI_CMD(psm, psm_dbg_cmd, "PSM Debug", "\n\tpsm set [modemsleep/lightsleep/deepsleep/off] [listen_interval/deepsleep_time(s)\n\tpsm pt [off/time(s)]\n\tpsm ls [3/5(modem/light)/sleep_time(s)]\n\tpsm show");
 
 
 

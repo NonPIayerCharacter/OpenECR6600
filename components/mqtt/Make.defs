@@ -9,8 +9,8 @@ ifeq ($(CONFIG_MQTT),y)
 			 transport.c \
 			 transport_ssl.c \
 			 transport_tcp.c \
-			 transport_ws.c \
-			 mqtt_test.c
+			 transport_ws.c
+
 	VPATH += :mqtt
 	INCPATHS += mqtt
 	INCPATHS += mqtt/include

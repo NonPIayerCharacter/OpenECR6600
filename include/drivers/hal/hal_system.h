@@ -16,6 +16,7 @@ typedef enum {
 	RST_TYPE_UNKOWN // Possible reasons: 1. PC pointer 0 address jump
 } RST_TYPE;
 
+typedef void (*reset_handler_t)(void *arg);
 
 void hal_system_reset_key_enable();
 void hal_system_reset_key_disable();
@@ -28,5 +29,11 @@ void func_after_irq();
 void func_before_restore();
 //int hal_system_set_mac(unsigned char *mac);
 //int hal_system_get_mac(unsigned char type, unsigned char *mac);
+int hal_system_register_reset_handler(reset_handler_t handle, void *arg);
+int hal_system_unregister_reset_handler(reset_handler_t handle);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif//__HAL_SYSTEM_H__

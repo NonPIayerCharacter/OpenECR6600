@@ -74,6 +74,10 @@ config MULTIPLEX_UART
       bool 
       default y
 
+config BLE_AHITL
+      bool 
+      default y
+
 config BLE_ATTC
       bool 
       default y
@@ -88,9 +92,13 @@ config BLE_SEC_CON
 
 config BLE_NBPRF
       int 
-      default 1
+      default 10
 
 config BLE_PROFILES
+      bool 
+      default y
+
+config BLE_PROFILE_DISS
       bool 
       default y
 
@@ -100,7 +108,7 @@ config BLE_WLCOEX
 
 config BLE_RAL
       int 
-      default 1
+      default 3
 
 config BLE_HOST_PRESENT
       bool 
@@ -111,6 +119,10 @@ config BLE_AHI_PRESENT
       default y
 
 config BLE_SCH_PRESENT
+      bool 
+      default y
+
+config BLE_RD_PICONET_CLK
       bool 
       default y
 
@@ -300,7 +312,7 @@ config WIFI_REORDBUF
 
 config WIFI_BATX
       int 
-      default 1
+      default 4
 
 config WIFI_MFP
       bool 

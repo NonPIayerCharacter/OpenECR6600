@@ -6,12 +6,7 @@
 
 #define SPI_SERVICE_MEM_DEBUG_SUPPORT
 #define CO_ALIGN4_HI(val) (((val)+3) & ~3)
-
-#ifdef CONFIG_SPI_REPEATER
-#define CO_ALIGN2_HI(val) (((val)+1) & ~1)
-#else
 #define CO_ALIGN2_HI(val) (val)
-#endif
 
 enum SPI_SERVICE_MEM
 {

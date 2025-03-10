@@ -20,7 +20,7 @@
 #ifdef NX_ESWIN_SDIO
 #include "amt_transport.h"
 #endif
-
+extern int temp_status;
 //#ifndef WRITE_REG
 //#define WRITE_REG(offset,value) (*(volatile unsigned int *)(offset) = (unsigned int)(value));
 //#endif

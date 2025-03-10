@@ -874,7 +874,7 @@ void wifi_send_heartbeat_pkg(void)
     ICMPH_TYPE_SET(iecho, ICMP_ECHO);
     ICMPH_CODE_SET(iecho, 0);
     iecho->chksum = 0;
-    iecho->id     = 0xAFAE;
+    iecho->id     = WIFI_HEARTBEAT_PING_ID;
     iecho->seqno  = htons(1);
 
     /* fill the additional data buffer with some data */

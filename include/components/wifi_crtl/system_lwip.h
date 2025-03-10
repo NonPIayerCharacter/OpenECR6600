@@ -210,7 +210,7 @@ int net_l2_send(void *net_if, const uint8_t *data, int data_len, uint16_t ethert
  ****************************************************************************************
 **/
 
-int net_packet_send(int vif_idx, const uint8_t *data, int data_len, uint8_t is_raw);
+int net_packet_send(int vif_idx, const uint8_t *data, int data_len, uint8_t is_raw, uint8_t is_block);
 
 /**
  ****************************************************************************************

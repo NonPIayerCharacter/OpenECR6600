@@ -8,6 +8,8 @@
 #include "dce.h"
 #include "tcpip_func.h"
 #include "lwip/sockets.h"
+#include "lwip/tcp.h"
+#include "lwip/tcpbase.h"
 #include "lwip/netdb.h"
 #include "string.h"
 #include "at_def.h"
@@ -22,7 +24,6 @@
 #define AT_NET_TASK_STACK_SIZE   (5120)
 #define AT_NET_TASK_PRIO         4
 
-#define PASSTHROUGH_BIT (1<<0)
 #define CONNECTSHOW_BIT (1<<1)
 
 /*******************************quxin*************************/
@@ -30,7 +31,6 @@
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
 #endif
 /*******************************quxin*************************/
-
 typedef enum {
     NET_SEND,
     NET_CLOSE,
@@ -71,6 +71,7 @@ static StackType_t    at_net_task_stack[AT_NET_TASK_STACK_SIZE/sizeof(StackType_
 static StaticTask_t   at_net_tcb;
 
 static link_id_pool_t link_id_pool[MAX_CONN_NUM] = {{0, 0}, {1, 0}, {2, 0}, {3, 0}, {4, 0}};
+extern u32_t ssl_client_num;
 
 u32_t lost      = 0;
 net_conn_cfg_t * get_net_conn_cfg(void)
@@ -570,6 +571,7 @@ int at_net_client_close(client_db_t *client)
             at_net_free_tls_cfg(client->priv.tcp.ssl_cfg);
             client->priv.tcp.ssl_cfg = NULL;
             client->priv.tcp.tls = NULL;
+            ssl_client_num = 0;
         } else {
             close(client->fd);
         }
@@ -876,6 +878,35 @@ int at_net_server_start_do(server_db_t *param, bool oneshot)
     return ret;
 }
 
+void at_net_server_stop(server_db_t *server_param)
+{
+    //close tcp/udp/ssl server
+    net_conn_cfg_t *cfg = get_net_conn_cfg();
+
+    if (!list_empty(&cfg->server_list)) {
+       client_db_t *client, *client_tmp;
+       server_db_t *server_del, *server_tmp;
+       list_for_each_entry_safe(server_del, server_tmp, &cfg->server_list, list) {
+           if (server_del->type == server_param->type && server_del->ip_info.src_port == server_param->ip_info.src_port) {
+               unsigned char *serverid = (server_del->type == conn_type_udp) ? &cfg->udp_server_id : &cfg->tcp_server_id;
+               close(server_del->listen_fd);
+               list_for_each_entry_safe(client, client_tmp, &server_del->client_list, list) {
+                   at_net_client_close(client);
+               }
+
+               if (server_del->type == conn_type_udp) {
+                   *serverid &= ~(1 << (server_del->id - MAX_CONN_NUM));
+               } else {
+                   *serverid &= ~(1 << server_del->id);
+               }
+
+               list_del(&server_del->list);
+               free(server_del);
+           }
+       }
+   }
+}
+
 int at_net_server_start(server_db_t *param)
 {
     server_db_t *server;
@@ -959,21 +990,36 @@ int at_net_abort_uart_rx(void)
 int at_net_exit_pass_through(unsigned char *data, int isr)
 {
     net_conn_cfg_t   *cfg = get_net_conn_cfg();
+    conn_send_buff_t *send_db = &cfg->send_buff;
     if (data[0] == '+' && data[1] == '+'  && data[2] == '+') {
-        at_net_abort_uart_rx();
-        if(get_system_config() & PASSTHROUGH_BIT){
-            target_dce_transmit("+QUIT\r\n", 7);
+
+        if(conn_stat_abort == send_db->client->state) {
+            send_db->client->retry = 0XFF;
+        } else {
+            at_net_abort_uart_rx();
+
+            if(isr == 0){
+                if (pdPASS != xTimerStop(cfg->reconnect_interval_times, 0)) {
+                    os_printf(LM_APP, LL_INFO, "stop client reconnet intervel timer fialed...\n");
+                }
+            } else {
+                if (pdPASS != xTimerStopFromISR(cfg->reconnect_interval_times, 0)) {
+                   os_printf(LM_APP, LL_INFO, "stop client reconnet intervel timer fialed...\n");
+                }
+            }
         }
+
         if(isr == 0){
             if (pdPASS != xTimerStop(cfg->uart_rx_timeout, 0)) {
                 os_printf(LM_APP, LL_INFO, "stop uart rx timer fialed...\n");
             }
+
         } else {
             if (pdPASS != xTimerStopFromISR(cfg->uart_rx_timeout, 0)) {
                 os_printf(LM_APP, LL_INFO, "stop uart rx timer fialed...\n");
             }
         }
-        
+
         return 1;
     }
 
@@ -1065,6 +1111,37 @@ int at_net_close(int link_id)
 
     return 0;
 }
+void client_reconnect_interval_times(TimerHandle_t xTimer)
+{
+    net_conn_cfg_t   *cfg = get_net_conn_cfg();
+    conn_send_buff_t *send_db = &cfg->send_buff;
+    
+    if (conn_stat_abort == send_db->client->state && \
+        send_db->client->retry <= 10 && \
+        cfg->pass_through == 1) { // re connect
+        at_net_queue_uart_recon(0,send_db->client->id);
+        at_net_reset_send_buff();
+        send_db->client->retry++;
+        os_printf(LM_APP, LL_INFO, "uart rx timeout, client reconn %d\n", send_db->client->retry);
+        return;
+    }
+    else if (conn_stat_abort == send_db->client->state && \
+        cfg->pass_through == 1) {
+        char resp_buf[64] = {0};
+        if(cfg->ipmux == 1)
+            sprintf(resp_buf,"%d,%s",send_db->client->id,"CLOSED");
+        else{
+            sprintf(resp_buf,"%s","CLOSED");
+        }
+            
+        dce_emit_extended_result_code((dce_t*)target_dce_get(), resp_buf, -1, 1);
+        at_net_client_close(send_db->client);
+        if ((pdPASS != xTimerStop(cfg->uart_rx_timeout, 0)) || (pdPASS != xTimerStop(cfg->reconnect_interval_times, 0))) {
+            os_printf(LM_APP, LL_INFO, "stop uart rx or client reconnet intervel timer fialed...\n");
+        }
+        return;
+    }
+}
 
 
 void at_net_uart_rx_timeout(TimerHandle_t xTimer)
@@ -1075,38 +1152,11 @@ void at_net_uart_rx_timeout(TimerHandle_t xTimer)
     unsigned short wt = send_db->wlen;
     unsigned short rt = send_db->rlen;
     system_irq_restore(flags);
-    
+
     if (!send_db->client) {
         // os_printf(LM_APP, LL_INFO, "uart rx timeout, but client is null\n");
         return;
     }
-
-    if (send_db->wpos >= 3 && at_net_exit_pass_through(send_db->buff + send_db->wpos, 0)) {
-        return;
-    }
-
-    if (conn_stat_abort == send_db->client->state && \
-		send_db->client->retry <= 10 && \
-        cfg->pass_through == 1) { // re connect
-        at_net_queue_uart_recon(0,send_db->client->id);
-        at_net_reset_send_buff();
-		send_db->client->retry++;
-		os_printf(LM_APP, LL_INFO, "uart rx timeout, client reconn %d\n", send_db->client->retry);
-        return;
-    }
-	else if (conn_stat_abort == send_db->client->state && \
-        cfg->pass_through == 1) {
-	char resp_buf[64] = {0};
-        if(cfg->ipmux == 1)
-            sprintf(resp_buf,"%d,%s",send_db->client->id,"CLOSED");
-        else{
-            sprintf(resp_buf,"%s","CLOSED");
-        }
-            
-        dce_emit_extended_result_code((dce_t*)target_dce_get(), resp_buf, -1, 1);
-        at_net_client_close(send_db->client);
-	return;
-	}
 
     if (wt) {
         if(rt == 0)
@@ -1164,12 +1214,10 @@ void at_net_handle_data_from_target(void *param, const char *data, size_t size)
             key_pos = 0;
         }
     }
-    
-    //system_printf("s b:%d, %d \r\n", key_pos, match);
 
     if(match == true)
     {
-        if (cfg->pass_through && send_db->wpos >= 3 && at_net_exit_pass_through(key, 1)) {
+        if (cfg->pass_through && at_net_exit_pass_through(key, 1)) {
             return;
         }            
     }
@@ -1218,7 +1266,7 @@ void at_net_handle_data_from_target(void *param, const char *data, size_t size)
         if (cfg->pass_through) {
             xTimerResetFromISR(cfg->uart_rx_timeout, 0);
         }
-        os_printf(LM_APP, LL_INFO, "at_net_queue_uart_data\n");
+        os_printf(LM_APP, LL_INFO, "at_net_queue_uart_data \r\n");
     }
     return;
 }
@@ -1373,12 +1421,12 @@ int at_net_client_prepare_tx(client_db_t *client)
     dce_register_data_input_cb(at_net_handle_data_from_target);
 
     if (cfg->pass_through) {
-        if (pdPASS != xTimerStart(cfg->uart_rx_timeout, 0)) {
-            os_printf(LM_APP, LL_INFO, "start uart rx timer fialed...\n");
+        if ((pdPASS != xTimerStart(cfg->uart_rx_timeout, 0)) || (pdPASS != xTimerStart(cfg->reconnect_interval_times, 0))) {
+            os_printf(LM_APP, LL_INFO, "start uart rx or client reconnect interval timer fialed...\n");
         }
     }
-    
-    target_dec_switch_input_state(ONLINE_DATA_STATE);
+
+    target_dec_switch_input_state(TCP_ONLINE_DATA_STATE);
     
     return 0;
 }
@@ -1944,6 +1992,7 @@ NET_POLL_RET at_net_poll(dce_t* dce)
                         
                     dce_emit_extended_result_code(dce, resp_buf, -1, 1);
                     ret |= NET_ERROR;
+                    at_net_server_stop(server);
                 } 
 				else 
 				{
@@ -1956,7 +2005,8 @@ NET_POLL_RET at_net_poll(dce_t* dce)
                 continue;
 			}
 			else 
-			{				
+			{
+                int read_len;
                 client = at_net_find_client_by_fd(i);
                 if (!client) {
                     //dce_emit_basic_result_code(dce, DCE_RC_ERROR);
@@ -1964,12 +2014,22 @@ NET_POLL_RET at_net_poll(dce_t* dce)
                     continue;
                 }
 
-                if (cfg->recv_buff.recv_data[client->id]->write_len == 0) {
-                    continue;
-                }
+                if (client->type == conn_type_tcp) {
+                    if (cfg->recv_buff.recv_data[client->id]->write_len == 0) {
+                        struct netconn *netinfo = NULL;
+                        socklen_t infolen = sizeof(struct netconn *);
+                        getsockopt(i, SOL_SOCKET, SO_CONNINFO, &netinfo, &infolen);
+                        if (netinfo->pcb.tcp->state > ESTABLISHED) {
+                            goto AT_NET_CLOSE;
+                        }
+                        continue;
+                    }
 
-                int read_len = (cfg->recv_buff.recv_data[client->id]->write_len > AT_MAX_RECV_LEN) ? AT_MAX_RECV_LEN :
-                    cfg->recv_buff.recv_data[client->id]->write_len;
+                    read_len = (cfg->recv_buff.recv_data[client->id]->write_len > AT_MAX_RECV_LEN) ? AT_MAX_RECV_LEN :
+                        cfg->recv_buff.recv_data[client->id]->write_len;
+                } else {
+                    read_len = AT_MAX_RECV_LEN;
+                }
 
                 int len = 0;
                 if (conn_type_ssl == client->type) {
@@ -2004,6 +2064,7 @@ NET_POLL_RET at_net_poll(dce_t* dce)
 				{
                     os_printf(LM_APP, LL_INFO, "read failed, client %d,%d ret %d errno %d\n", client->fd, client->id, ret,errno);
                     char resp_buf[64] = {0};
+AT_NET_CLOSE:
                     if(cfg->ipmux == 1)
                         sprintf(resp_buf,"%d,%s",client->id,"CLOSED");
                     else{
@@ -2014,7 +2075,7 @@ NET_POLL_RET at_net_poll(dce_t* dce)
 
                     if(client->father && client->type != conn_type_udp) {
                         at_net_client_close(client);
-                    } else if(cfg->pass_through && ONLINE_DATA_STATE != target_dce_get_state())
+                    } else if(cfg->pass_through && TCP_ONLINE_DATA_STATE != target_dce_get_state())
                     {
                     	at_net_client_close(client);
                     } else {
@@ -2069,14 +2130,14 @@ static void at_net_task(void *pvParams)
         }
 
         if (pdPASS == xQueueReceive(cfg->uart_rx_queue, &dummy, 0)) {
-            os_printf(LM_APP, LL_INFO, "xQueueReceive(cfg->uart_rx_queue dummy.msg_type %d\n",dummy.msg_type);
+            os_printf(LM_APP, LL_DBG, "msg_type %d\n",dummy.msg_type);
             if(dummy.msg_type == NET_CLOSE){
                 at_net_client_close_by_id(dummy.client_id);
                 ret |= 1;
             } else if(dummy.msg_type == NET_RECON){
                 client_db_t * client = at_net_find_client(dummy.client_id);
                 if(client) {
-                    if(at_net_client_start_do(client, false)) {
+                    if(at_net_client_start_do(client, true)) {
                         ret |= 1;
                     }
 					else {
@@ -2105,7 +2166,7 @@ void at_net_task_init(dce_t* dce)
     
     cfg->uart_rx_queue = xQueueCreate(50, sizeof(rx_msg));
     cfg->uart_rx_timeout = xTimerCreate("uart_rx_timeout", pdMS_TO_TICKS(80), pdTRUE, (void *)0, at_net_uart_rx_timeout);
-    
+    cfg->reconnect_interval_times = xTimerCreate("reconnect_interval_times", pdMS_TO_TICKS(5000), pdTRUE, (void *)0, client_reconnect_interval_times);
     at_net_task_t = xTaskCreateStatic(at_net_task,
                 "at_net", AT_NET_TASK_STACK_SIZE/sizeof(StackType_t),
                 dce, AT_NET_TASK_PRIO, &at_net_task_stack[0], &at_net_tcb);

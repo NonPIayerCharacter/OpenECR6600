@@ -1116,7 +1116,7 @@ void dhcps_start(struct netif *netif, struct ip_info* info)
 	}
     dhcps_netif = netif;
     //softap_if_id = netif->num;
-
+    pcb_dhcps->netif_idx = netif->num+1;
 	netif->dhcps_pcb = pcb_dhcps;
 	
 	#if LWIP_IPV4 && LWIP_IPV6

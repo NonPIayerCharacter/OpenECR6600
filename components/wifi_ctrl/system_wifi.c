@@ -36,8 +36,9 @@
 #include "utils/os.h"
 #include "utils/eloop.h"
 #include "format_conversion.h"
-
-
+#include "hal_system.h"
+#include "system_lwip.h"
+#include "ieee802_11_defs.h"
 
 /****************************************************************************
 *                                            Local Macros
@@ -80,6 +81,7 @@ static bool wifi_init_complete_flag = false;
 /****************************************************************************
 * 	                                          Global Function Prototypes
 ****************************************************************************/
+extern uint8_t wifi_ax_config;
 extern char wpa_cmd_receive_str(int vif_id, char *cmd);
 extern struct wpa_supplicant *wpa_get_ctrl_iface(int vif_id);
 //extern sys_err_t wpa_get_bss_mode(struct wpa_bss *bss, uint8_t *auth, uint8_t *cipher);
@@ -87,6 +89,13 @@ extern int wifi_drv_get_ap_rssi(char *rssi);
 extern int ap_for_each_sta_wrap(void *wpa,
                          int (*cb)(const unsigned char *sta_mac, void *ctx),
                          void *ctx);
+extern int fhost_change_mac_addr(uint8_t *mac);
+extern int fhost_set_channel(int ch);
+extern void get_channel(uint8_t *ch);
+extern int wpa_drv_set_country(const char *p_country_code);
+extern void wpa_drv_get_country(const char *p_country_code);
+extern wifi_discon_reason_e wpa_disconnect_reason();
+extern void fhost_set_heartbeat_enable(uint8_t enable);
 
 /****************************************************************************
 * 	                                          Function Definitions
@@ -175,9 +184,56 @@ void wifi_set_ready_flag(bool init_complete_flag)
     }
 }
 
+void wifi_set_ax_flag(uint8_t ax_config)
+{
+    if (ax_config != 0) {
+        wifi_ax_config = 1;
+    } else {
+        wifi_ax_config = 0;
+    }
+}
+
+
 bool wifi_is_ready(void)
 {
     return wifi_init_complete_flag;
+}
+
+static void wifi_send_deauth(unsigned char *sa, unsigned char *da, unsigned char *bssid)
+{
+    struct ieee80211_mgmt *mgmt;
+
+    mgmt = os_zalloc(sizeof(struct ieee80211_mgmt));
+    if (!mgmt) {
+        return ;
+    }
+
+    mgmt->frame_control = IEEE80211_FC(WLAN_FC_TYPE_MGMT,
+        WLAN_FC_STYPE_DEAUTH);
+    memcpy(mgmt->da, da, ETH_ALEN);
+    memcpy(mgmt->sa, sa, ETH_ALEN);
+    memcpy(mgmt->bssid, bssid, ETH_ALEN);
+    mgmt->u.deauth.reason_code = host_to_le16(1);
+
+    net_packet_send(STATION_IF, (u8 *)mgmt, IEEE80211_HDRLEN + sizeof(mgmt->u.deauth), 1, 1);
+    os_free(mgmt);
+}
+
+static void wifi_reset_handler(void *arg)
+{
+    unsigned char src_mac[NETIF_MAX_HWADDR_LEN];
+
+    if(wifi_get_status(STATION_IF) != STA_STATUS_CONNECTED)
+    {
+        return;
+    }
+
+    if (wifi_get_mac_addr(STATION_IF, src_mac) != SYS_OK)
+    {
+        return;
+    }
+
+    wifi_send_deauth(src_mac, wifi_nv_info.sta_bssid, wifi_nv_info.sta_bssid);
 }
 
 sys_err_t wifi_system_init(void)
@@ -193,6 +249,8 @@ sys_err_t wifi_system_init(void)
     } else {
         network_db.mode = WIFI_MODE_AP_STA;
     }
+
+    hal_system_register_reset_handler(wifi_reset_handler, NULL);
 
     return SYS_OK;
 }
@@ -252,8 +310,6 @@ bool check_wifi_link_on(int vif)
 
     return false;
 }
-
-extern int fhost_change_mac_addr(uint8_t *mac);
 
 sys_err_t wifi_change_mac_addr(uint8_t *mac)
 {
@@ -489,13 +545,10 @@ char wifi_config_encrypt(int vif, char *pwd, wifi_auth_mode_e mode)
     return SYS_OK;
 }
 
-extern int fhost_set_channel(int ch);
 sys_err_t wifi_rf_set_channel(uint8_t channel)
 {
     return fhost_set_channel(channel) ? SYS_ERR : SYS_OK;
 }
-
-extern void get_channel(uint8_t *ch);
 
 uint8_t wifi_rf_get_channel(void)
 {
@@ -1285,7 +1338,7 @@ sys_err_t wifi_load_nv_info(wifi_nv_info_t *nv_info)
 sys_err_t wifi_save_nv_info(wifi_nv_info_t *nv_info)
 {
     int ret = 0;
-
+	SYS_LOGE("wifi_save_nv_info=%d %d",nv_info,nv_info->sta_ssid[0]);
     if (!nv_info)
         return SYS_ERR_INVALID_ARG;
     if (!nv_info->sta_ssid[0])
@@ -1309,7 +1362,7 @@ sys_err_t wifi_save_nv_info(wifi_nv_info_t *nv_info)
         hal_system_del_config(CUSTOMER_NV_WIFI_AUTO_CONN);
         return SYS_ERR;
     }
-#ifdef CONFIG_VNET_SERVICE
+		#ifdef CONFIG_VNET_SERVICE
     else
     {
         hal_system_del_config(CUSTOMER_NV_WIFI_AP_SSID);
@@ -1459,7 +1512,6 @@ sys_err_t wifi_get_ap_rssi(char *rssi)
 /****************************************************************
 *****************************************************************
 ****************************************************************/
-extern int wpa_drv_set_country(const char *p_country_code);
 
 int wifi_set_country_code(const char *p_country_code)
 {
@@ -1467,7 +1519,6 @@ int wifi_set_country_code(const char *p_country_code)
 
     return SYS_OK;
 }
-extern void wpa_drv_get_country(const char *p_country_code);
 
 int wifi_get_country_code(char *p_country_code)
 {
@@ -1476,6 +1527,10 @@ int wifi_get_country_code(char *p_country_code)
     return SYS_OK;
 }
 
+wifi_discon_reason_e wifi_get_sta_disconnect_reason ()
+{
+    return wpa_disconnect_reason();
+}
 
 
 

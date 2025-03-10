@@ -121,6 +121,7 @@ iperf_accept(struct iperf_test *test)
     signed char rbuf = ACCESS_DENIED;
     socklen_t len;
     struct sockaddr_storage addr;
+    unsigned int recv_timeout = 2000;
 
     len = sizeof(addr);
     if ((s = accept(test->listener, (struct sockaddr *) &addr, &len)) < 0) {
@@ -137,6 +138,10 @@ iperf_accept(struct iperf_test *test)
             i_errno = IESETNODELAY;
             return -1;
         }
+
+#ifdef __TR_SW__
+        setsockopt(test->ctrl_sck, SOL_SOCKET, SO_RCVTIMEO, &recv_timeout, sizeof(unsigned int));
+#endif
 
         flag = 7;
         if (setsockopt(test->ctrl_sck, IPPROTO_IP, IP_TOS, (char *) &flag, sizeof(int))) {
@@ -504,8 +509,11 @@ int iperf_run_server(struct iperf_test *test)
     struct iperf_time now;
 #ifdef __TR_SW__
     struct timeval poll;
+    struct timeval timeout;
+    int ret = 0;
+#else
+    struct timeval* timeout = NULL;
 #endif
-    struct timeval* timeout;
     int flag;
 
 #ifndef __TR_SW__
@@ -560,15 +568,15 @@ int iperf_run_server(struct iperf_test *test)
 #ifndef __TR_SW__
         timeout = tmr_timeout(&now);
 #else
-        timeout = tmr_timeout(test, &now);
+        ret = tmr_timeout(test, &now, &timeout);
 #endif
 #ifndef __TR_SW__
         result = select(test->max_fd + 1, &read_set, &write_set, NULL, timeout);
 #else
-        if (timeout)
+        if (!ret)
         {
-            poll.tv_sec = timeout->tv_sec;
-            poll.tv_usec = timeout->tv_usec;
+            poll.tv_sec = timeout.tv_sec;
+            poll.tv_usec = timeout.tv_usec;
             if ((poll.tv_sec == 0) && (poll.tv_usec < 10000))
                 poll.tv_usec = 10000;
         }
@@ -810,16 +818,19 @@ int iperf_run_server(struct iperf_test *test)
                 }
             }
         }
-
+#ifndef __TR_SW__
         if (result == 0 || (timeout != NULL && timeout->tv_sec == 0 && timeout->tv_usec == 0)) {
             /* Run the timers. */
             iperf_time_now(&now);
-#ifndef __TR_SW__
             tmr_run(&now);
-#else
-            tmr_run(test, &now);
-#endif
         }
+#else 
+        if (result == 0 || (!ret && timeout.tv_sec == 0 && timeout.tv_usec == 0)) {
+            /* Run the timers. */
+            iperf_time_now(&now);
+            tmr_run(test, &now);
+        }
+#endif
     }
 
     cleanup_server(test);

@@ -6,7 +6,7 @@ ifeq ($(CONFIG_HTTPSERVER),y)
 	CSRCS += src/httpd_txrx.c
 	CSRCS += src/httpd_uri.c
 	CSRCS += src/httpd_ws.c
-	CSRCS += src/util/ctrl_sock.c
+	CSRCS += src/util/http_sock.c
 
 	VPATH += :http_server
 

@@ -81,7 +81,7 @@ typedef struct {
     uint8_t ssid[WIFI_SSID_MAX_LEN];         /**< SSID of disconnected AP */
     uint8_t ssid_len;                        /**< SSID length of disconnected AP */
     uint8_t bssid[6];                        /**< BSSID of disconnected AP */
-    uint8_t reason;                          /**< reason of disconnection */
+    uint16_t reason;                          /**< reason of disconnection */
 } system_event_sta_disconnected_t;
 
 typedef struct {
