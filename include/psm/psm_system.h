@@ -83,6 +83,10 @@ enum psm_state_bit_pos
 #define POWERON_TIME (4300)
 
 #define vPortSuppressTicksAndSleep( xExpectedIdleTime )  psm_schedule_idle_cb(xExpectedIdleTime)
+#ifdef CONFIG_PSM_SWITCH_LOWPOWER
+#define PSM_STATE  1
+#define WPA_STATE  0
+#endif
 
 /*-----------------------------------------------------------
     |STATE                  |   WIFI    |   BLE     |
@@ -175,6 +179,9 @@ struct psm_wifi_info
 {
 	bool wifi_psm_en;				//wifi enable
 	bool rtc_error_cal;
+	#ifdef CONFIG_PSM_SWITCH_LOWPOWER
+	bool is_rx_disable;
+	#endif
 	unsigned int last_beacon_time;			//wifi
 	unsigned int bcn_int;			//beacon interval, us, get from mm_tbtt_compute()
 	unsigned int dtim_bcn_avg;
@@ -217,6 +224,7 @@ struct psm_wifi_info
 	unsigned int en_cw_lost_bea_thr;
 	int cw_sub;
 	bool dynamic_cw_en;
+	bool bssidd_match_en;
 };
 
 struct psm_ble_info
@@ -242,6 +250,7 @@ struct psm_info
 	unsigned int device_status;		//all device status
 	unsigned long long deep_sleep_time;	//set time for deepsleep
 	unsigned int cpu_freq;
+	unsigned int chip_type;
 	unsigned char crystal_26m_or_40m;	//0:40M 1:26M
 	
 	unsigned char prev_status;		//previous wifi and ble status
@@ -255,6 +264,10 @@ struct psm_info
     bool    is_rtc_compenstion;
 	bool	is_rtc_update;
 	bool	rf_open_enable;
+	#ifdef CONFIG_PSM_SWITCH_LOWPOWER
+	bool    is_freq_changeable;
+	bool	is_pll_closeable;
+	#endif
 };
 struct psm_dbg_wifi_info
 {
@@ -290,6 +303,43 @@ struct psm_timer_param
 	unsigned int pt_cnt;
 	bool pt_info;
 };
+#ifdef CONFIG_PSM_SWITCH_LOWPOWER
+#define  START_TIME 0
+#define  END_TIME 1
+extern void txl_store_unsent_tx(void);
+extern void txl_restore_unsent_tx(void);
+
+
+typedef enum {
+    WPA_STATE_DISCONNECT,
+    WPA_STATE_COMPLETED,
+    WPA_STATE_SCANNING,
+    WPA_STATE_AUTHENTICATING,
+    WPA_STATE_ASSOCIATING,
+    WPA_STATE_ASSOCIATED,
+    WPA_STATE_4WAY_HANDSHAKE,
+    WPA_STATE_GROUP_HANDSHAKE,
+    WPA_STATE_DHCP_START,
+    WPA_STATE_CONNECTED,
+    WPA_STATE_CONNECT_FAILED,
+} WPA_STATE_T;
+
+typedef enum {
+    TIME_SCAN,
+    TIME_AUTH,
+    TIME_ASSO_COMPLETE,
+    TIME_EAPOL_GROUP,
+    TIME_NONE = 0xff,
+} STATE_TYPE_T;
+
+typedef struct{
+    unsigned long start;
+    unsigned long end;
+}STATE_TIME_T;
+
+
+#endif
+
 #define _PSM_HANDLE_DEF_(cmd, f)	#cmd, psm_ ## cmd ## _ ## f
 
 #define _PSM_DBG_RCD_(mode) psm_dbg_rcd_op(dbg_cnt_ ## mode)
@@ -334,6 +384,7 @@ extern void rwnx_reg_store(void);
 extern bool psm_check_tx_finish();
 extern int psm_check_wifi_status();
 extern void FreeRTOS_Tick_Handler( void );
+extern void rxl_bssidmatch_isr_en();
 #ifdef CONFIG_ECR_BLE
 extern void rf_ble_restore();
 #endif
@@ -392,8 +443,26 @@ unsigned int psm_pit_when_sleep_op(bool isSet, unsigned int value);
 bool psm_is_rtc_update_op(bool isSet, bool value);
 unsigned int psm_uart_last_time_op(bool isSet, unsigned int value);
 unsigned int psm_cnt_rec_beacon_op(bool isSet, unsigned int value);
+unsigned int psm_chip_type_op(bool isSet, unsigned int value);
 void psm_dbg_rcd_op(enum psm_dbg_wifi_cnt value);
 void psm_dbg_clr_op(enum psm_dbg_wifi_cnt value);
 unsigned int psm_sleep_next_time_point_op(bool isSet, unsigned char value);
 void psm_pad_gpio_status_init();
+
+#ifdef CONFIG_PSM_SWITCH_LOWPOWER
+bool psm_get_last_beacon_time();
+
+int wpa_get_sta_status(void);
+void wpa_set_sta_status(void *priv, int status, int state);
+int psm_get_processing_time(STATE_TYPE_T state);
+void record_time(STATE_TYPE_T state, unsigned char start_or_end);
+unsigned char get_current_record_state(void);
+unsigned char get_last_record_state(void);
+
+
+
+
+
+#endif
+
 #endif

@@ -81,7 +81,7 @@
 #define configTICK_RATE_HZ						( ( TickType_t ) 500 )
 #define configUSE_PREEMPTION					1
 #define configMAX_PRIORITIES					( 12 )
-#define configMINIMAL_STACK_SIZE				( 202 )  //256 
+#define configMINIMAL_STACK_SIZE				( 202 )
 #define configMAX_TASK_NAME_LEN					( 16 )
 #define configUSE_16_BIT_TICKS					0
 #define configIDLE_SHOULD_YIELD					1

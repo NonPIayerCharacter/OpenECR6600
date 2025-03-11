@@ -7,7 +7,7 @@
 #ifndef _CHIP_PIN_MUX_H
 #define _CHIP_PIN_MUX_H
 
-
+#include "aon_reg.h"
 #include "chip_smupd.h"
 
 /*  UART PIN MUX CFG  */

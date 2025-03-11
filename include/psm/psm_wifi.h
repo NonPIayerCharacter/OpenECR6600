@@ -39,5 +39,11 @@ void psm_update_beacon_cnt();
 void psm_clear_beacon_lost_cnt();
 void psm_send_ap_pwr();
 unsigned int psm_deep_sleeptime_op(bool isSet, unsigned int value);
+#ifdef CONFIG_PSM_SWITCH_LOWPOWER
+extern int wpa_get_sta_status(void);
+extern void wpa_set_sta_status(void *priv, int status, int state);
+bool psm_rx_status_op(bool isSet, bool value);
+bool psm_rx_op(bool enable);
 
+#endif
 #endif

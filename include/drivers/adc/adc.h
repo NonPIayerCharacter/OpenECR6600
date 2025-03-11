@@ -70,7 +70,9 @@ typedef enum
 {
 	DRV_ADC_TEMP_LOW,
 	DRV_ADC_TEMP_NORMAL,
+	DRV_ADC_TEMP_HIGH_ADD_MEDIUM,//hanfeng cfo add index, 50°c
 	DRV_ADC_TEMP_HIGH,
+
 
 	DRV_ADC_TEMP_MAX
 }DRV_ADC_TEMP_TYPE;
