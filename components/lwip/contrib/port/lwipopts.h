@@ -238,7 +238,7 @@ a lot of data that needs to be copied, this should be set high. */
 
 
 #define PBUF_POOL_BUFSIZE               1580
-#define PBUF_POOL_SIZE                  10
+#define PBUF_POOL_SIZE                  16
 
 /* ---------- TCP options ---------- */
 #define LWIP_TCP                1
