@@ -26,6 +26,8 @@ CSRCS	:=
 INCPATHS:=
 MAKEDEFS:=
 
+INCPATHS += $(TOPDIR)/include/components/cli
+
 $(foreach dir, $(SUBDIRS), $(eval $(call MAKEDEFS_template,$(dir))))
 
 CFLAGS := $(foreach incpath, $(INCPATHS), -I "$(incpath)") $(CFLAGS)
