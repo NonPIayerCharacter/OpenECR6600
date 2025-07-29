@@ -56,6 +56,10 @@
 #include "netif/ethernet.h"
 
 #include <string.h>
+#ifdef CONFIG_PSM_SURPORT
+#include "system_wifi_def.h"
+extern	struct netif *get_netif_by_index(int idx);
+#endif
 
 #ifdef LWIP_HOOK_FILENAME
 #include LWIP_HOOK_FILENAME
@@ -741,6 +745,39 @@ etharp_input(struct pbuf *p, struct netif *netif)
   pbuf_free(p);
 }
 
+#ifdef CONFIG_PSM_SURPORT
+void etharp_raw_send_resp()
+{	
+	#define MAC_ADDR_LEN 6
+	struct mac_addr
+	{
+	    /// Array of 16-bit words that make up the MAC address.
+	    uint16_t array[MAC_ADDR_LEN/2];
+	};
+	extern struct mac_addr *vif_get_bssid();
+	struct netif *netif = get_netif_by_index(STATION_IF);
+	struct mac_addr * bssid_addr = vif_get_bssid();
+	u8_t dst_addr[NETIF_MAX_HWADDR_LEN];
+	memcpy(dst_addr,(unsigned char*)bssid_addr->array,NETIF_MAX_HWADDR_LEN);
+	etharp_raw(netif,
+			   (struct eth_addr *)netif->hwaddr,  (struct eth_addr *)dst_addr,
+			   (struct eth_addr *)netif->hwaddr, netif_ip4_addr(netif),
+			     (struct eth_addr *)dst_addr, netif_ip4_gw(netif),
+			   ARP_REPLY);
+	return ;
+}
+
+void etharp_raw_send_req()
+{	
+	struct netif *netif = get_netif_by_index(STATION_IF);
+	etharp_raw(netif,
+			   (struct eth_addr *)netif->hwaddr,  (struct eth_addr *)&ethbroadcast,
+			   (struct eth_addr *)netif->hwaddr, netif_ip4_addr(netif),
+			     (struct eth_addr *)&ethzero, netif_ip4_addr(netif),
+			   ARP_REQUEST);
+	return ;
+}
+#endif
 /** Just a small helper function that sends a pbuf to an ethernet address
  * in the arp_table specified by the index 'arp_idx'.
  */

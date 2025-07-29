@@ -4,6 +4,16 @@
 #include "spi.h"
 #include "chip_pinmux.h"
 
+#define SPI_SERVICE_CHECK_RETURN(condition, ret, logstr) \
+    do { \
+        if ((condition) != 0) { \
+            if ((logstr) != NULL) { \
+                os_printf(LM_APP, LL_ERR, "%s[%d]%s, ret %d\r\n", __FUNCTION__, __LINE__, logstr, ret); \
+            } \
+            return ret; \
+        } \
+    } while (0)
+
 typedef void *(*spi_service_call)(void *);
 typedef struct {
     spi_service_call rxPrepare;
@@ -19,18 +29,28 @@ typedef struct {
     unsigned int memLen;
     unsigned int memSlen;
     unsigned int memType;
+    unsigned int memNet;
     unsigned int memNext;
 } spi_service_mem_t;
 
 typedef struct {
-    unsigned int evt:14;
+    /* spi host data type sendto slave */
+    unsigned int evt:12;
+    /* spi host sta&ap netif data sendto slave */
+    unsigned int net:2;
+    /* spi host data len sendto slave */
+    /* spi host data read ignore it */
     unsigned int len:16;
+    /* spi host read or write data about slave */
     unsigned int type:2;
 } spi_service_ctrl_t;
 
 typedef enum {
+    /* spi host notice read/write event, spi host send (spi_service_ctrl_t)data */
     SPI_SERVICE_EVENT_CTRL,
+    /* spi host/slave read data from peer point */
     SPI_SERVICE_EVENT_RX,
+    /* spi host/slave write data to peer point */
     SPI_SERVICE_EVENT_TX,
 } spi_service_event_e;
 
@@ -63,22 +83,38 @@ typedef enum {
 
 typedef enum {
     SPI_SERVICE_TYPE_INFO,
+    /* host to slave ethernet data type */
     SPI_SERVICE_TYPE_HTOS = 0x100,
+    /* slave to host ethernet data type */
     SPI_SERVICE_TYPE_STOH = 0x200,
+    /* host send ota data to update slave firmware */
     SPI_SERVICE_TYPE_OTA = 0x300,
+    /* host send ble msg to contorl slave ble module */
+    SPI_SERVICE_TYPE_BLE = 0x400,
+    /* host send msg to slave and slave send msg to host */
     SPI_SERVICE_TYPE_MSG = 0x500,
+    /* just support slave send interrupt to host */
+    /* also you can send special msg to instead this */
+    /* msg send spi driver queue and wait to send, int send before spi drvier queue */
+    /* scence: wifi linkup/linkdown; gpio interrupt sendto host to play music(lockdoor); etc */
     SPI_SERVICE_TYPE_INT,
+    SPI_SERVICE_TYPE_MAX
 } spi_service_type_e;
 
-#define SPI_SERVICE_CONTROL_LEN 0x8000
-#define SPI_SERVICE_CONTROL_INT 0x9000
-#define SPI_SERVICE_CONTROL_MSG 0xA000
-#define SPI_SERVICE_MSG_MAX_LEN 0x1000
+/* spi slave status register define */
+/* spi slave notice the data type sendto host */
+#define SPI_SERVICE_MASK_EVT 0xF000
+#define SPI_SERVICE_MASK_DAT 0x0FFF
+typedef enum {
+    SPI_SERVICE_DATA_STA = 0x1000,
+    SPI_SERVICE_DATA_AP = 0x2000,
+    SPI_SERVICE_DATA_INFO = 0x3000,
+    SPI_SERVICE_DATA_INT = 0x9000,
+    SPI_SERVICE_DATA_MSG = 0xA000,
+} spi_service_event_t;
 
-//#define SPI_SERVICE_LOOP_TEST
-#ifdef SPI_SERVICE_LOOP_TEST
-#define SPI_SERVICE_PM_CNT
-//#define SPI_SERVICE_PM_DATA
-#endif
-
+typedef enum {
+    SPI_SERVICE_NET_STA,
+    SPI_SERVICE_NET_AP,
+} spi_service_net_e;
 #endif

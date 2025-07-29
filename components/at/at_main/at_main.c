@@ -31,6 +31,10 @@
 #if defined(CONFIG_MQTT)
 #include "mqtt_command.h"
 #endif
+
+#if defined(CONFIG_HTTP_CLIENT)
+#include "http_command.h"
+#endif
 #include "at_customer_wrapper.h"
 #include "system_config.h"
 #include "easyflash.h"
@@ -42,13 +46,12 @@
 #include "cli.h"
 #define COMMAND_TASK_PRIORITY 0
 #define COMMAND_QUEUE_SIZE    1
-#define COMMAND_LINE_LENGTH   4608
 
 static dce_t* dce;
 
 static os_queue_handle_t command_queue = NULL;
 
-E_DRV_UART_NUM     uart_num = E_UART_NUM_1;
+ E_DRV_UART_NUM     uart_num = E_UART_NUM_1;
 
 void  AT_command_callback(char c)
 {
@@ -248,6 +251,7 @@ AP_IP:
     {
         ip_info_t ip_info;
 
+	memset(&ip_info, 0, sizeof(ip_info));
         if (!hal_system_get_config(CUSTOMER_NV_WIFI_AP_IP, &(ip_info.ip), sizeof(ip_info.ip)) || 
             !hal_system_get_config(CUSTOMER_NV_WIFI_AP_GATEWAY, &(ip_info.gw), sizeof(ip_info.gw)) || 
             !hal_system_get_config(CUSTOMER_NV_WIFI_AP_NETMASK, &(ip_info.netmask), sizeof(ip_info.netmask)))
@@ -424,11 +428,9 @@ void AT_command_init(void)
     #if defined(CONFIG_MQTT)
     dce_register_mqtt_commands(dce);
     #endif
-    init_done();
-	int va=0;int ret=0;
-	ret=develop_get_env_blob("BleAdvMode", &va, sizeof(va),NULL);
-	if (ret==0xffffffff || ret==0){
-	develop_set_env_blob("BleAdvMode",&va,sizeof(va));}
+#if defined(CONFIG_HTTP_CLIENT)
+    dce_register_http_commands(dce);
+#endif
 
     callback.uart_callback = cli_uart_isr;
     callback.uart_data     = (void *)dce;

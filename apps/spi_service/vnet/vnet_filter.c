@@ -1,4 +1,8 @@
 #include "vnet_filter.h"
+#include "spi_service_main.h"
+#include "lwip/ip4.h"
+#include "lwip/udp.h"
+#include "lwip/etharp.h"
 #include "oshal.h"
 
 #define VNET_FILTER_RULE_MAX 20
@@ -104,7 +108,9 @@ int vnet_set_default_filter(unsigned char dir)
     filter.dstPmax = 68;
 
     vnet_del_filter(&filter, sizeof(filter), VNET_FILTER_TYPE_IPV4);
+#ifndef SPI_SERVICE_DHCP_HOST
     vnet_add_filter(&filter, sizeof(filter), VNET_FILTER_TYPE_IPV4);
+#endif
 
     return 0;
 }
@@ -386,13 +392,26 @@ int vnet_ipv4_packet_blist_filter(unsigned char *packet)
     return vnet_ipv4_filter_match(g_ip_list.ipv4Blist, packet);
 }
 
+/* wifi filter the data sendto MCU or sendto TCPIP */
+/* wifi send data to TCPIP, wifi take heap memory to hold the data */
+/* wifi send data to MCU, wifi take spi memory(macif_spi_buff_alloc) to hold the data */
 int vnet_filter_wifi_handle(uint16_t type, unsigned char *data)
 {
-    // ipv4 data packet filter
-    if (type != 0x08 || ((*data & 0xf0) >> 4) != 0x04) {
+    struct ip_hdr *iphdr = (struct ip_hdr *)data;
+
+    /* IPv4 UDP&TCP packets can pass through spi, others packets sendto TCPIP */
+    if (lwip_ntohs(type) != ETHTYPE_IP) {
         return -1;
     }
 
+    /*IPv6 support later*/
+    if (IP_HDR_GET_VERSION(data) != 4) {
+        return -1;
+    }
+
+    if ((IPH_PROTO(iphdr) != IPPROTO_TCP) && (IPH_PROTO(iphdr) != IP_PROTO_UDP)) {
+        return -1;
+    }
     if (vnet_ipv4_packet_blist_filter(data) == VNET_PACKET_DICTION_BOTH) {
         return -1;
     }

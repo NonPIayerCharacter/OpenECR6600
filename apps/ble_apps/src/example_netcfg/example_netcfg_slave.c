@@ -168,14 +168,10 @@ static void  get_wifi_status_timer(os_timer_handle_t timer)
 
 }
 
-uint8_t skylab_bleNet_flag=0;
-wifi_config_u skylab_conf={0};
-
 static void ecr_ble_netcfg_handler(ECR_BLE_GATT_PARAMS_EVT_T *p_event)
 {
 	static char g_ssid[NETCFG_SSID_LEN];
 	static char g_password[NETCFG_PASSWORD_LEN];
-	os_printf(LM_APP, LL_INFO, "ecr_ble_netcfg_handler=%d\n",p_event->gatt_event.write_report.report.p_data[0]);
 	switch(p_event->gatt_event.write_report.report.p_data[0])
 	{
 		case NETCFG_DISTRIBUTE_NETWORK_STATUS:
@@ -255,8 +251,6 @@ static void ecr_ble_netcfg_handler(ECR_BLE_GATT_PARAMS_EVT_T *p_event)
 			if (SYS_OK == ret)
 			{
 				os_printf(LM_APP, LL_INFO, "net config start\n");
-				memcpy((void *)&skylab_conf,(void *)&sta_cfg,sizeof(wifi_config_u));
-				skylab_bleNet_flag = 1;
 			} 
 			else 
 			{
@@ -387,24 +381,17 @@ static void ecr_netcfg_task_init()
 
 static void ecr_netcfg_slave_init(void *arg)
 {
-	ecr_netcfg_task_init(); 		
-	ecr_ble_adv_scanRsp_param_set();				
-	ecr_ble_adv_start();		
-	if(ind_timer==NULL) 			   
-		ind_timer = os_timer_create("netcfg_timer", 100, 1, get_wifi_status_timer, NULL);		
-	ble_apps_task_handle = 0;				 
+	ecr_netcfg_task_init(); 
+	ecr_ble_adv_scanRsp_param_set();
+	if(ind_timer==NULL)
+		ind_timer = os_timer_create("netcfg_timer", 100, 1, get_wifi_status_timer, NULL);
 	os_task_delete(ble_apps_task_handle);
-
+	ble_apps_task_handle = 0;
 }
 
-int ble_apps_init(void)
-{                        
-	if(ble_apps_task_handle==0){
-		ble_apps_task_handle=os_task_create( "ble_apps_task", BLE_APPS_PRIORITY, BLE_APPS_STACK_SIZE, (task_entry_t)ecr_netcfg_slave_init, NULL);
-		return 0;        
-	}        
-	return 0;
+void ble_apps_init(void)
+{
+	ble_apps_task_handle=os_task_create( "ble_apps_task", BLE_APPS_PRIORITY, BLE_APPS_STACK_SIZE, (task_entry_t)ecr_netcfg_slave_init, NULL);
 }
-
 
 

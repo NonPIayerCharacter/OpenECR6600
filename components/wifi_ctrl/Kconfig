@@ -41,4 +41,9 @@ if SYSTEM_WIFI_CTRL
 	int "wifi amsdu tx cnt"
 	range 1 32
 	default 3
+	
+	config WIFI_CTRL_LOG_LEVEL
+	int "LOG LEVEL"
+	range 0 5
+	default 4
 endif

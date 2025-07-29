@@ -58,7 +58,7 @@ static inline unsigned long CACHE_LINE_SIZE(enum cache_t cache){
 	}
 }
 
-void nds32_icache_flush(void)
+void   __attribute__((no_ex9, used))nds32_icache_flush(void)
 {
 	unsigned long end;
 	unsigned long cache_line = CACHE_LINE_SIZE(ICACHE);
@@ -80,7 +80,7 @@ void nds32_dcache_invalidate(void)
 	__nds32__dsb();
 }
 
-void  arch_icache_enable(int On)
+void   __attribute__((no_ex9, used))arch_icache_enable(int On)
 {
 	unsigned int reg = __nds32__mfsr(NDS32_SR_CACHE_CTL);
 
@@ -114,7 +114,7 @@ void  arch_icache_enable(int On)
 
 
 
-void arch_dcache_enable(int On)
+void  __attribute__((no_ex9, used))arch_dcache_enable(int On)
 {
 	unsigned int reg = __nds32__mfsr(NDS32_SR_CACHE_CTL);
 

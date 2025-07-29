@@ -6,9 +6,11 @@
 #include "oshal.h"
 #include "sdk_version.h"
 #include "hal_system.h"
+#include "hash.h"
+#include "flash.h"
 
-#if defined (CONFIG_OTA_LOCAL) || defined(CONFIG_OTA_SERVICE)
 #include "ota.h"
+#if defined (CONFIG_OTA_LOCAL) || defined(CONFIG_OTA_SERVICE)
 #include "flash.h"
 #endif
 
@@ -183,6 +185,65 @@ int cmd_show_lib_compile_info(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(show, lib_compile_info, cmd_show_lib_compile_info, "displays lib compile info", "show lib_compile_info");
 
 
+
+int cmd_show_firmware_integrity(cmd_tbl_t *t, int argc, char *argv[])
+{
+    unsigned int start_addr;
+    unsigned int part_size;
+    image_headinfo_t image_head;
+    int ab_run_flag = 0;
+
+    if (partion_info_get(PARTION_NAME_CPU, &start_addr, &part_size) != 0)
+    {
+        os_printf(LM_APP, LL_ERR, "can not get %s info\n", PARTION_NAME_CPU);
+        return CMD_RET_FAILURE;
+    }
+    drv_spiflash_read(start_addr, (unsigned char *)&image_head, sizeof(image_headinfo_t));
+    if(OTA_UPDATE_METHOD_AB == image_head.update_method )
+    {
+        extern void *__etext1;
+        unsigned int text_addr = ((unsigned int)&__etext1) - 0x40800000U;
+
+        if (text_addr > start_addr + part_size / 2)
+        {
+            // os_printf(LM_APP, LL_INFO, "active part B\n");
+            ab_run_flag = 1;
+        }
+    }
+    if(1 == ab_run_flag)
+    {
+        start_addr += part_size / 2;
+        drv_spiflash_read(start_addr, 
+            (unsigned char *)&image_head, 
+            sizeof(image_headinfo_t));
+    }
+
+    unsigned all_data_size = image_head.text_size + image_head.data_size + image_head.xip_size;
+    unsigned char hash_data[32];
+    
+    os_printf(LM_CMD, LL_DBG, "get hesh start:0x%x  end:0x%x  data len:0x%x\r\n", 
+        0x40800000U+start_addr+sizeof(image_headinfo_t), 
+        0x40800000U+start_addr+sizeof(image_headinfo_t)+all_data_size, 
+        all_data_size);
+    drv_hash_sha256_ret((unsigned char*)(0x40800000U+start_addr+sizeof(image_headinfo_t)), 
+        all_data_size, hash_data);
+    os_printf(LM_CMD, LL_DBG, "head hash:0x%08x\r\n", image_head.image_dcrc);
+    os_printf(LM_CMD, LL_DBG, "get  hash:0x%08x  0x%08x  0x%08x  0x%08x  0x%08x  0x%08x  0x%08x  0x%08x\r\n",
+        *((int*)&hash_data[0]), *((int*)&hash_data[4]), *((int*)&hash_data[8]), *((int*)&hash_data[12]),
+        *((int*)&hash_data[16]), *((int*)&hash_data[20]), *((int*)&hash_data[24]), *((int*)&hash_data[28]));
+    if(image_head.image_dcrc == *((int*)&hash_data[0]) || 
+        image_head.image_dcrc == ((hash_data[0]<<24)|(hash_data[1]<<16)|(hash_data[2]<<8)|(hash_data[3])))
+    {
+        os_printf(LM_CMD, LL_INFO, "HASH_OK\r\n");
+        return CMD_RET_SUCCESS;
+    }
+    else
+    {
+        os_printf(LM_CMD, LL_INFO, "HASH_ERROR\r\n");
+        return CMD_RET_FAILURE;
+    }
+}
+CLI_SUBCMD(show, firmware_integrity, cmd_show_firmware_integrity, "Check firmware integrity", "show firmware_integrity");
 
 
 

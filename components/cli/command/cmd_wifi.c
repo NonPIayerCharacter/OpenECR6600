@@ -79,51 +79,188 @@ static int cmd_wifi_stop_station(cmd_tbl_t *t, int argc, char *argv[])
 	return CMD_RET_SUCCESS;
 }
 CLI_CMD(wifi_stop_sta, cmd_wifi_stop_station,  "wifi_stop_sta", "wifi_stop_sta");
+uint8_t g_enable_cmw = 0;
+extern wifi_work_mode_e wifi_get_opmode(void);
+static int cmd_wifi_get_opmode(cmd_tbl_t *t, int argc, char *argv[])
+{
+    int mode;
+    char *mode_str;
+    mode = wifi_get_opmode();
+    switch (mode)
+        {
+        case 0:
+            mode_str = "sta";
+            break;
+        case 1:
+            mode_str = "ap";
+            break;
+        case 2:
+            mode_str = "ap+sta";
+            break;
+        case 3:
+        default:
+            mode_str = "error :not any mode";
+        }
 
+    os_printf(LM_CMD, LL_INFO, "now mode is %s\n",mode_str);
+    return CMD_RET_SUCCESS;
+}
+CLI_CMD(wifi_get_opmode, cmd_wifi_get_opmode,  "wifi_get_opmode", "wifi_get_mode");
+
+static int cmd_wifi_set_opmode(cmd_tbl_t *t, int argc, char *argv[])
+{
+    if (argc < 2) {
+        return CMD_RET_USAGE;
+    }
+
+    if (strcmp(argv[1], "sta") == 0) {
+        wifi_set_opmode(WIFI_MODE_STA);
+    }
+    
+    if (strcmp(argv[1], "ap") == 0) {
+        wifi_set_opmode(WIFI_MODE_AP);
+    }
+
+    if (strcmp(argv[1], "sta+ap") == 0) {
+        wifi_set_opmode(WIFI_MODE_AP_STA);
+    }
+
+    return CMD_RET_SUCCESS;
+}
+CLI_CMD(wifi_set_opmode, cmd_wifi_set_opmode,  "wifi_set_opmode", "wifi_set_opmode sta/ap/sta+ap");
+
+extern sys_err_t wifi_get_wifi_info(wifi_info_t *info);
+static int cmd_wifi_get_wifi_info(cmd_tbl_t *t, int argc, char *argv[])
+{
+    wifi_info_t info;
+    char *cipher,*auth;
+
+    wifi_get_wifi_info(&info);
+
+    switch (info.cipher)
+        {
+        case 0:
+            cipher = "none";
+            break;
+        case 1:
+            cipher = "wep_40";
+            break;
+        case 2:
+            cipher = "wep_104";
+            break;
+        case 3:
+            cipher = "tkip";
+            break;
+        case 4:
+            cipher = "ccmp";
+            break;
+        default:
+            cipher = "error :not belong any cipher mode";
+        }
+
+    switch (info.auth)
+        {
+        case 0:
+            auth = "open";
+            break;
+        case 1:
+            auth = "wep";
+            break;
+        case 2:
+            auth = "wpa_psk";
+            break;
+        case 3:
+            auth = "wpa2_psk";
+            break;
+        case 4:
+            auth = "wpa_wpa2_psk";
+            break;
+        default:
+            auth = "error :not belong any auth mode";
+        }
+
+    os_printf(LM_CMD, LL_INFO, "now auth mode is %s and cipher is %s\n",auth,cipher);
+    os_printf(LM_CMD, LL_INFO, "now channel is %d\n",info.channel);
+    os_printf(LM_CMD, LL_INFO, "now rssi is %d\n",info.rssi);
+    return 0;
+
+}
+CLI_CMD(wifi_get_info, cmd_wifi_get_wifi_info,  "wifi_get_info", "wifi_get_info");
+extern int hexstr2bin(const char *hex, uint8_t *buf, size_t len);
+static int process_str(char *str_src, char *str_dest, char max_len)
+{
+    char *src = str_src;
+    char *dest = str_dest;
+    if (*src == '"')
+    {
+        const char *pos;
+        uint8_t len = 0;
+        src++;
+        pos = strrchr(src, '"');
+        if (pos == NULL || pos[1] != '\0')
+        {
+            return CMD_RET_USAGE;
+        }
+        len = pos - src;
+        if ((len == 0) ||len > (max_len - 1))
+        {
+            return CMD_RET_USAGE;
+        }
+        memcpy((char *)dest, src, len);
+        dest[len] = '\0';
+        return 0;
+    }
+    else
+    {
+        uint8_t tlen, hlen = strlen(str_src);
+        if (hlen & 1)
+        {
+            return CMD_RET_USAGE;
+        }
+        tlen = hlen / 2;
+        if (tlen > (max_len - 1))
+        {
+            return CMD_RET_USAGE;
+        }
+        if (hexstr2bin(str_src, (unsigned char*)str_dest, tlen)) 
+        {
+            return CMD_RET_USAGE;
+        }
+        str_dest[tlen] = '\0';
+        return 0;
+    }
+}
 static int cmd_wifi_sta(cmd_tbl_t *t, int argc, char *argv[])
 {
     wifi_config_u config;
-
+    char *ssid = NULL;
+    char *pwd = NULL;
     if (argc < 2 || argc > 3)
     {
         return CMD_RET_USAGE;
     }
-
+    ssid = argv[1];
     memset(&config, 0, sizeof(config));
-    strcpy((char *)config.sta.ssid, argv[1]);
+    if (process_str(ssid, (char*)(config.sta.ssid), WIFI_SSID_MAX_LEN))
+    {
+        return CMD_RET_USAGE;
+    }
     if (argc > 2)
     {
-        strncpy(config.sta.password, argv[2], sizeof(config.sta.password) - 1);
+        pwd = argv[2];
+        if (process_str(pwd, config.sta.password, WIFI_PWD_MAX_LEN))
+        {
+            return CMD_RET_USAGE;
+        }
     }
 
     wifi_stop_station();
     os_msleep(500);
+    g_enable_cmw = 1;
     return wifi_start_station(&config) ? CMD_RET_FAILURE : CMD_RET_SUCCESS;
 }
 CLI_CMD(wifi_sta, cmd_wifi_sta,  "connect wifi as station", "wifi_sta <ssid> [password]");
 
-
-static int cmd_chineses_wifi_sta(cmd_tbl_t * t, int argc, char * argv[])
-{
-
-	wifi_config_u config;
-
-	memset(&config,0,sizeof(config));
-
-	if(0== strcmp(argv[1],"test1"))
-		strcpy((char *)config.sta.ssid,"!@#￥%*\\");
-	else if(0== strcmp(argv[1],"test2"))
-		
-		strcpy((char *)config.sta.ssid,"中文测试SSID");
-
-	strncpy(config.sta.password,argv[2],sizeof(config.sta.password)-1);
-
-
-	wifi_stop_station();
-	os_msleep(500);
-	return wifi_start_station(&config) ? CMD_RET_FAILURE:CMD_RET_SUCCESS;
-}
-CLI_CMD(wifi_chinenese_sta, cmd_chineses_wifi_sta,  "connect wifi as station", "wifi_sta <ssid> [password]");
 extern uint16_t get_macsw_sta_max_cnt(void);
 static int cmd_wifi_softap(cmd_tbl_t * t, int argc, char * argv[])
 {
@@ -623,6 +760,7 @@ int set_sniffer_stop(cmd_tbl_t *t, int argc, char *argv[])
     return 0;
 }
 CLI_CMD(sniffer_stop, set_sniffer_stop, "set_sniffer_stop", "set_sniffer_stop");
+
 
 #endif // CONFIG_WIFI_PRODUCT_FHOST
 

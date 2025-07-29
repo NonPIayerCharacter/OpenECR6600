@@ -27,17 +27,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <errno.h>
 #endif
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <netinet/in.h>
 #endif
 #include <netdb.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <sys/time.h>
 #include <sys/select.h>
 #endif
@@ -47,7 +47,7 @@
 #include "iperf_api.h"
 #include "iperf_tcp.h"
 #include "net.h"
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include "iperf_cjson.h"
 #else
 #include "cJSON.h"
@@ -94,7 +94,7 @@ iperf_tcp_send(struct iperf_stream *sp)
 {
     int r;
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     if (sp->test->zerocopy)
 	r = Nsendfile(sp->buffer_fd, sp->socket, sp->buffer, sp->settings->blksize);
     else
@@ -162,7 +162,7 @@ iperf_tcp_listen(struct iperf_test *test)
     int s, opt;
     socklen_t optlen;
     int saved_errno;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     int rcvbuf_actual, sndbuf_actual;
 #else
     int rcvbuf_actual;
@@ -194,7 +194,7 @@ iperf_tcp_listen(struct iperf_test *test)
 	 * family specified, then force us to get an AF_INET6 socket.
 	 * More details in the comments in netanounce().
 	 */
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	if (test->settings->domain == AF_UNSPEC && !test->bind_address) {
 	    hints.ai_family = AF_INET6;
 	}
@@ -229,7 +229,7 @@ iperf_tcp_listen(struct iperf_test *test)
             }
         }
         // XXX: Setting MSS is very buggy!
-#ifndef __TR_SW__	/* lwip not support TCP_MAXSEG */
+#ifndef CONFIG_WIRELESS_IPERF_3	/* lwip not support TCP_MAXSEG */
         if ((opt = test->settings->mss)) {
             if (setsockopt(s, IPPROTO_TCP, TCP_MAXSEG, &opt, sizeof(opt)) < 0) {
 		saved_errno = errno;
@@ -250,7 +250,7 @@ iperf_tcp_listen(struct iperf_test *test)
                 i_errno = IESETBUF;
                 return -1;
             }
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
             if (setsockopt(s, SOL_SOCKET, SO_SNDBUF, &opt, sizeof(opt)) < 0) {
 		saved_errno = errno;
 		close(s);
@@ -336,7 +336,7 @@ iperf_tcp_listen(struct iperf_test *test)
         test->listener = s;
     }
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     /* Read back and verify the sender socket buffer size */
     optlen = sizeof(sndbuf_actual);
     if (getsockopt(s, SOL_SOCKET, SO_SNDBUF, &sndbuf_actual, &optlen) < 0) {
@@ -374,7 +374,7 @@ iperf_tcp_listen(struct iperf_test *test)
 
     if (test->json_output) {
 	cJSON_AddNumberToObject(test->json_start, "sock_bufsize", test->settings->socket_bufsize);
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	cJSON_AddNumberToObject(test->json_start, "sndbuf_actual", sndbuf_actual);
 #endif
 	cJSON_AddNumberToObject(test->json_start, "rcvbuf_actual", rcvbuf_actual);
@@ -399,7 +399,7 @@ iperf_tcp_connect(struct iperf_test *test)
     int s, opt;
     socklen_t optlen;
     int saved_errno;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     int rcvbuf_actual, sndbuf_actual;
 #else
     int rcvbuf_actual;
@@ -467,7 +467,7 @@ iperf_tcp_connect(struct iperf_test *test)
 	    lcladdr->sin_addr.s_addr = INADDR_ANY;
 	    addrlen = sizeof(struct sockaddr_in);
 	}
-#if !defined(__TR_SW__) || LWIP_IPV6
+#if !defined(CONFIG_WIRELESS_IPERF_3) || LWIP_IPV6
 	/* IPv6 */
 	else if (server_res->ai_family == AF_INET6) {
 	    struct sockaddr_in6 *lcladdr = (struct sockaddr_in6 *) &lcl;
@@ -509,7 +509,7 @@ iperf_tcp_connect(struct iperf_test *test)
             return -1;
         }
     }
-#ifndef __TR_SW__	/* lwip not support TCP_MAXSEG */
+#ifndef CONFIG_WIRELESS_IPERF_3	/* lwip not support TCP_MAXSEG */
     if ((opt = test->settings->mss)) {
         if (setsockopt(s, IPPROTO_TCP, TCP_MAXSEG, &opt, sizeof(opt)) < 0) {
 	    saved_errno = errno;
@@ -530,7 +530,7 @@ iperf_tcp_connect(struct iperf_test *test)
             i_errno = IESETBUF;
             return -1;
         }
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
         if (setsockopt(s, SOL_SOCKET, SO_SNDBUF, &opt, sizeof(opt)) < 0) {
 	    saved_errno = errno;
 	    close(s);
@@ -543,7 +543,7 @@ iperf_tcp_connect(struct iperf_test *test)
     }
 
     /* Read back and verify the sender socket buffer size */
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     optlen = sizeof(sndbuf_actual);
     if (getsockopt(s, SOL_SOCKET, SO_SNDBUF, &sndbuf_actual, &optlen) < 0) {
 	saved_errno = errno;
@@ -582,7 +582,7 @@ iperf_tcp_connect(struct iperf_test *test)
 
     if (test->json_output) {
 	cJSON_AddNumberToObject(test->json_start, "sock_bufsize", test->settings->socket_bufsize);
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	cJSON_AddNumberToObject(test->json_start, "sndbuf_actual", sndbuf_actual);
 #endif
 	cJSON_AddNumberToObject(test->json_start, "rcvbuf_actual", rcvbuf_actual);

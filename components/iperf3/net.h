@@ -32,7 +32,7 @@ int netdial(int domain, int proto, char *local, int local_port, char *server, in
 int netannounce(int domain, int proto, char *local, int port);
 int Nread(int fd, char *buf, size_t count, int prot);
 int Nwrite(int fd, const char *buf, size_t count, int prot) /* __attribute__((hot)) */;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 int has_sendfile(void);
 int Nsendfile(int fromfd, int tofd, const char *buf, size_t count) /* __attribute__((hot)) */;
 #endif

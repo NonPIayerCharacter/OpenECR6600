@@ -28,11 +28,11 @@
 /****************************************************************************
 * 	                                        Macros
 ****************************************************************************/
-#define LOG_LOCAL_LEVEL SYS_LOG_VERBOSE
+#define LOG_LOCAL_LEVEL CONFIG_WIFI_CTRL_LOG_LEVEL
 
 #define SYS_LOG_EARLY_IMPL(format, log_level, ...) do {                         \
         if (LOG_LOCAL_LEVEL >= log_level) {                                     \
-            os_printf(LM_APP, LL_INFO, format"\n", ##__VA_ARGS__);                           \
+            os_printf(LM_APP, LL_INFO, format"\r\n", ##__VA_ARGS__);                           \
         }} while(0)
 
 

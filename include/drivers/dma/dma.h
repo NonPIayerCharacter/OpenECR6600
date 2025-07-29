@@ -45,7 +45,9 @@ void drv_dma_start(int num);
 unsigned int drv_dma_stop(int num);
 void drv_dma_isr_register(int num, void (* callback)(void *), void  *data);
 int drv_dma_ch_alloc(void);
+void drv_dma_ch_release(int chn);
 
+unsigned int drv_dma_looplist_config(int chn_num, unsigned int src_addr, unsigned int dst_addr,unsigned int trans_size, int buff_num, E_DMA_CHN_MODE mode);
 
 #endif /* DRV_DMA_H */
 

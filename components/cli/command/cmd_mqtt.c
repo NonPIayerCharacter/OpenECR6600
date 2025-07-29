@@ -57,7 +57,6 @@
 
 trs_mqtt_client_handle_t mqtt_client = NULL;
 trs_mqtt_client_config_t mqtt_cfg = {0};
-uint16_t g_mqtt_cli_port = 0;
 
 int g_MQTT_EVENT_CONNECTED = 0;
 int g_MQTT_EVENT_DISCONNECTED = 0;

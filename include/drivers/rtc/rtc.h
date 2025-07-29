@@ -34,6 +34,9 @@ typedef void (*void_fn)(void);
 #define US_TO_ALARM_CNT(X)	(((X) * ALARM_CLK) / 1000000) //maybe <<15 is more effective than * 32768
 #define ALARM_CNT_TO_US(X)	(((X) * 1000000) / ALARM_CLK)
 
+#define CNT_40M_FRO_100_32K_CYCLE  122070
+#define CNT_26M_FRO_100_32K_CYCLE  79346
+#define RTC_COMP_PERIOD (3600)//unit:s
 
 /** RTC TYPE  used in rtc isr register or unregister*/
 typedef enum _RTC_TYPE{
@@ -105,6 +108,9 @@ unsigned int drv_rtc_get_32K_cnt(void);
 unsigned int drv_rtc_set_alarm_relative(unsigned int value);
 int drv_rtc_get_alarm_cnt(void);
 unsigned int drv_rtc_get_interval_cnt(unsigned       int pre_rtc,unsigned int now_rtc);
+void rtc_bias_time_cal();
+void rtc_pit_diff_trigger();
 void calculate_rtc_task();
+
 #endif
 

@@ -25,7 +25,7 @@
  * file for complete information.
  */
 #include <stdio.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <errno.h>
 #endif
 #include <netdb.h>
@@ -47,7 +47,7 @@ iperf_err(struct iperf_test *test, const char *format, ...)
     if (test != NULL && test->json_output && test->json_top != NULL)
 	cJSON_AddStringToObject(test->json_top, "error", str);
     else
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	if (test && test->outfile && test->outfile != stdout) {
 	    fprintf(test->outfile, "iperf3: %s\n", str);
 	}
@@ -73,7 +73,7 @@ iperf_errexit(struct iperf_test *test, const char *format, ...)
 	cJSON_AddStringToObject(test->json_top, "error", str);
 	iperf_json_finish(test);
     } else
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	if (test && test->outfile && test->outfile != stdout) {
 	    fprintf(test->outfile, "iperf3: %s\n", str);
 	}
@@ -84,7 +84,7 @@ iperf_errexit(struct iperf_test *test, const char *format, ...)
         printf("iperf3: %s\n", str);
 #endif
     va_end(argp);
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     if (test)
         iperf_delete_pidfile(test);
     exit(1);

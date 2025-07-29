@@ -71,6 +71,11 @@ unsigned int p_efuse_ctrl = 0;
 #define EN25QH32B			0x16701C
 #define EN25Q32C			0x16301C
 
+#define KH25L64				0x1720C2
+#define KH25L128			0x1820C2
+
+#define PROTECT_ALL			0x0218
+#define TH_QE				0x0200
 
 
 #if defined (CONFIG_STANDARD_SPI)
@@ -98,8 +103,7 @@ unsigned int p_efuse_ctrl = 0;
 										| SPI_TRANSCTRL_ADDR_EN				\
 										| SPI_TRANSCTRL_ADDR_FMT				\
 										| SPI_TRANSCTRL_TRAMODE_DR			\
-										| SPI_TRANSCTRL_DUALQUAD_DUAL		\
-										| SPI_TRANSCTRL_TOKEN_EN)
+										| SPI_TRANSCTRL_DUALQUAD_DUAL		)
 
 #define DRV_FLASH_WRITE_CMD		0x02
 #define DRV_FLASH_WRITE_PARAM	( SPI_TRANSCTRL_CMD_EN						\
@@ -132,6 +136,9 @@ unsigned int p_efuse_ctrl = 0;
 #endif
 
 
+int flash_init_ret = 0;
+unsigned int Flash_ID = 0;
+unsigned int Flash_FT = 1;
 
 
 static T_SPI_FLASH_DEV flash_dev;
@@ -142,7 +149,7 @@ static T_SPI_FLASH_DEV flash_dev;
  *	   @details 	Check spi bus status within 1000 cycles. 
  *     @return      0--spi bus status busy, 1--spi bus status not busy.
  */
-int spi_bus_ready(void)
+int   __attribute__((no_ex9, used))spi_bus_ready(void)
 {
 	unsigned int i;
 
@@ -161,7 +168,7 @@ int spi_bus_ready(void)
  *	   @details 	Reset spi fifo and check spi fifo status within 1000 cycles.
  *     @return      0--spi fifo reset completes, 1--spi fifo reset not completes.
  */
-int spi_fifo_reset(void)
+int   __attribute__((no_ex9, used))spi_fifo_reset(void)
 {
 	unsigned int i;
 
@@ -226,7 +233,7 @@ int spiFlash_RDP(void)
  *     @param[in]	cmd--Only send the instruction of CMD timing.
  *     @return      0--send CMD ok, -1--spi bus status busy, -2--spi fifo reset not completes.
  */
-int spiFlash_format_none(int cmd)
+int   __attribute__((no_ex9, used))spiFlash_format_none(int cmd)
 {
 	//wait spi-idle
 	if (!spi_bus_ready())
@@ -306,6 +313,23 @@ void spiFlash_format_wr(int cmd, int data, int wr_len)
 	} while((status & SPIFLASH_STATUS_WIP) == 1);
 }
 
+void spiFlash_format_wr_vol(int cmd, int data, int wr_len)
+{
+	unsigned int status;
+	
+	spiFlash_format_none(SPIFLASH_CMD_WREN_VOL);
+	spi_bus_ready();
+
+	FLASH_SPI_REG->transCtrl = SPI_TRANSCTRL_CMD_EN |SPI_TRANSCTRL_TRAMODE_WO |SPI_TRANSCTRL_WCNT(wr_len-1);
+	FLASH_SPI_REG->cmd =  cmd;
+	FLASH_SPI_REG->data = data;
+
+	do
+	{
+		status = spiFlash_format_rd(SPIFLASH_CMD_RDSR_1, 1);
+	} while((status & SPIFLASH_STATUS_WIP) == 1);
+}
+
 void spiFlash_format_wr_fast(int cmd, int data, int wr_len)
 {
 	FLASH_SPI_REG->transCtrl = SPI_TRANSCTRL_CMD_EN |SPI_TRANSCTRL_TRAMODE_WO |SPI_TRANSCTRL_WCNT(wr_len-1);
@@ -370,6 +394,90 @@ int spiFlash_format_addr_no(int cmd, unsigned int addr, unsigned int param)
 
 	return FLASH_RET_SUCCESS;
 }
+
+
+void spiFlash_format_wr_nodummy(int cmd, int addr, unsigned int data, int length)
+{
+	char status;
+		
+	do
+	{
+		spiFlash_format_none(SPIFLASH_CMD_WREN);
+		status = spiFlash_format_rd(SPIFLASH_CMD_RDSR_1, 1);
+	} while((status & SPIFLASH_STATUS_WEL) == 0);
+
+	FLASH_SPI_REG->transCtrl = (SPI_TRANSCTRL_CMD_EN | SPI_TRANSCTRL_ADDR_EN |SPI_TRANSCTRL_TRAMODE_WDR |SPI_TRANSCTRL_WCNT(length - 1) |SPI_TRANSCTRL_DUMMY_CNT_1);
+	FLASH_SPI_REG->addr = addr;	
+	FLASH_SPI_REG->cmd =  cmd;
+	FLASH_SPI_REG->data = data;
+
+	do
+	{
+		status = spiFlash_format_rd(SPIFLASH_CMD_RDSR_1, 1);
+	} while((status & SPIFLASH_STATUS_WIP) == 1);
+}
+
+
+void spiFlash_format_rd_nodummy(int cmd, int addr, unsigned char * buf, int length)
+{
+	int i,rx_num;
+	unsigned int data;	//word aligned
+	unsigned int * rxBuf;
+
+	spi_fifo_reset();
+	FLASH_SPI_REG-> transFmt= FLASH_SPI_REG-> transFmt |BIT4 ;
+	FLASH_SPI_REG->addr = addr;
+	FLASH_SPI_REG->transCtrl = (SPI_TRANSCTRL_CMD_EN | SPI_TRANSCTRL_ADDR_EN |SPI_TRANSCTRL_TRAMODE_RO | SPI_TRANSCTRL_RCNT(length - 1));
+	FLASH_SPI_REG->cmd = cmd;
+
+	if(((unsigned int)buf%4==0) && ((unsigned int) length % 4 == 0))
+	{
+		rxBuf = (unsigned int *)buf;
+		data = (length+3)/4;
+
+		while((FLASH_SPI_REG->status & SPI_STATUS_BUSY) == 1)
+		{
+			rx_num = ((FLASH_SPI_REG->status) >> 8) & 0x1F;
+			rx_num = MIN(rx_num , data);
+
+			for(i=0; i<rx_num; i++)
+			{
+				*rxBuf++ = FLASH_SPI_REG->data;
+			}
+
+			data -= rx_num;
+
+			if(data == 0)
+			{
+				return;
+			}
+		}
+
+		for(i=0; i<data; i++)
+		{
+			*rxBuf++ = FLASH_SPI_REG->data;
+		}
+	}
+	else
+	{
+		while(length)
+		{
+			rx_num = MIN(4, length);
+			SPI_WAIT_RX_READY(FLASH_SPI_REG->status);
+			data = FLASH_SPI_REG->data;
+
+			for(i=0; i<rx_num; i++)
+			{
+				*buf++ = (unsigned char)data;
+				data >>= 8;
+				length--;
+			}
+		}
+	}
+	
+	FLASH_SPI_REG-> transFmt= FLASH_SPI_REG-> transFmt & (~BIT4) ;
+}
+
 
 
 /**    @brief		Write-enable Cmd send instruction.
@@ -516,8 +624,9 @@ static void spiFlash_cmd_page_program(unsigned int addr, const unsigned char * b
 			}
 
 			SPI_WAIT_TX_READY(FLASH_SPI_REG->status);
-			FLASH_SPI_REG->addr = addr + (i*4); 
+			FLASH_SPI_REG->addr = addr; 
 			FLASH_SPI_REG->data = data;
+			addr += 4; 
 		}
 	}
 }
@@ -725,7 +834,7 @@ static void spiFlash_QE_cfg_restore(T_SPI_FLASH_DEV *p_flash_dev)
 	unsigned int QE;
 	QE = spiFlash_cmd_rdSR_2();
 
-	if(p_flash_dev->flash_param.flash_id == 0x146085 || p_flash_dev->flash_param.flash_id == 0x1440c8 || p_flash_dev->flash_param.flash_id == 0x15400b || p_flash_dev->flash_param.flash_id == 0x14400b || p_flash_dev->flash_param.flash_id == 0x1560EB)//P25Q80H & GD25Q80E & P25Q16H & XT25F08 & XT25F16 & TH25Q16HB
+	if(p_flash_dev->flash_param.flash_id == 0x146085 || p_flash_dev->flash_param.flash_id == 0x1440c8 || p_flash_dev->flash_param.flash_id == 0x15400b || p_flash_dev->flash_param.flash_id == 0x14400b)//P25Q80H & GD25Q80E & P25Q16H & XT25F08 & XT25F16
 	{
 		spiFlash_format_wr_fast(SPIFLASH_CMD_WRSR_1,QE | SPIFLASH_STATUS_QE,2);
 	}
@@ -737,6 +846,14 @@ static void spiFlash_QE_cfg_restore(T_SPI_FLASH_DEV *p_flash_dev)
 	else if(p_flash_dev->flash_param.flash_id == 0x16701C || p_flash_dev->flash_param.flash_id == 0x16301C || p_flash_dev->flash_param.flash_id == 0x15701C)	//EN25QH32B EN25Q16B EN25Q32C
 	{
 		//spiFlash_format_wr_fast(SPIFLASH_CMD_WRSR_2,QE | SPIFLASH_STATUS_2_QE,2);
+	}
+	else if(p_flash_dev->flash_param.flash_id == 0x1560eb) //TH25Q16HB
+	{
+		spiFlash_format_wr_fast(SPIFLASH_CMD_WRSR_1,QE | PROTECT_ALL,2);
+	}
+	else if(p_flash_dev->flash_param.flash_id == 0x1820c2 || p_flash_dev->flash_param.flash_id == 0x1720c2)  // Special adaptation  KH25L128	& KH25L64
+	{
+		spiFlash_format_wr_fast(SPIFLASH_CMD_WRSR_1,QE | SPIFLASH_STATUS_QE_SPECIAL,1);
 	}
 	else
 	{
@@ -892,6 +1009,11 @@ int drv_spiflash_erase(unsigned int addr,  unsigned int len)
 	for (i=0; i<eraseSectorCnt; i++)
 	{
 		irq_flag = system_irq_save_tick_compensation();
+		
+		#ifdef CONFIG_FLASH_TH
+			// memroy protect adjust 
+			spiflash_TH_wr_protect( addr);
+		#endif
 		for (j = 0; j<SPIFLASH_TIMEOUT_COUNT; j++)
 		{
 			spiFlash_cmd_wrEnable();
@@ -910,7 +1032,11 @@ int drv_spiflash_erase(unsigned int addr,  unsigned int len)
 		}
 		
 		if((data & SPIFLASH_STATUS_WEL) == 0 && ((flash_dev.flash_param.flash_id != EN25QH32B) && (flash_dev.flash_param.flash_id != EN25Q16B) && (flash_dev.flash_param.flash_id != EN25Q32C) ))
-		{
+		{	
+			#ifdef CONFIG_FLASH_TH
+				// memroy protect all
+				spiflash_TH_wr_protect( 0x00);
+			#endif
 			system_irq_restore_tick_compensation(irq_flag);
 			#ifdef CONFIG_PSM_SURPORT
 				psm_set_device_status(PSM_DEVICE_SPI_FLASH,PSM_DEVICE_STATUS_IDLE);
@@ -929,6 +1055,10 @@ int drv_spiflash_erase(unsigned int addr,  unsigned int len)
 				break;
 			}
 		}
+		#ifdef CONFIG_FLASH_TH
+			// memroy protect all
+			spiflash_TH_wr_protect( 0x00);
+		#endif
 
 		system_irq_restore_tick_compensation(irq_flag);
 		if(data & SPIFLASH_STATUS_WIP)
@@ -938,6 +1068,8 @@ int drv_spiflash_erase(unsigned int addr,  unsigned int len)
 			#endif
 			return FLASH_RET_WIP_NOT_SET;
 		}
+		
+		portYIELD_FROM_ISR(i%2);
 	}
 
 	#ifdef CONFIG_PSM_SURPORT
@@ -1024,7 +1156,7 @@ void up_IO_driver_strength(void)
 	
 	//os_printf(LM_OS, LL_ERR, "chip_id = 0x%x \n",chip_id);
 	if((((fuse_ft & EFUSE_FT_MASK) == EFUSE_FT_TYPE_6600) && ((chip_id == 0x12) || (chip_id == 0x13) || (chip_id == 0x14) || (chip_id == 0x15))) ||
-	   (((fuse_ft & EFUSE_FT_MASK) == EFUSE_FT_TYPE_1600) && ((chip_id == 0x00) || (chip_id == 0x01) || (chip_id == 0x04) || (chip_id == 0x05) || (chip_id == 0x08) || (chip_id == 0x09))) )
+	   (((fuse_ft & EFUSE_FT_MASK) == EFUSE_FT_TYPE_1600) && ((chip_id == 0x00) || (chip_id == 0x01) || (chip_id == 0x04) || (chip_id == 0x05) || /*(chip_id == 0x08) ||*/ (chip_id == 0x09))) )
 	{
 		WRITE_REG(MEM_BASE_SMU_AON + 0x28, READ_REG(MEM_BASE_SMU_AON + 0x28) | 0x1f80);
 		
@@ -1070,7 +1202,7 @@ void flash_encrypt_write_check()
  *     @param[in]	len--The specified length read from the specified address in flash memory. 
  *     @return      0--ok.
  */
-int drv_spiflash_read(unsigned int addr, unsigned char * buf, unsigned int len)
+ int drv_spiflash_read(unsigned int addr, unsigned char * buf, unsigned int len)
 {
 	if ((len + addr) > flash_dev.flash_param.flash_size)
 	{
@@ -1081,24 +1213,28 @@ int drv_spiflash_read(unsigned int addr, unsigned char * buf, unsigned int len)
 		psm_set_device_status(PSM_DEVICE_SPI_FLASH,PSM_DEVICE_STATUS_ACTIVE);
 	#endif
 
-#if 1
-	//xip mode 
-	spiFlash_xip_read_mem(addr, (unsigned char *)buf, len);
-#else
-	//spi mode
-	unsigned int curr = 0;
-	unsigned int curr_off = 0;
-	unsigned int curr_len = 0;
-
-	curr = len;
-	do
+	if((addr < FLASH_SIZE_4_MB) && (addr + len < FLASH_SIZE_4_MB) )
 	{
-		curr_len = MIN(0x200, curr);
-		spiFlash_read(addr + curr_off, (unsigned char *)(&buf[curr_off]), curr_len);
-		curr -= curr_len;
-		curr_off += curr_len;
-	}while(curr);
-#endif
+		//xip mode 
+		spiFlash_xip_read_mem(addr, (unsigned char *)buf, len);
+	}
+	else
+	{
+		//spi mode
+		unsigned int curr = 0;
+		unsigned int curr_off = 0;
+		unsigned int curr_len = 0;
+
+		curr = len;
+		do
+		{
+			curr_len = MIN(0x100, curr);
+			spiFlash_read(addr + curr_off, (unsigned char *)(&buf[curr_off]), curr_len);
+			curr -= curr_len;
+			curr_off += curr_len;
+		}while(curr);
+	}
+
 
 	#ifdef CONFIG_PSM_SURPORT
 		psm_set_device_status(PSM_DEVICE_SPI_FLASH,PSM_DEVICE_STATUS_IDLE);
@@ -1154,6 +1290,11 @@ int drv_spiflash_write(unsigned int addr, const unsigned char * buf, unsigned in
 		unsigned int j, data = 0, irq_flag;
 
 		irq_flag = system_irq_save_tick_compensation();
+		
+		#ifdef CONFIG_FLASH_TH
+			// memroy protect adjust 
+			spiflash_TH_wr_protect( addr);
+		#endif
 		unsigned int enc_en = READ_REG(CHIP_SMU_PD_APB_ENCRY_EN);
 		if((addr < start_addr) || (addr > end_addr) ) 
 		{
@@ -1179,6 +1320,11 @@ int drv_spiflash_write(unsigned int addr, const unsigned char * buf, unsigned in
 		
 		if((data & SPIFLASH_STATUS_WEL) == 0 && ((flash_dev.flash_param.flash_id != EN25QH32B) && (flash_dev.flash_param.flash_id != EN25Q16B) && (flash_dev.flash_param.flash_id != EN25Q32C) ))
 		{
+		
+			#ifdef CONFIG_FLASH_TH
+				// memroy protect all
+				spiflash_TH_wr_protect( 0x00);
+			#endif
 			WRITE_REG(CHIP_SMU_PD_APB_ENCRY_EN, enc_en);
 			system_irq_restore_tick_compensation(irq_flag);
 			
@@ -1207,6 +1353,11 @@ int drv_spiflash_write(unsigned int addr, const unsigned char * buf, unsigned in
 
 		if (data & SPIFLASH_STATUS_WIP)
 		{
+		
+			#ifdef CONFIG_FLASH_TH
+				// memroy protect all
+				spiflash_TH_wr_protect( 0x00);
+			#endif
 			WRITE_REG(CHIP_SMU_PD_APB_ENCRY_EN, enc_en);
 			system_irq_restore_tick_compensation(irq_flag);
 			
@@ -1217,6 +1368,10 @@ int drv_spiflash_write(unsigned int addr, const unsigned char * buf, unsigned in
 			return FLASH_RET_WIP_NOT_SET;
 		}
 		
+		#ifdef CONFIG_FLASH_TH
+			// memroy protect all
+			spiflash_TH_wr_protect( 0x00);
+		#endif
 		WRITE_REG(CHIP_SMU_PD_APB_ENCRY_EN, enc_en);
 		system_irq_restore_tick_compensation(irq_flag);
 	}while(length);
@@ -1255,7 +1410,7 @@ int drv_spiFlash_init(void)
 	spiFlash_xip_read_cfg();			/* cfg xip read-mem-cmd */
 
 	p_flash_dev->flash_param.flash_id = spiFlash_cmd_rdID();
-	
+	Flash_ID = p_flash_dev->flash_param.flash_id ;
 	//spiFlash_QE_cfg(p_flash_dev);
 	
 	//g_flash_priv.rx_dma_ch = (unsigned char)drv_dma_ch_alloc();
@@ -1263,6 +1418,14 @@ int drv_spiFlash_init(void)
 	
 	up_IO_driver_strength();
 	drv_efuse_read(EFUSE_CTRL_OFFSET, &p_efuse_ctrl, 4);
+	#ifdef CONFIG_FLASH_TH
+		Flash_FT = spiflash_TH_FT();
+	
+		if ( (Flash_ID & 0xFF)	== 0xEB )
+		{
+			spiFlash_cmd_wrSR_1(PROTECT_ALL);
+		}
+	#endif
 	return spiFlash_probe(p_flash_dev);
 }
 
@@ -1304,7 +1467,7 @@ int spiflash_read_DMA(unsigned int addr, unsigned char * buf, unsigned int len)
 	irq_flag = system_irq_save_tick_compensation();	
 	volatile unsigned int status = READ_REG(DMAC_INTR_STS);
 
-	dma_cfg_info.dst = (unsigned int)buf;//数组地址
+	dma_cfg_info.dst = (unsigned int)buf;//脢媒脳茅碌脴脰路
 	dma_cfg_info.src = spiFlash_api_get_dma_addr();  //spi reg :2C 
 	dma_cfg_info.len = len; //256byte
 	dma_cfg_info.mode = DMA_CHN_SPI_FLASH_RX;//8
@@ -1346,7 +1509,7 @@ int spiflash_write_DMA(unsigned int addr, const unsigned char * buf, unsigned in
     spi_flash_priv_t *pread = &g_flash_priv;
 
 	dma_cfg_info.dst = spiFlash_api_get_dma_addr();  //spi reg :2C 
-	dma_cfg_info.src = (unsigned int)buf;//数组地址
+	dma_cfg_info.src = (unsigned int)buf;//脢媒脳茅碌脴脰路
 	dma_cfg_info.len = len; //256byte
 	dma_cfg_info.mode = DMA_CHN_SPI_FLASH_TX;//7
 
@@ -1569,7 +1732,7 @@ int drv_otp_encrypt_init(void)
 }
 
 
-void drv_spiflash_restore(void)
+void  __attribute__((no_ex9, used))drv_spiflash_restore(void)
 {
 	chip_clk_enable(CLK_SPI0_APB);
 	chip_clk_enable(CLK_SPI0_AHB);
@@ -1586,6 +1749,10 @@ void drv_spiflash_restore(void)
 	spiFlash_clk_cfg();					/* cfg spi clk */
 	spiFlash_xip_read_cfg();			/* cfg xip read-mem-cmd */
 	spiFlash_QE_cfg_restore(&flash_dev);
+	
+	#ifdef CONFIG_FLASH_TH
+		Flash_FT = spiflash_TH_FT();
+	#endif
 
 	return;
 }
@@ -1794,12 +1961,22 @@ int drv_spiflash_OTP_Read(int addr, int length, unsigned char *pdata)
 		{
 			spiFlash_format_none(SPIFLASH_CMD_OTP_ENTRY);
 		}
+		
+		if(p_flash_dev->flash_param.flash_id == KH25L64 || p_flash_dev->flash_param.flash_id == KH25L128)
+		{
+			spiFlash_format_none(SPIFLASH_CMD_OTP_ENTRY_KH);
+		}
 
 		ret = ops->flash_otp_read(p_flash_dev, otp_addr, otp_leng, (unsigned char*)(pdata + offset));
 		
 		if(p_flash_dev->flash_param.flash_id == EN25QH32B || p_flash_dev->flash_param.flash_id == EN25Q16B || p_flash_dev->flash_param.flash_id == EN25Q32C )
 		{
 			spiFlash_format_none(SPIFLASH_CMD_OTP_EXIT);
+		}
+		
+		if(p_flash_dev->flash_param.flash_id == KH25L64 || p_flash_dev->flash_param.flash_id == KH25L128)
+		{
+			spiFlash_format_none(SPIFLASH_CMD_OTP_EXIT_KH);
 		}
 		
 		if(ret != FLASH_RET_SUCCESS)
@@ -1847,6 +2024,10 @@ static int drv_spiflash_OTP_Write_transform(unsigned int addr, unsigned int len,
 		{
 			spiFlash_format_none(SPIFLASH_CMD_OTP_ENTRY);
 		}
+		if(p_flash_dev->flash_param.flash_id == KH25L64 || p_flash_dev->flash_param.flash_id == KH25L128)
+		{
+			spiFlash_format_none(SPIFLASH_CMD_OTP_ENTRY_KH);
+		}
 
 		ret = ops->flash_otp_write(p_flash_dev, otp_addr, otp_leng, (unsigned char*)(buf + offset));
 		
@@ -1855,6 +2036,10 @@ static int drv_spiflash_OTP_Write_transform(unsigned int addr, unsigned int len,
 			spiFlash_format_none(SPIFLASH_CMD_OTP_EXIT);
 		}
 		
+		if(p_flash_dev->flash_param.flash_id == KH25L64 || p_flash_dev->flash_param.flash_id == KH25L128)
+		{
+			spiFlash_format_none(SPIFLASH_CMD_OTP_EXIT_KH);
+		}
 		if(ret != FLASH_RET_SUCCESS)
 		{
 			return ret;
@@ -2003,12 +2188,20 @@ int drv_spiflash_OTP_Write(unsigned int addr, unsigned int len, const unsigned c
 			{
 				spiFlash_format_none(SPIFLASH_CMD_OTP_ENTRY);
 			}
+			if(p_flash_dev->flash_param.flash_id == KH25L64 || p_flash_dev->flash_param.flash_id == KH25L128)
+			{
+				spiFlash_format_none(SPIFLASH_CMD_OTP_ENTRY_KH);
+			}
 
 			ret = ops->flash_otp_read(p_flash_dev, param->flash_otp_star_addr + cycles_num * param->flash_otp_block_interval, param->flash_otp_block_size, (unsigned char*)(temp_buf));
 
 			if(p_flash_dev->flash_param.flash_id == EN25QH32B || p_flash_dev->flash_param.flash_id == EN25Q16B  || p_flash_dev->flash_param.flash_id == EN25Q32C )
 			{
 				spiFlash_format_none(SPIFLASH_CMD_OTP_EXIT);
+			}
+			if(p_flash_dev->flash_param.flash_id == KH25L64 || p_flash_dev->flash_param.flash_id == KH25L128)
+			{
+				spiFlash_format_none(SPIFLASH_CMD_OTP_EXIT_KH);
 			}
 
 			if(ret != FLASH_RET_SUCCESS)
@@ -2025,6 +2218,10 @@ int drv_spiflash_OTP_Write(unsigned int addr, unsigned int len, const unsigned c
 			{
 				spiFlash_format_none(SPIFLASH_CMD_OTP_ENTRY);
 			}
+			if(p_flash_dev->flash_param.flash_id == KH25L64 || p_flash_dev->flash_param.flash_id == KH25L128)
+			{
+				spiFlash_format_none(SPIFLASH_CMD_OTP_ENTRY_KH);
+			}
 
 			ret = ops->flash_otp_erase(p_flash_dev, otp_addr);
 			
@@ -2033,6 +2230,10 @@ int drv_spiflash_OTP_Write(unsigned int addr, unsigned int len, const unsigned c
 				spiFlash_format_none(SPIFLASH_CMD_OTP_EXIT);
 			}
 			
+			if(p_flash_dev->flash_param.flash_id == KH25L64 || p_flash_dev->flash_param.flash_id == KH25L128)
+			{
+				spiFlash_format_none(SPIFLASH_CMD_OTP_EXIT_KH);
+			}
 			if(ret != FLASH_RET_SUCCESS)
 			{
 				#ifdef CONFIG_PSM_SURPORT
@@ -2048,6 +2249,10 @@ int drv_spiflash_OTP_Write(unsigned int addr, unsigned int len, const unsigned c
 			{
 				spiFlash_format_none(SPIFLASH_CMD_OTP_ENTRY);
 			}
+			else if(p_flash_dev->flash_param.flash_id == KH25L64 || p_flash_dev->flash_param.flash_id == KH25L128)
+			{
+				spiFlash_format_none(SPIFLASH_CMD_OTP_ENTRY_KH);
+			}
 			else
 			{
 				//close
@@ -2062,6 +2267,10 @@ int drv_spiflash_OTP_Write(unsigned int addr, unsigned int len, const unsigned c
 			if(p_flash_dev->flash_param.flash_id == EN25QH32B || p_flash_dev->flash_param.flash_id == EN25Q16B  || p_flash_dev->flash_param.flash_id == EN25Q32C )
 			{
 				spiFlash_format_none(SPIFLASH_CMD_OTP_EXIT);
+			}
+			else if(p_flash_dev->flash_param.flash_id == KH25L64 || p_flash_dev->flash_param.flash_id == KH25L128)
+			{
+				spiFlash_format_none(SPIFLASH_CMD_OTP_EXIT_KH);
 			}
 			else
 			{
@@ -2291,9 +2500,4 @@ int drv_spiflash_OTP_Lock(unsigned char otp_block)
 	
 	return ret;
 }
-
-
-
-
-
 

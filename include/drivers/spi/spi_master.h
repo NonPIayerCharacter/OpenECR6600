@@ -17,10 +17,11 @@
 #define SPI_MASTER_GPIO 4
 
 int spi_master_init(void);
-void spi_master_read_info(unsigned int len);
+void spi_master_gpio_init(void);
+void spi_master_read_info(unsigned int regaddr, unsigned int len);
 int spi_master_read_data(unsigned int *data, unsigned int len);
 int spi_master_write_data(unsigned int *data, unsigned int len);
-void spi_master_sendto_peer(spi_service_mem_t *smem);
+int spi_master_sendto_slave(spi_service_mem_t *smem);
 void spi_master_funcset_register(spi_service_func_t funcset);
 
 #endif

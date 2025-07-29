@@ -31,7 +31,7 @@
 #define __TIMER_H
 
 #include <time.h>
-#if defined(__TR_SW__)
+#if defined(CONFIG_WIRELESS_IPERF_3)
 #ifndef int64_t
 typedef long long int64_t;
 #endif
@@ -71,7 +71,7 @@ typedef struct TimerStruct
     int hash;
 } Timer;
 
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
 Timer* tmr_create(void *handle, struct iperf_time* nowP, TimerProc* timer_proc, TimerClientData client_data,
     int64_t usecs, int periodic );
 int tmr_timeout(void *handle, struct iperf_time *nowP, struct timeval *timeout);

@@ -1,24 +1,17 @@
 ifeq ($(CONFIG_SPI_SERVICE), y)
-	CSRCS += spi_service_main.c spi_service_mem.c
+	CSRCS += spi_service_main.c spi_service_mem.c spi_service_task.c spi_service_loop.c
 	VPATH += :spi_service/comm
 	INCPATHS += spi_service/comm
 
-ifeq ($(CONFIG_VNET_SERVICE), y)
-	CSRCS += vnet_register.c vnet_int.c vnet_filter.c vnet_service.c
-	VPATH += :spi_service/vnet
-	INCPATHS += spi_service/vnet
+ifeq ($(CONFIG_SPI_SLAVE), y)
+	CSRCS += vnet_int.c vnet_filter.c vnet_service.c
 endif
-
-ifeq ($(CONFIG_SPI_REPEATER), y)
 	CSRCS += spi_repeater.c
 	VPATH += :spi_service/repeater
 	INCPATHS += spi_service/repeater
-ifeq ($(CONFIG_VNET_SERVICE), )
 	CSRCS += vnet_register.c
 	VPATH += :spi_service/vnet
 	INCPATHS += spi_service/vnet
-endif
-endif
 
 ifeq ($(CONFIG_SPI_SERVICE_UT), y)
 	CSRCS += spi_service_unitest.c

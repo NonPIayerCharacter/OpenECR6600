@@ -1,71 +1,24 @@
 #include "spi_service_main.h"
+#include "spi_service_loop.h"
+#include "spi_service_task.h"
 #include "spi_service_mem.h"
-#ifdef CONFIG_SPI_REPEATER
 #include "spi_repeater.h"
-#endif
-#include "spi_master.h"
-#include "spi_slave.h"
-#include "vnet_filter.h"
-#include "vnet_service.h"
 #include "vnet_register.h"
-#include "vnet_int.h"
-#include "lwip/tcpip.h"
-#include "ota.h"
-#include "pit.h"
-
-unsigned int g_packet_size;
-unsigned int g_packet_count;
-unsigned int g_time_cnt;
-
-#ifdef SPI_SERVICE_LOOP_TEST
-static int spi_service_packet_pm(spi_service_mem_t *smem)
-{
-#ifdef SPI_SERVICE_PM_CNT
-    unsigned int time_cnt;
-
-    g_packet_size += smem->memLen;
-    if (g_time_cnt == 0) {
-        g_time_cnt = drv_pit_get_tick();
-    }
-
-    g_packet_count++;
-    time_cnt = drv_pit_get_tick();
-    time_cnt -= g_time_cnt;
-    if (time_cnt / 40 > 1000000) {
-        os_printf(LM_OS, LL_INFO, "%u[%u][%u]\n", g_packet_size, g_packet_count, time_cnt);
-        g_time_cnt = 0;
-        g_packet_size = 0;
-        g_packet_count = 0;
-    }
-#endif
-#ifdef SPI_SERVICE_PM_DATA
-    int idx;
-    unsigned char *pm = (unsigned char *)smem->memAddr + smem->memOffset;
-
-    os_printf(LM_OS, LL_ERR, "###############addr:0x%x:%d################\n", smem->memAddr, smem->memLen);
-    for (idx = 0; idx < smem->memLen; idx++) {
-        os_printf(LM_OS, LL_ERR, "0x%02x ", pm[idx]);
-        if ((idx + 1) % 16 == 0) {
-            os_printf(LM_OS, LL_ERR, "\n");
-        }
-    }
-    os_printf(LM_OS, LL_ERR, "\n");
-    os_printf(LM_OS, LL_ERR, "##########################################\n");
+#include "system_event.h"
+#ifdef CONFIG_BLE_EXAMPLES_SPI_SERVER
+#include "ble_spi_cmd.h"
 #endif
 
-    return 0;
-}
-#endif
-
+/* smem used for spi transfor data, smem take the mem attach to spi driver send queue */
+/* spi driver giveback the smem at spi finish time */
 #define SPI_SMEM_QUEUE_MAX 128
 typedef struct spi_smem_queue_ {
     spi_service_mem_t smem;
     struct spi_smem_queue_ *next;
 } spi_smem_queue_t;
-
 spi_smem_queue_t *g_smem_queue;
 
-void spi_mqueue_init(void)
+static void spi_mqueue_init(void)
 {
     int idx;
     spi_smem_queue_t *mqueue;
@@ -108,95 +61,98 @@ void spi_mqueue_put(spi_service_mem_t *queue)
     system_irq_restore(flag);
 }
 
-void *spi_service_handle(void *arg)
+static void *spi_service_rxhandle(void *arg)
 {
     spi_service_mem_t *smem = (spi_service_mem_t *)arg;
+    spi_service_msg_t msg = {0};
+#ifdef CONFIG_BLE_EXAMPLES_SPI_SERVER
+    ble_spi_msg_t blemsg = {0};
+#endif
+    int ret;
 
     switch (smem->memType) {
         case SPI_SERVICE_TYPE_HTOS:
-#ifdef SPI_SERVICE_LOOP_TEST
-            return (void *)spi_service_packet_pm(smem);
-#endif
-#ifdef CONFIG_VNET_SERVICE
-{
-            /* vnet service send data to wifi */
-            struct pbuf *p = (struct pbuf *)smem->memAddr;
-            vnet_service_wifi_tx(p);
-}
-#endif
+            ret = spi_service_packet_pm(smem);
+            SPI_SERVICE_CHECK_RETURN(ret == 0, NULL, NULL);
+            spi_service_send_wifi(smem);
             break;
 
         case SPI_SERVICE_TYPE_STOH:
-#ifdef SPI_SERVICE_LOOP_TEST
-            return (void *)spi_service_packet_pm(smem);
-#endif
-#ifdef CONFIG_SPI_MASTER
-#ifdef CONFIG_SPI_REPEATER
-{
-            spi_repeater_msg_t msg;
-            msg.msgType = SPI_REPEATER_PACKETIN;
+            ret = spi_service_packet_pm(smem);
+            SPI_SERVICE_CHECK_RETURN(ret == 0, NULL, NULL);
+            msg.msgType = SPI_SERVICE_MSG_PACKET;
             msg.msgAddr = smem->memAddr;
-
+            msg.msgfree = spi_service_mpool_free;
+            smem->memType = SPI_SERVICE_TYPE_MAX;
             if (spi_repeater_send_msg(&msg) != 0) {
-                os_printf(LM_OS, LL_ERR, "spi_repeater_send_msg failed\n");
+                smem->memType = SPI_SERVICE_TYPE_STOH;
             }
-}
-#endif
+            break;
+
+        case SPI_SERVICE_TYPE_BLE:
+#ifdef CONFIG_BLE_EXAMPLES_SPI_SERVER
+            blemsg.msgAddr = smem->memAddr;
+            blemsg.msgLen = smem->memLen;
+            blemsg.msgfree = spi_service_mpool_free;
+            smem->memType = SPI_SERVICE_TYPE_MAX;
+            if (ble_spi_send_msg(&blemsg) != 0) {
+                smem->memType = SPI_SERVICE_TYPE_BLE;
+            }
 #endif
             break;
 
         case SPI_SERVICE_TYPE_OTA:
-            ota_update_image((unsigned char *)smem->memAddr, smem->memLen);
-            break;
-
-        case SPI_SERVICE_TYPE_MSG: {
-            int idx;
-            unsigned char *pm = (unsigned char *)smem->memAddr;
-            for (idx = 0; idx < smem->memLen; idx++) {
-                os_printf(LM_OS, LL_ERR, "0x%02x ", pm[idx]);
-                if ((idx + 1) % 16 == 0) {
-                    os_printf(LM_OS, LL_ERR, "\n");
-                }
+            msg.msgType = SPI_SERVICE_MSG_OTA;
+            msg.msgAddr = smem->memAddr;
+            msg.msgLen = smem->memLen;
+            msg.msgfree = spi_service_mpool_free;
+            /* OTA handle the mem and msgfree to release it */
+            /* rxDone ignore the memtype as unkown */
+            smem->memType = SPI_SERVICE_TYPE_MAX;
+            if (spi_service_send_task(&msg) != 0) {
+                /* rxDone to release the mem, set back the memtype */
+                smem->memType = SPI_SERVICE_TYPE_OTA;
             }
-            os_printf(LM_OS, LL_ERR, "\n");
-        }
-        break;
-
-        case SPI_SERVICE_TYPE_INFO:
-#ifdef CONFIG_VNET_SERVICE
-            vnet_reg_op_call(smem->memAddr);
-#endif
-#ifdef CONFIG_SPI_MASTER
-#ifdef CONFIG_SPI_REPEATER
-{
-            spi_repeater_msg_t msg;
-            msg.msgType = SPI_REPEATER_START_STA;
-            spi_repeater_send_msg(&msg);
-}
-#endif
-#endif
             break;
+
+        case SPI_SERVICE_TYPE_MSG:
+            msg.msgType = SPI_SERVICE_MSG_BASIC;
+            msg.msgAddr = smem->memAddr;
+            msg.msgLen = smem->memLen;
+            msg.msgfree = spi_service_mpool_free;
+            smem->memType = SPI_SERVICE_TYPE_MAX;
+            if ((spi_service_send_task(&msg) != 0) && (spi_repeater_send_msg(&msg) != 0)) {
+                smem->memType = SPI_SERVICE_TYPE_MSG;
+            }
+            break;
+
         default:
-            os_printf(LM_OS, LL_ERR, "unkown type 0x%x\n", smem->memType);
+            msg.msgType = SPI_SERVICE_MSG_NET;
+            msg.msgAddr = smem->memAddr;
+            msg.msgLen = smem->memLen;
+            /* SPI MASTER read SLAVE netinfo */
+            spi_repeater_send_msg(&msg);
+            /* SPI MASTER set netinfo to SLAVE */
+            spi_service_send_task(&msg);
             break;
     }
 
     return 0;
 }
 
-void *spi_service_rx_prepare(void *arg)
+static void *spi_service_rx_prepare(void *arg)
 {
     spi_service_ctrl_t *scfg = (spi_service_ctrl_t *)arg;
     spi_service_mem_t *smem = NULL;
 
-#ifdef CONFIG_SPI_MASTER
-#ifdef CONFIG_SPI_REPEATER
-    if (scfg->evt == SPI_SERVICE_TYPE_INT) {
-        vnet_reg_get_peer_value();
-        return NULL;
-    }
-#endif
-#endif
+    /* SPI master handle interrupt event */
+    SPI_SERVICE_CHECK_RETURN(spi_repeater_rx_interrupt(scfg->evt, scfg->len) == 0, NULL, NULL);
+    smem = spi_repeater_get_netinfo(scfg->evt, scfg->len);
+    SPI_SERVICE_CHECK_RETURN(smem != NULL, smem, NULL);
+    /* SPI master set netinfo to slave */
+    smem = spi_service_get_info(scfg->evt, scfg->len);
+    SPI_SERVICE_CHECK_RETURN(smem != NULL, smem, NULL);
+
     smem = spi_mqueue_get();
     if (smem != NULL) {
         if (spi_service_smem_rx_alloc(scfg, smem) == NULL) {
@@ -208,72 +164,53 @@ void *spi_service_rx_prepare(void *arg)
     return smem;
 }
 
-void *spi_service_rx_done(void *arg)
+static void *spi_service_rx_done(void *arg)
 {
+    /* rxdataHanle take the mem and free it, like the data sendto TCPIP or WIFI? but spi driver error? */
     spi_service_mem_t *smem = (spi_service_mem_t *)arg;
 
-    spi_service_smem_rx_free(smem);
+    spi_service_smem_free(smem);
     spi_mqueue_put(smem);
     return 0;
 }
 
-void *spi_service_tx_prepare(void *arg)
+static void *spi_service_tx_prepare(void *arg)
 {
-    spi_service_mem_t *smem = NULL;
-#ifdef CONFIG_VNET_SERVICE
     spi_service_ctrl_t *scfg = (spi_service_ctrl_t *)arg;
-    unsigned int sintAddr = vnet_interrupt_get_addr();
-    int sintNum = vnet_interrupt_get_num();
-    smem = spi_mqueue_get();
-    unsigned int stype = scfg->evt;
-    if (smem && sintNum >= 0 && stype >= SPI_SERVICE_TYPE_HTOS) {
-        smem->memAddr = sintAddr;
-        smem->memOffset = 0;
-        smem->memType = SPI_SERVICE_TYPE_INT;
-        smem->memLen = sizeof(unsigned int);
-        smem->memSlen = SPI_SERVICE_CONTROL_INT | SPI_SERVICE_CONTROL_LEN | sintNum;
-        vnet_interrupt_clear(sintNum);
-        return smem;
-    }
+    spi_service_mem_t *smem = spi_service_send_interrput();
 
-    if (smem && scfg->evt == SPI_SERVICE_TYPE_INFO) {
-        if (spi_service_smem_tx_alloc(scfg, smem) == NULL) {
-            spi_mqueue_put(smem);
-            smem = NULL;
-        }
-    } else {
-        spi_mqueue_put(smem);
-        smem = NULL;
-    }
-#endif
-    return smem;
+    /* SPI SLAVE send interrupt higher */
+    SPI_SERVICE_CHECK_RETURN(smem != NULL, smem, NULL);
+    /* SPI HOST read netinfo evt */
+    smem = spi_service_get_info(scfg->evt, scfg->len);
+    SPI_SERVICE_CHECK_RETURN(smem != NULL, smem, NULL);
+
+    /* SPI SLAVE get driver queue data to send */
+    return NULL;
 }
 
-void *spi_service_tx_done(void *arg)
+static void *spi_service_tx_done(void *arg)
 {
     spi_service_mem_t *smem = (spi_service_mem_t *)arg;
 
-    spi_service_smem_tx_free(smem);
+    spi_service_smem_free(smem);
     spi_mqueue_put(smem);
-    return 0;
+
+    return NULL;
 }
 
+/* HOST send msg to SLAVE or SLAVE send msg to HOST */
 int spi_service_send_msg(unsigned char *data, unsigned int len)
 {
-    spi_service_ctrl_t mcfg;
-    spi_service_mem_t *smem = spi_mqueue_get();
+    spi_service_ctrl_t mcfg = {0};
+    spi_service_mem_t *smem = NULL;
 
-    if (smem == NULL) {
-        return -1;
-    }
-
-    if (len >= SPI_SERVICE_MSG_MAX_LEN || len == 0) {
-        os_printf(LM_APP, LL_ERR, "%s[%d] msg(%d) len err\n", __FUNCTION__, __LINE__, len);
-        return -1;
-    }
+    SPI_SERVICE_CHECK_RETURN(len == 0, -1, "length not correct");
+    smem = spi_mqueue_get();
+    SPI_SERVICE_CHECK_RETURN(smem == NULL, -1, "cannot get mqueue");
 
     mcfg.evt = SPI_SERVICE_TYPE_MSG;
-    mcfg.type = SPI_SLAVE_TYPE_WRITE;
+    mcfg.type = SPI_SEND_MSG_EVENTYPE;
     mcfg.len = len;
     if (spi_service_smem_tx_alloc(&mcfg, smem) == NULL) {
         spi_mqueue_put(smem);
@@ -281,94 +218,63 @@ int spi_service_send_msg(unsigned char *data, unsigned int len)
     }
 
     memcpy((void *)smem->memAddr, data, len);
-#ifdef CONFIG_SPI_MASTER
-        spi_master_sendto_peer(smem);
-#endif
-#ifdef CONFIG_SPI_SLAVE
-        smem->memSlen = SPI_SERVICE_CONTROL_MSG | SPI_SERVICE_CONTROL_LEN | CO_ALIGN2_HI(len);
-        spi_slave_sendto_host(smem);
-#endif
+    smem->memSlen = SPI_SERVICE_DATA_MSG | len;
+    SPI_SEND_DATA_TO_PEER(smem);
 
     return 0;
 }
 
-int spi_service_send_pbuf(struct pbuf *p_buf)
+/* spi master write part netinfo to slave */
+int spi_service_send_part_info(unsigned int regaddr, unsigned int len)
 {
-    spi_service_ctrl_t mcfg;
+    spi_service_mem_t *smem = NULL;
+    unsigned int infoaddr = (unsigned int)vnet_reg_get_addr();
+
+    SPI_SERVICE_CHECK_RETURN(regaddr + len > sizeof(vnet_reg_t), -1, "length not correct");
+    smem = spi_mqueue_get();
+    SPI_SERVICE_CHECK_RETURN(smem == NULL, -1, "cannot get mqueue");
+
+    smem->memType = regaddr;
+    smem->memAddr = infoaddr + regaddr;
+    smem->memLen = len;
+    smem->memSlen = len;
+    SPI_SEND_DATA_TO_PEER(smem);
+
+    return 0;
+}
+
+/* spi master send tcpip packet */
+int spi_service_send_pbuf(struct netif *nif, struct pbuf *p)
+{
+    spi_service_ctrl_t mcfg = {0};
     spi_service_mem_t *smem = NULL;
     unsigned int offset = 0;
 
-    if (p_buf == NULL || p_buf->tot_len >= SPI_SERVICE_CONTROL_LEN || p_buf->tot_len == 0) {
-        os_printf(LM_APP, LL_ERR, "%s[%d] pbuf err\n", __FUNCTION__, __LINE__);
-        return -1;
-    }
-
     smem = spi_mqueue_get();
-    if (smem == NULL) {
-        return -1;
-    }
-#ifdef CONFIG_SPI_MASTER
-    mcfg.evt = SPI_SERVICE_TYPE_HTOS;
-#endif
-#ifdef CONFIG_SPI_SLAVE
-    mcfg.evt = SPI_SERVICE_TYPE_STOH;
-#endif
-    mcfg.type = SPI_SLAVE_TYPE_WRITE;
-    mcfg.len = p_buf->tot_len;
+    SPI_SERVICE_CHECK_RETURN(smem == NULL, -1, "cannot get mqueue");
+    mcfg.evt = SPI_SEND_DATA_EVENTYPE;
+    mcfg.type = SPI_SEND_MSG_EVENTYPE;
+    mcfg.len = p->tot_len;
     if (spi_service_smem_tx_alloc(&mcfg, smem) == NULL) {
         spi_mqueue_put(smem);
         return -1;
     }
 
-    while (p_buf != NULL) {
-        memcpy((void *)(smem->memAddr + smem->memOffset + offset), p_buf->payload, p_buf->len);
-        offset += p_buf->len;
-        p_buf = p_buf->next;
+    while (p != NULL) {
+        memcpy((void *)(smem->memAddr + smem->memOffset + offset), p->payload, p->len);
+        offset += p->len;
+        p = p->next;
     }
-#ifdef CONFIG_SPI_MASTER
-    spi_master_sendto_peer(smem);
-#endif
-#ifdef CONFIG_SPI_SLAVE
-    spi_slave_sendto_host(smem);
-#endif
+    SPI_SEND_DATA_TO_PEER(smem);
 
     return 0;
 }
 
-int spi_service_send_data(unsigned char *data, unsigned int len)
+static int32_t spi_service_wifi_event_handle(void *ctx, system_event_t *event)
 {
-    spi_service_ctrl_t mcfg;
-    spi_service_mem_t *smem = NULL;
-
-    if (len >= SPI_SERVICE_CONTROL_LEN || len == 0) {
-        os_printf(LM_APP, LL_ERR, "%s[%d] data len(%d) err\n", __FUNCTION__, __LINE__, len);
-        return -1;
-    }
-    smem = spi_mqueue_get();
-    if (smem == NULL) {
-        return -1;
-    }
-#ifdef CONFIG_SPI_MASTER
-    mcfg.evt = SPI_SERVICE_TYPE_HTOS;
-#endif
-#ifdef CONFIG_SPI_SLAVE
-    mcfg.evt = SPI_SERVICE_TYPE_STOH;
-#endif
-    mcfg.type = SPI_SLAVE_TYPE_WRITE;
-    mcfg.len = len;
-    if (spi_service_smem_tx_alloc(&mcfg, smem) == NULL) {
-        spi_mqueue_put(smem);
-        return -1;
-    }
-
-    memcpy((void *)(smem->memAddr + smem->memOffset), data, len);
-#ifdef CONFIG_SPI_MASTER
-    spi_master_sendto_peer(smem);
-#endif
-#ifdef CONFIG_SPI_SLAVE
-    spi_slave_sendto_host(smem);
-#endif
-
+    spi_repeater_wifi_event(ctx, event);
+    spi_service_task_wifi_event(ctx, event);
+    
     return 0;
 }
 
@@ -379,31 +285,18 @@ void spi_service_main(void)
     spi_service_mem_init();
     spi_mqueue_init();
 
+    /* SPI RX: rxprepare=>dataHandle=>rxdone */
+    /* SPI RX: rxprepare=>rxdone(spi driver error) */
+    /* SPI TX: txprepare=>txdone */
     funcset.rxPrepare = spi_service_rx_prepare;
     funcset.rxDone = spi_service_rx_done;
     funcset.txPrepare = spi_service_tx_prepare;
     funcset.txDone = spi_service_tx_done;
-    funcset.dataHandle = spi_service_handle;
-#ifdef CONFIG_SPI_MASTER
-    spi_master_init();
-    spi_master_funcset_register(funcset);
-    tcpip_pbuf_vnet_free(spi_repeater_mem_free);
-    spi_repeater_init();
-#else
-    spi_slave_init(0);
-    spi_slave_funcset_register(funcset);
-#endif
+    funcset.dataHandle = spi_service_rxhandle;
 
-#ifdef CONFIG_VNET_SERVICE
-    vnet_reg_t *vreg = vnet_reg_get_addr();
-    memset(vreg, 0, sizeof(vnet_reg_t));
-    typedef int (*rxl_vnet_packet_parse)(uint16_t type, unsigned char *data);
-    void rxl_vnet_packet_call(rxl_vnet_packet_parse cb);
-    tcpip_pbuf_vnet_handle(vnet_service_wifi_rx);
-    tcpip_pbuf_vnet_free(vnet_service_wifi_rx_free);
-    rxl_vnet_packet_call(vnet_filter_wifi_handle);
-    vnet_set_default_filter(VNET_PACKET_DICTION_HOST);
-    vnet_reg_get_info();
-#endif
+    spi_repeater_init(funcset);
+    spi_service_task_init(funcset);
+
+    /* wifi event user handle after wifi default handle */
+    sys_event_loop_init(spi_service_wifi_event_handle, NULL);
 }
-

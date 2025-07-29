@@ -32,18 +32,18 @@
 #include "iperf_config.h"
 
 #include <stdio.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
 #endif
 #include <string.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <stdarg.h>
 #include <sys/select.h>
 #endif
 #include <sys/types.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <sys/utsname.h>
@@ -52,7 +52,7 @@
 #include <fcntl.h>
 #endif
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include "iperf_cjson.h"
 #else
 #include "cJSON.h"
@@ -67,7 +67,7 @@
  */
 int readentropy(void *out, size_t outsize)
 {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     static FILE *frandom;
     static const char rndfile[] = "/dev/urandom";
 
@@ -205,7 +205,7 @@ timeval_diff(struct timeval * tv0, struct timeval * tv1)
     return time1;
 }
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 void
 cpu_util(double pcpu[3])
 {
@@ -392,7 +392,7 @@ iperf_json_printf(const char *format, ...)
 		case 'b':
 		j = cJSON_CreateBool(va_arg(argp, int));
 		break;
-#ifndef __TR_SW__        
+#ifndef CONFIG_WIRELESS_IPERF_3        
 		case 'd':
 		j = cJSON_CreateNumber(va_arg(argp, int64_t));
 		break;
@@ -423,7 +423,7 @@ iperf_json_printf(const char *format, ...)
     return o;
 }
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 /* Debugging routine to dump out an fd_set. */
 void
 iperf_dump_fdset(FILE *fp, char *str, int nfds, fd_set *fds)
@@ -465,7 +465,7 @@ iperf_dump_fdset(char *str, int nfds, fd_set *fds)
 }
 #endif
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 /*
  * daemon(3) implementation for systems lacking one.
  * Cobbled together from various daemon(3) implementations,
@@ -613,7 +613,7 @@ getline(char **buf, size_t *bufsiz, FILE *fp)
 
 #endif
 
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
 int os_gettimeofday(struct timeval *t)
 {
 	long long cur = os_time_get();

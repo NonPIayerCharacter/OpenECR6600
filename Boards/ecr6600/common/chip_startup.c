@@ -38,17 +38,7 @@ void chip_c_init(void)
 	    *dest++ = 0;
 	}
 }
-
-void hsf_psm_pad_gpio_status_init()
-{
-	WRITE_REG(AON_PAD_PE_REG,0x4dfe0);
-
-	WRITE_REG(AON_PAD_PS_REG,0x3f3201f);
-
-	WRITE_REG(AON_PAD_IE_REG,0x3ffffff);
-
-	WRITE_REG(AON_PAD_MODE_REG,0x20000);
-}
+ 
 
 
 void chip_startup(void)
@@ -57,9 +47,6 @@ extern int main(void);
 	chip_c_init();
 	arch_cpu_init(); 
 	drv_pit_init();
-//#ifdef CONFIG_PSM_SURPORT	
-	psm_set_powerup_pcu_int_status();
-//#endif
 
 #if defined(CONFIG_EFUSE)
 		drv_efuse_init();
@@ -108,7 +95,8 @@ extern int main(void);
 	sys_irq_sw_set();
 #endif
 
-	hsf_psm_pad_gpio_status_init();
-
+#ifdef CONFIG_PSM_SURPORT
+	psm_pad_gpio_status_init();
+#endif
 	main();
 }

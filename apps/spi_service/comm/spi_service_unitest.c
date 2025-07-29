@@ -1,18 +1,20 @@
 #include "spi_service_main.h"
 #include "spi_service.h"
+#include "vnet_register.h"
 #include "cli.h"
 #include "system_wifi.h"
-#ifdef CONFIG_VNET_SERVICE
-#include "vnet_filter.h"
-#include "vnet_int.h"
-
-#define VNET_MAX_PORT_RANGE 65535
 
 #define  STRING_STOP_CHECK(X) \
     if ((*(char *)X) != '\0') { \
         os_printf(LM_APP, LL_INFO, "Not support character %s\n", X); \
         return CMD_RET_FAILURE; \
     }
+
+#ifdef CONFIG_SPI_SLAVE
+#include "vnet_filter.h"
+#include "vnet_int.h"
+
+#define VNET_MAX_PORT_RANGE 65535
 
 static int spi_slave_filter_qeury_test(cmd_tbl_t *t, int argc, char *argv[])
 {
@@ -273,6 +275,60 @@ static int spi_slave_interrupt_handle(cmd_tbl_t *t, int argc, char *argv[])
 CLI_CMD(inter_handle, spi_slave_interrupt_handle, "spi_slave_interrupt_handle", "inter_handle num(0-29)");
 #endif
 
+#ifdef CONFIG_SPI_MASTER
+static int spi_master_read_part_info(cmd_tbl_t *t, int argc, char *argv[])
+{
+    unsigned int regaddr, len;
+    char *stop;
+
+    if (argc != 3) {
+        os_printf(LM_APP, LL_INFO, "spi_read_pinfo regaddr len\n");
+        return CMD_RET_FAILURE;
+    }
+
+    regaddr = strtoul(argv[1], &stop, 0);
+    STRING_STOP_CHECK(stop);
+    len = strtoul(argv[2], &stop, 0);
+    STRING_STOP_CHECK(stop);
+    if (regaddr + len > sizeof(vnet_reg_t)) {
+        os_printf(LM_APP, LL_INFO, "spi_read_pinfo overflow\n");
+        return CMD_RET_FAILURE;
+    }
+
+    spi_master_read_info(regaddr, len);
+
+    return CMD_RET_SUCCESS;
+}
+
+CLI_CMD(spi_read_pinfo, spi_master_read_part_info, "spi_master_read_part_info", "spi_master_read_part_info");
+
+static int spi_master_write_part_info(cmd_tbl_t *t, int argc, char *argv[])
+{
+    unsigned int regaddr, len;
+    char *stop;
+
+    if (argc != 3) {
+        os_printf(LM_APP, LL_INFO, "spi_read_pinfo regaddr len\n");
+        return CMD_RET_FAILURE;
+    }
+
+    regaddr = strtoul(argv[1], &stop, 0);
+    STRING_STOP_CHECK(stop);
+    len = strtoul(argv[2], &stop, 0);
+    STRING_STOP_CHECK(stop);
+    if (regaddr + len > sizeof(vnet_reg_t)) {
+        os_printf(LM_APP, LL_INFO, "spi_read_pinfo overflow\n");
+        return CMD_RET_FAILURE;
+    }
+
+    spi_service_send_part_info(regaddr, len);
+
+    return CMD_RET_SUCCESS;
+}
+
+CLI_CMD(spi_write_pinfo, spi_master_write_part_info, "spi_master_write_part_info", "spi_master_write_part_info");
+#endif
+
 static int spi_slave_msg_send_handle(cmd_tbl_t *t, int argc, char *argv[])
 {
     if (argc != 2) {
@@ -286,81 +342,3 @@ static int spi_slave_msg_send_handle(cmd_tbl_t *t, int argc, char *argv[])
 }
 
 CLI_CMD(spi_msg, spi_slave_msg_send_handle, "spi_slave_msg_send_handle", "spi_slave_msg_send_handle");
-
-
-static int spi_slave_start_sta(cmd_tbl_t *t, int argc, char *argv[])
-{
-    wifi_config_u wifiCfg = {0};
-    wifi_work_mode_e wifi_mode = WIFI_MODE_STA;
-
-    if (argc != 3 && argc != 2) {
-        os_printf(LM_APP, LL_INFO, "spi_sta ssid [pwd]\n");
-        return CMD_RET_FAILURE;
-    }
-    wifi_set_opmode(wifi_mode);
-    snprintf((char *)wifiCfg.sta.ssid, sizeof(wifiCfg.sta.ssid), "%s", argv[1]);
-    if (argc == 3) {
-        snprintf((char *)wifiCfg.sta.password, sizeof(wifiCfg.sta.password), "%s", argv[2]);
-    }
-    wifi_stop_station();
-    wifi_stop_softap();
-    wifi_start_station(&wifiCfg);
-
-    return CMD_RET_SUCCESS;
-}
-
-CLI_CMD(spi_sta, spi_slave_start_sta, "spi_slave_start_sta", "spi_slave_start_sta");
-
-static int spi_slave_start_ap(cmd_tbl_t *t, int argc, char *argv[])
-{
-    wifi_config_u wifiCfg = {0};
-    wifi_work_mode_e wifi_mode = WIFI_MODE_AP;
-
-    if (argc != 3) {
-        os_printf(LM_APP, LL_INFO, "spi_ap ssid pwd\n");
-        return CMD_RET_FAILURE;
-    }
-    wifi_set_opmode(wifi_mode);
-    wifiCfg.ap.channel = WIFI_CHANNEL_1;
-    wifiCfg.ap.authmode = AUTH_WPA_WPA2_PSK;
-    snprintf((char *)wifiCfg.ap.ssid, sizeof(wifiCfg.ap.ssid), "%s", argv[1]);
-    snprintf((char *)wifiCfg.ap.password, sizeof(wifiCfg.ap.password), "%s", argv[2]);
-    wifi_stop_station();
-    wifi_stop_softap();
-    wifi_start_softap(&wifiCfg);
-
-    return CMD_RET_SUCCESS;
-}
-
-CLI_CMD(spi_ap, spi_slave_start_ap, "spi_slave_start_ap", "spi_slave_start_ap");
-
-#ifdef SPI_SERVICE_LOOP_TEST
-static int spi_service_send_loop(cmd_tbl_t *t, int argc, char *argv[])
-{
-    unsigned int data[512];
-    int idx;
-    unsigned int num = 1;
-    char *stop;
-
-    if (argc == 2) {
-        num = strtoul(argv[1], &stop, 0);
-        if (num <= 0) {
-            num = 1;
-        }
-    }
-
-    for (idx = 0; idx < 512; idx++) {
-        data[idx] = idx;
-    }
-
-    do {
-        if (spi_service_send_data((unsigned char *)data, 1460) < 0) {
-            os_msleep(1);
-        }
-    } while (--num);
-
-    return CMD_RET_SUCCESS;
-}
-
-CLI_CMD(spi_service_loop, spi_service_send_loop, "spi_service_send_loop", "spi_service_send_loop");
-#endif

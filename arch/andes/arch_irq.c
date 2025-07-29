@@ -60,7 +60,7 @@ void arch_irq_register(int vector_num, void_fn fn)
 }
 
 #ifndef CONFIG_SYSTEM_IRQ
-unsigned long arch_irq_save( void )
+unsigned long __attribute__((no_ex9, used))arch_irq_save( void )
 {
 	/* By default, the kerenl has the highest priority */
 	/* It's mean that we don't support kernel preemptive */
@@ -73,7 +73,7 @@ unsigned long arch_irq_save( void )
 }
 #endif
 
-void arch_irq_restore( unsigned long flags )
+void __attribute__((no_ex9, used))arch_irq_restore( unsigned long flags )
 {
 	system_irq_restore(flags);
 	/*

@@ -37,12 +37,12 @@ static int wifi_conn_scan(void)
 
     for(retry = 0; retry < 2; retry++) {
         if(wifi_scan_start(1, &scan_cfg) != 0) {
-            os_printf(LM_APP, LL_ERR, "can not scan fac wifi\r\n");
+            SYS_LOGI("can not scan fac wifi");
             continue;
         }
 
         if (wpa_get_scan_num() == 0) {
-            os_printf(LM_APP, LL_ERR, "ap num is 0\r\n");
+            SYS_LOGI("ap num is 0");
             continue;
         }
 
@@ -56,7 +56,7 @@ static int wifi_conn_scan(void)
     }
 
     if(retry == 2) {
-        os_printf(LM_APP, LL_ERR, "enter normal mode \r\n");
+        SYS_LOGI("enter normal mode ");
         return -1;
     }
 
@@ -121,7 +121,7 @@ static void wifi_conn_task(void *arg)
     EventBits_t r_event;
 
     while (!wifi_is_ready()) {
-        os_msleep(50);
+        os_msleep(5);
     }
 
 #ifdef CONFIG_APP_AT_COMMAND
@@ -134,7 +134,7 @@ static void wifi_conn_task(void *arg)
     if ((develop_get_env_blob("local_ssid", CONFIG_WIFI_CONN_SSID, 32, NULL) <= 0) ||
         (develop_get_env_blob("local_password", CONFIG_WIFI_CONN_PASSWD, 32, NULL) <= 0) ||
         (develop_get_env_blob("local_channel", channel_str, 2, NULL) <= 0))  {
-        os_printf(LM_APP, LL_ERR, "Can not find local_ssid or local_password or local_channel in dnv.\n");
+        SYS_LOGD("Can not find local_ssid or local_password or local_channel in dnv");
         memcpy(CONFIG_WIFI_CONN_SSID, "local_ota_test", 14);
         memcpy(CONFIG_WIFI_CONN_PASSWD, "12345678", 8);
         CONFIG_WIFI_CONN_CHANNEL = 7;
@@ -142,38 +142,38 @@ static void wifi_conn_task(void *arg)
     else {
         CONFIG_WIFI_CONN_CHANNEL = atoi(channel_str);
     }
-    os_printf(LM_APP, LL_INFO, "local ota: ssid:%s  password:%s  channel:%d\n", CONFIG_WIFI_CONN_SSID, CONFIG_WIFI_CONN_PASSWD, CONFIG_WIFI_CONN_CHANNEL);
+   SYS_LOGI("local ota: ssid:%s  password:%s  channel:%d", CONFIG_WIFI_CONN_SSID, CONFIG_WIFI_CONN_PASSWD, CONFIG_WIFI_CONN_CHANNEL);
     if (wifi_conn_scan() == 0) {
         if (wifi_conn_set_sta() == 0) {
             r_event = xEventGroupClearBits(os_event_handle, OS_EVENT_STA_REMOVE_NETWORK);
             r_event = xEventGroupWaitBits(os_event_handle, OS_EVENT_STA_GOT_IP | OS_EVENT_STA_REMOVE_NETWORK,
                 pdTRUE, pdFALSE, MS_TO_TICKS(CONFIG_WIFI_CONN_CONNET_TIMEOUT));
             if ((r_event & OS_EVENT_STA_GOT_IP) == OS_EVENT_STA_GOT_IP) {
-                os_printf(LM_APP, LL_INFO, "local ota conn OK.\n");
+                SYS_LOGD("local ota conn OK");
                 is_local_ota_conn = true; //may use os_event to replace global variable later
                 os_task_delete(g_wifi_conn_task_handle);
                 return;
             }
             else if ((r_event & OS_EVENT_STA_REMOVE_NETWORK) == OS_EVENT_STA_REMOVE_NETWORK) {
-                os_printf(LM_APP, LL_INFO, "local ota conn , remove_network by other task.\n");
+                SYS_LOGD( "local ota conn , remove_network by other task");
             }
             else { //after 20s, still can't get ip, and it's not disconnect from other task
-                os_printf(LM_APP, LL_INFO, "local ota conn , get ip fail.\n");
+                os_printf(LM_APP, LL_INFO, "local ota conn , get ip fail");
                 wifi_remove_config_all(STATION_IF);
             }
         }
         else {
-            os_printf(LM_APP, LL_INFO, "local ota conn, set_sta fail.\n");
+            SYS_LOGE("local ota conn, set_sta fail");
         }
     }
     else {
-        os_printf(LM_APP, LL_INFO, "local ota scan fail.\n");
+        SYS_LOGE( "local ota scan fail");
     }
 #endif
 
     if(wifi_load_nv_info(NULL) == SYS_OK) {
         wifi_nv_info_t *wifi_nv_info = get_wifi_nv_info();
-        os_printf(LM_APP, LL_INFO, "load NV ok, start auto:%d.\n", wifi_nv_info->auto_conn);
+        SYS_LOGD("load NV ok, start auto:%d", wifi_nv_info->auto_conn);
         if(1 == wifi_nv_info->auto_conn)
         {
             if (wifi_set_sta_by_nv(NULL) == 0) {
@@ -181,36 +181,22 @@ static void wifi_conn_task(void *arg)
                 r_event = xEventGroupWaitBits(os_event_handle, OS_EVENT_STA_GOT_IP | OS_EVENT_STA_REMOVE_NETWORK,
                     pdTRUE, pdFALSE, MS_TO_TICKS(CONFIG_WIFI_CONN_CONNET_TIMEOUT));
                 if ((r_event & OS_EVENT_STA_GOT_IP) == OS_EVENT_STA_GOT_IP) {
-                    os_printf(LM_APP, LL_INFO, "auto conn , get ip success.\n");
+                    os_printf(LM_APP, LL_INFO, "auto conn , get ip success");
                     is_wifi_conn = true; //may use os_event to replace global variable later
                 }
                 else if ((r_event & OS_EVENT_STA_REMOVE_NETWORK) == OS_EVENT_STA_REMOVE_NETWORK) {
-                    os_printf(LM_APP, LL_INFO, "auto conn , remove_network by other task.\n");
+                    SYS_LOGD( "auto conn , remove_network by other task");
                 }
                 else { //after 20s, still can't get ip, and it's not disconnect from other task
-                    os_printf(LM_APP, LL_INFO, "auto conn , get ip fail.\n");
+                    SYS_LOGE("auto conn , get ip fail");
                     wifi_remove_config_all(STATION_IF);
                 }
             }
             else {
-                os_printf(LM_APP, LL_INFO, "auto conn , set_sta fail.\n");
+               SYS_LOGE("auto conn , set_sta fail");
             }
         }
     }
-#ifdef CONFIG_VNET_SERVICE
-    else
-    {
-        wifi_config_u wificonfig;
-        int ret;
-
-        if (wifi_load_ap_nv_info(&wificonfig.ap) == SYS_OK) {
-            ret = wifi_start_softap(&wificonfig);
-            if (ret != SYS_OK) {
-                os_printf(LM_APP, LL_INFO, "auto conn ap failed (0x%x)\n", ret);
-            }
-        }
-    }
-#endif
 
     os_task_delete(g_wifi_conn_task_handle);
 }

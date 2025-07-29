@@ -5,4 +5,10 @@ ifeq ($(CONFIG_BLE_PRODUCT_BLEFULL),y)
 		VPATH += ble_apps/src/example_netcfg
 		INCPATHS += ble_apps/api ble_apps/src/example_netcfg
 	endif
+
+	ifeq ($(CONFIG_BLE_EXAMPLES_SPI_SERVER),y)
+		CSRCS +=  ble_spi_cmd.c
+		VPATH += ble_apps/src/ble_spi_server
+		INCPATHS += ble_apps/api ble_apps/src/ble_spi_server
+	endif
 endif

@@ -220,10 +220,26 @@
 #define WLAN_REASON_MESH_INCONSISTENT_PARAMS 59
 #define WLAN_REASON_MESH_INVALID_SECURITY_CAP 60
 
-#define WLAN_REASON_4WAY_HANDSHAKE_FAIL       0x1000
-#define WLAN_REASON_AP_NOT_FOUND              0x1001
+//add by eswin: self reason code
+#define WLAN_REASON_4WAY_HANDSHAKE_FAIL      0x1000
+#define WLAN_REASON_AP_NOT_FOUND             0x1001
 /*Synchronize MAC macro -MAC_RX_SELF_DEFINE_FLAG*/
 #define WLAN_RX_SELF_DEFINE_FLAG                  0x8000
+
+/*
+///Synchronize -Mac custom reason code
+typedef enum {
+    MAC_RS_NO_ERROR,
+    MAC_RS_BEACON_LOST, //0x8001
+    MAC_RS_CHAN_MISS_MATCH, //0x8002
+    MAC_RS_WD_SET_DISCONNECT, //0x8003 cover REASON_USER_DISCONNECT
+    MAC_RS_CSA_CHAN_ADD_FAIL,
+    MAC_RS_ENCRYPT_MODE_CHANGE,
+    MAC_RS_AP_CAP_CHANNE,
+    MAC_RS_SEND_NULLDATA_NOACK,
+    MAC_RS_PS_SEND_NULLDATA_FAIL, //0x8008
+} mac_self_reason_code;
+*/
 
 /* Information Element IDs */
 #define WLAN_EID_SSID 0

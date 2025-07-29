@@ -10,9 +10,9 @@
 #include "pit.h"
 #include "efuse.h"
 #include "reg_macro_def.h"
-//#ifdef CONFIG_PSM_SURPORT
+#ifdef CONFIG_PSM_SURPORT
 #include "psm_system.h"
-//#endif
+#endif
 
 //#define CHIP_GET_REG(reg)                (*((volatile unsigned int *) (reg)))
 //#define CHIP_SET_REG(reg, data)         ((*((volatile unsigned int *)(reg)))=(unsigned int)(data))
@@ -204,6 +204,7 @@ void   __attribute__((no_ex9, used))chip_clk_bbpll_enable(void)
 {
 	volatile unsigned int value;
 	WRITE_REG(RF_CTRL_DCXO_REG6,0x01f03201);	//note:eco3 isn't need 
+	
 	while(1)
 	{
 		// 0x00203084	
@@ -224,28 +225,76 @@ void   __attribute__((no_ex9, used))chip_clk_bbpll_enable(void)
 		WRITE_REG(CHIP_RF_PLL_REG20, 0x49e);
 		// 0x00203084
 		WRITE_REG(CHIP_RF_DIG_PLL1, 0x3300);
-		drv_pit_delay(10);
+		drv_pit_delay(5);
 		// 0x00203148
 		WRITE_REG(CHIP_RF_PLL_REG18, 0x1);
-		drv_pit_delay(40);
+		drv_pit_delay(30);
 		WRITE_REG(CHIP_RF_PLL_REG18, 0x0);
+		// 0x0020308c
+		WRITE_REG(CHIP_RF_DIG_PLL3, 0x2e4305a0);
+		// 0x00203088
+		WRITE_REG(CHIP_RF_DIG_PLL2, 0x1a697f74);
+		// 0x00203084	
+		WRITE_REG(CHIP_RF_DIG_PLL1, 0x2300);
+		// 0x00203130	
+		WRITE_REG(CHIP_RF_PLL_REG12, 0x3);
+		drv_pit_delay(10);
+		// 0x0020308c
+		WRITE_REG(CHIP_RF_DIG_PLL3, 0x2ec305a0);
 		value = (READ_REG(0x203158) >> 16) & 0xffff;
 		if(value <= 0x4AE && value >= 0x420)
 		{
 			break;
-		}
+		}else{
+				// 0x00203084	
+				WRITE_REG(CHIP_RF_DIG_PLL1, 0x2300);
+				// // 0x00203130	
+				// WRITE_REG(CHIP_RF_PLL_REG12, 0x6);
+				// // 0x00203130	
+				// WRITE_REG(CHIP_RF_PLL_REG12, 0x2);
+				// 0x00203088
+				WRITE_REG(CHIP_RF_DIG_PLL2, 0x12697f74);
+				// 0x0020308c
+				WRITE_REG(CHIP_RF_DIG_PLL3, 0x0e33c5ac);
+				//0x20315c		
+				WRITE_REG(0x20315c, 0x88);		
+				//0x203154		
+				WRITE_REG(0x203154, 0x210);
+				// 0x00203134
+				WRITE_REG(CHIP_RF_PLL_REG13, 0x37);
+				// 0x00203138
+				WRITE_REG(CHIP_RF_PLL_REG14, 0x00313b13);
+				// 0x00203150
+				WRITE_REG(CHIP_RF_PLL_REG20, 0x376);
+				// 0x00203084
+				//WRITE_REG(CHIP_RF_DIG_PLL1, 0x3300);
+				drv_pit_delay(10);
+				// 0x00203148
+				WRITE_REG(CHIP_RF_PLL_REG18, 0x1);
+				drv_pit_delay(40);
+				WRITE_REG(CHIP_RF_PLL_REG18, 0x0);
+				value = (READ_REG(0x203158) >> 16) & 0xffff;
+				
+			// 0x0020308c
+			WRITE_REG(CHIP_RF_DIG_PLL3, 0x2e330da0);
+			// 0x00203084	
+			WRITE_REG(CHIP_RF_DIG_PLL1, 0x2300);
+			// 0x00203130	
+			WRITE_REG(CHIP_RF_PLL_REG12,0x0);
+			// 0x00203130	
+			WRITE_REG(CHIP_RF_PLL_REG12,0x3);
+			// 0x00203088
+			WRITE_REG(CHIP_RF_DIG_PLL2, 0x1a697f74);
+			drv_pit_delay(10);
+			// 0x0020308c
+			WRITE_REG(CHIP_RF_DIG_PLL3, 0x2eb3c5a0);
+			if(value <= 0x386 && value >= 0x366)
+			{
+					break;
+			}
+	    }
 	}
-	// 0x0020308c
-	WRITE_REG(CHIP_RF_DIG_PLL3, 0x2e4305a0);
-	// 0x00203088
-	WRITE_REG(CHIP_RF_DIG_PLL2, 0x1a697f74);
-	// 0x00203084	
-	WRITE_REG(CHIP_RF_DIG_PLL1, 0x2300);
-	// 0x00203130	
-	WRITE_REG(CHIP_RF_PLL_REG12, 0x3);
-	drv_pit_delay(10);
-	// 0x0020308c
-	WRITE_REG(CHIP_RF_DIG_PLL3, 0x2ec305a0);
+	
 }
 #endif
 
@@ -285,17 +334,11 @@ void  __attribute__((no_ex9, used))chip_clk_init(void)
 		chip_clk_bbpll_enable();
 	}
 
-//#ifdef CONFIG_PSM_SURPORT
-	#ifdef CONFIG_PSM_SWITCH_LOWPOWER	
-	if(MODEM_SLEEP == psm_get_sleep_mode())
-	#endif
-	{
-		unsigned int pit_when_sleep;
-		drv_pit_ioctrl(DRV_PIT_CHN_6, DRV_PIT_CTRL_GET_COUNT, (unsigned int)&pit_when_sleep);
-		psm_pit_when_sleep_op(true, pit_when_sleep);
-
-	}
-//#endif
+#ifdef CONFIG_PSM_SURPORT
+    unsigned int pit_when_sleep;
+    drv_pit_ioctrl(DRV_PIT_CHN_6, DRV_PIT_CTRL_GET_COUNT, (unsigned int)&pit_when_sleep);
+    psm_pit_when_sleep_op(true, pit_when_sleep);
+#endif
 
 #if defined (CONFIG_CPU_CLK_SRC_96M)
 
@@ -309,11 +352,7 @@ void  __attribute__((no_ex9, used))chip_clk_init(void)
 
 	WRITE_REG(CHIP_SMU_PD_CLK_DIV_EN , \
 		value |CHIP_SMU_PD_CLK_DIV2_EN |CHIP_SMU_PD_CLK_DIV3_EN |CHIP_SMU_PD_CLK_UART_TRNG_80M_EN );
-	#ifdef CONFIG_PSM_SWITCH_LOWPOWER
-	WRITE_REG(CHIP_SMU_PD_UART_CLK_SEL , CHIP_SMU_PD_UART_CLK_SEL_40M_26M); //single fire uart choose 26m
-	#else
 	WRITE_REG(CHIP_SMU_PD_UART_CLK_SEL , CHIP_SMU_PD_UART_CLK_SEL_80M);
-	#endif
 	drv_pit_delay(10);
 	value = CHIP_SMU_PD_CORE_CLK_SRC_160M;
 
@@ -385,16 +424,11 @@ void chip_clk_config_40M_26M(void)
 #endif
 #endif
 
-//#ifdef CONFIG_PSM_SURPORT
-	#ifdef CONFIG_PSM_SWITCH_LOWPOWER	
-	if(MODEM_SLEEP == psm_get_sleep_mode())
-	#endif
-	{
-		unsigned int pit_when_sleep;
-		drv_pit_ioctrl(DRV_PIT_CHN_6, DRV_PIT_CTRL_GET_COUNT, (unsigned int)&pit_when_sleep);
-		psm_pit_when_sleep_op(true, pit_when_sleep);
-	}
-//#endif
+#ifdef CONFIG_PSM_SURPORT
+    unsigned int pit_when_sleep;
+    drv_pit_ioctrl(DRV_PIT_CHN_6, DRV_PIT_CTRL_GET_COUNT, (unsigned int)&pit_when_sleep);
+    psm_pit_when_sleep_op(true, pit_when_sleep);
+#endif
 
     value |= CHIP_SMU_PD_CORE_CLK_DIV0;
 

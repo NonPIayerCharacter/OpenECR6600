@@ -550,11 +550,18 @@ void wpa_supplicant_set_state(struct wpa_supplicant *wpa_s,
 			      enum wpa_states state)
 {
 	enum wpa_states old_state = wpa_s->wpa_state;
-
+#if defined(CONFIG_FAST_CONNECT)
+	os_printf(LM_APP, LL_INFO, "%s %d->%d.\n",
+        wpa_s->ifname,
+		wpa_s->wpa_state,
+		state);
+#else
 	os_printf(LM_APP, LL_INFO, "wpa state: %s %s->%s.\n",
         wpa_s->ifname,
 		wpa_supplicant_state_txt(wpa_s->wpa_state),
 		wpa_supplicant_state_txt(state));
+
+#endif
 
 	//if (state == WPA_INTERFACE_DISABLED) {
 		/* Assure normal scan when interface is restored */

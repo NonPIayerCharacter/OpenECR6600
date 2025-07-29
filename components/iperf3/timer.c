@@ -32,11 +32,11 @@
 
 #include "timer.h"
 #include "iperf_time.h"
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
 #include "iperf.h"
 #endif
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 static Timer* timers = NULL;
 static Timer* free_timers = NULL;
 TimerClientData JunkClientData;
@@ -57,7 +57,7 @@ static void getnow(struct iperf_time *nowP, struct iperf_time *nowP2)
         iperf_time_now(nowP2);
 }
 
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
 static void list_add(void *handle, Timer *t)
 {
     Timer* t2;

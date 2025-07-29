@@ -134,7 +134,7 @@ int set_wifi_channel(int argc, char *argv[])
 
     return CMD_RET_SUCCESS;
 }
-#if defined ENABLE_LWIP_NAPT || (CONFIG_SPI_REPEATER && CONFIG_SPI_MASTER)
+#if defined ENABLE_LWIP_NAPT
 extern void napt_debug_print(); 
 static int set_napt(int argc, char *argv[])
 {
@@ -206,7 +206,7 @@ static const struct cli_cmd set_cmd[] = {
 	CMDENTRY(wifi_opmode, set_wifi_opmode, "", ""),
     CMDENTRY(channel, set_wifi_channel, "", ""),
     CMDENTRY(ipinfo, set_ipinfo, "", ""),
-#if defined ENABLE_LWIP_NAPT || (CONFIG_SPI_REPEATER && CONFIG_SPI_MASTER)
+#if defined ENABLE_LWIP_NAPT
     CMDENTRY(napt, set_napt, "", ""),
 #endif
 };

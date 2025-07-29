@@ -920,7 +920,7 @@ int at_net_server_start(server_db_t *param)
 			if (server_tmp->type == param->type && server_tmp->ip_info.src_port == param->ip_info.src_port)
 			{
 				os_printf(LM_APP, LL_INFO, "already have server\n");
-				return 0;
+				return 1;
 			}
         }
     }
@@ -1951,7 +1951,7 @@ NET_POLL_RET at_net_poll(dce_t* dce)
 
                 client->father = server;
 				client->ip_info.dst_port = server->ip_info.src_port;
-                client->ip_info.src_port = clientAddr.sin_port;
+                client->ip_info.src_port = htons(clientAddr.sin_port);
                 ip_2_ip4(&client->ip_info.src_ip)->addr = clientAddr.sin_addr.s_addr;
                 list_add_tail(&client->list, &server->client_list);
 				

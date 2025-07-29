@@ -244,8 +244,6 @@ int local_ota_start(void)
     {
         return -1;
     }
-
-    http_client_instance_init();
     os_printf(LM_APP, LL_INFO, "@@@@@@@@the version %d %d %d %d %d %d\r\n",
         ota_info->version[5], ota_info->version[4], ota_info->version[3],
         ota_info->version[2], ota_info->version[1], ota_info->version[0]);
@@ -313,7 +311,7 @@ int local_ota_start(void)
             update_count = 0;
 
 			os_printf(LM_APP, LL_INFO, "recv_message.url=%s  recv_message.len=%d\n", recv_message.url, recv_message.len);
-            if ((http_client_download_file(recv_message.url, recv_message.len)==0) && (ota_done(1)==0))
+            if ((http_client_download_file(recv_message.url)==0) && (ota_done(1)==0))
             {
                 break;
             }
@@ -351,7 +349,7 @@ static void local_ota_task(void *arg)
 	if(-1 != num )
 	{
 	    os_msleep(2000);
-#ifdef CONFIG_VNET_SERVICE
+#if defined(CONFIG_SPI_SERVICE) && defined(CONFIG_SPI_SLAVE)
 	    extern int vnet_set_default_filter(unsigned char dir);
 	    vnet_set_default_filter(0);
 #endif

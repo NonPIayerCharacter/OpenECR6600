@@ -1232,9 +1232,10 @@ int wpa_supplicant_ap_update_beacon(struct wpa_supplicant *wpa_s)
 }
 
 
-int ap_switch_channel(struct wpa_supplicant *wpa_s,
+int ap_switch_channel(void *ctx,
 		      struct csa_settings *settings)
 {
+    struct wpa_supplicant *wpa_s = ctx;
 #ifdef NEED_AP_MLME
 	if (!wpa_s->ap_iface || !wpa_s->ap_iface->bss[0])
 		return -1;

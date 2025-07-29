@@ -57,6 +57,13 @@ static const T_FLASH_TABLE flash_tables [] =
 	{FLASH_ID_BOYA, spiFlash_BOYA_probe},
 #endif
 
+#ifdef CONFIG_FLASH_GT
+		{FLASH_ID_GT, spiFlash_GT_probe},
+#endif
+
+#ifdef CONFIG_FLASH_KH
+			{FLASH_ID_KH, spiFlash_KH_probe},
+#endif
 
 };
 

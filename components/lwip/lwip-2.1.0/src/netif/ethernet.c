@@ -300,7 +300,7 @@ ethernet_output(struct netif * netif, struct pbuf * p,
   } else
 #endif /* ETHARP_SUPPORT_VLAN && defined(LWIP_HOOK_VLAN_SET) */
   {
-#if defined CONFIG_SPI_MASTER && CONFIG_SPI_REPEATER
+#if defined(CONFIG_SPI_MASTER) && defined(CONFIG_SPI_SERVICE)
     if (pbuf_add_header_force(p, SIZEOF_ETH_HDR) != 0) {
 #else
     if (pbuf_add_header(p, SIZEOF_ETH_HDR) != 0) {

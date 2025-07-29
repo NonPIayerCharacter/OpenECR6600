@@ -23,7 +23,6 @@
 #include "reg_macro_def.h"
 #include "flash.h"
 #include "system_config.h"
-#include "Psm_user.h"
 static E_DRV_UART_NUM     uart_num = E_UART_NUM_1;
 
 struct AT_GPIO_PIN
@@ -42,6 +41,8 @@ static StackType_t	  wakeup_stack[256];
 static StaticTask_t   wakeup_tcb;
 
 extern void psm_at_callback(void_fn cb);
+extern bool psm_set_sleep_mode(unsigned int sleep_mode, unsigned char listen_interval);
+extern unsigned char psm_wifi_listen_interval_op(bool isSet, unsigned char value);
 
 #ifndef TEST_MODE_EXTPAD_RST_EN
 #define TEST_MODE_EXTPAD_RST_EN  0x201214
@@ -494,6 +495,7 @@ dce_result_t dce_handle_SLEEP(dce_t* dce, void* group_ctx, int kind, size_t argc
 {
 #ifdef CONFIG_PSM_SURPORT
 	uint8_t sleep_mode = 0;
+	uint8_t dtim = 0;
     if (kind & DCE_READ)
     {
        /* if(psmCtx.psmFlag == SYS_AMT_MODE)
@@ -528,34 +530,41 @@ dce_result_t dce_handle_SLEEP(dce_t* dce, void* group_ctx, int kind, size_t argc
 			sleep_mode = 0;
 		}
         
+		dtim = psm_wifi_listen_interval_op(false,0);
         arg_t result[] = {
             {ARG_TYPE_NUMBER, .value.number=sleep_mode},
+			{ARG_TYPE_NUMBER, .value.number=dtim},
         };
-        dce_emit_extended_result_code_with_args(dce, "SLEEP", -1, result, 1, 1, false);
+        dce_emit_extended_result_code_with_args(dce, "SLEEP", -1, result, 2, 1, false);
         //dce_emit_extended_result_code(dce, "+SLEEP:0", -1, 1);
     }
-    else if ((kind & DCE_WRITE) && argc == 1 && argv[0].type == ARG_TYPE_NUMBER)
+    else if ((kind & DCE_WRITE) && argc == 2 && argv[0].type == ARG_TYPE_NUMBER)
     {
+		os_printf(LM_APP, LL_INFO, "kind:%d argc:%d type:%d argv1:%d argv2:%d\r\n",kind ,argc, argv[0].type,argv[0].value.number,argv[1].value.number);
+		dtim = argv[1].value.number;
         if(argv[0].value.number == 0)       // disable
         {
-        	psm_sleep_mode_ena_op(true, 0);
+        	/*psm_sleep_mode_ena_op(true, 0);
 			psm_set_psm_enable(0);
 			psm_pwr_mgt_ctrl(0);
-			psm_sleep_mode_ena_op(true, 0);
+			psm_sleep_mode_ena_op(true, 0);*/
+			psm_set_sleep_mode(SLEEP_OFF,0);
             os_printf(LM_APP, LL_INFO, "close sleep\r\n");
         }
         else if(argv[0].value.number == 1)  // 进入lightsleep模式
         {
-			psm_set_psm_enable(1);
+			/*psm_set_psm_enable(1);
 			PSM_SLEEP_SET(LIGHT_SLEEP_EN);
-			PSM_SLEEP_CLEAR(MODEM_SLEEP_EN);
+			PSM_SLEEP_CLEAR(MODEM_SLEEP_EN);*/
+			psm_set_sleep_mode(LIGHT_SLEEP,dtim);
             os_printf(LM_APP, LL_INFO, "set lightsleep\r\n");
         }
         else if(argv[0].value.number == 2)  // 进入modemsleep模式
         {
-			psm_set_psm_enable(1);
+			/*psm_set_psm_enable(1);
 			PSM_SLEEP_SET(MODEM_SLEEP_EN);
-			PSM_SLEEP_CLEAR(LIGHT_SLEEP_EN);
+			PSM_SLEEP_CLEAR(LIGHT_SLEEP_EN);*/
+			psm_set_sleep_mode(MODEM_SLEEP,dtim);
             os_printf(LM_APP, LL_INFO, "set modemsleep\r\n");
         }
         else
@@ -671,6 +680,7 @@ dce_result_t dce_handle_WAKEUPGPIO(dce_t* dce, void* group_ctx, int kind, size_t
             //quxin OUT32(SOC_PCU_CTRL10, IN32(SOC_PCU_CTRL10) & ~(0x1 << 2)); // 关闭上升沿唤醒
             //quxin OUT32(SOC_PCU_CTRL10, IN32(SOC_PCU_CTRL10) & ~(0x1 << 3)); // 关闭下升沿唤醒
 			psm_wake_clear_trigger_level();
+            psm_gpio_wakeup_config(argv[1].value.number, 0);
 			
             dce_emit_basic_result_code(dce, DCE_RC_OK);
             return DCE_OK;
@@ -700,6 +710,7 @@ dce_result_t dce_handle_WAKEUPGPIO(dce_t* dce, void* group_ctx, int kind, size_t
             //quxin OUT32(SOC_PCU_CTRL10, IN32(SOC_PCU_CTRL10) & ~(0x1 << 2)); // 关闭上升沿唤醒
             //quxin OUT32(SOC_PCU_CTRL10, IN32(SOC_PCU_CTRL10) & ~(0x1 << 3)); // 关闭下升沿唤醒
 			psm_wake_clear_trigger_level();
+            psm_gpio_wakeup_config(argv[1].value.number, 0);
 			clear_pin_mode();
             dce_emit_basic_result_code(dce, DCE_RC_OK);
             return DCE_OK;
@@ -1018,23 +1029,6 @@ dce_result_t dce_handle_SYSADC(dce_t* dce, void* group_ctx, int kind, size_t arg
 }
 
 #define GPIO_GET_MODE(reg, offset, mask) ((READ_REG(reg)>>offset)&mask)
-
-void MqttReadLed(void){
-	struct _iomux cfg = {0,0,0};
-	get_iomux_cfg(GPIO_NUM_3, &cfg);
-	PIN_MUX_SET(cfg.reg, cfg.msk, cfg.off, 1);
-	drv_gpio_ioctrl(GPIO_NUM_3, DRV_GPIO_CTRL_PULL_TYPE, DRV_GPIO_ARG_PULL_DOWN);
-	hal_gpio_dir_set(GPIO_NUM_3, 1);
-	hal_gpio_write(GPIO_NUM_3, 0);
-
-	struct _iomux cfg_4 = {0,0,0};
-	get_iomux_cfg(GPIO_NUM_4, &cfg_4);
-	PIN_MUX_SET(cfg_4.reg, cfg_4.msk, cfg_4.off, 1);
-	drv_gpio_ioctrl(GPIO_NUM_4, DRV_GPIO_CTRL_PULL_TYPE, DRV_GPIO_ARG_PULL_DOWN);
-	hal_gpio_dir_set(GPIO_NUM_4, 1);
-	hal_gpio_write(GPIO_NUM_4, 0);
-	
-}
 
 dce_result_t dce_handle_SYSIOSETCFG(dce_t* dce, void* group_ctx, int kind, size_t argc, arg_t* argv)
 {
@@ -1457,34 +1451,6 @@ dce_result_t dce_handle_SYSFLASH(dce_t *dce, void *group_ctx, int kind, size_t a
     return DCE_OK;
 }
 
-extern uint8_t psm_usr_sleep_mode_status;
-dce_result_t dce_handle_SYS_LIGHTSEELP(dce_t* dce, void* group_ctx, int kind, size_t argc, arg_t* argv)
-{
-	uint16_t time  = argv[0].value.number;
-	target_dce_transmit("[DA]SLEEP:1\r\n", strlen("[DA]SLEEP:1\r\n"));
-	os_printf(LM_APP, LL_INFO, "dce_handle_SYS_SEELP(%d)=%s\r\n",time,argv[0].value.string);
-	psm_set_sleep_mode(LIGHT_SLEEP,7);
-	psm_usr_sleep_mode_status = 1;
-	return DCE_OK;
-}
-
-dce_result_t dce_handle_SYS_VER(dce_t* dce, void* group_ctx, int kind, size_t argc, arg_t* argv)
-{
-	char line[32] = {0};
-    if (kind == DCE_READ)
-    {
-        sprintf(line, "VER:W0327.1.2");
-        dce_emit_extended_result_code(dce, line, -1, 1);
-    }
-    else
-    {
-        dce_emit_basic_result_code(dce, DCE_RC_ERROR);
-        return DCE_OK;
-    }
-    dce_emit_basic_result_code(dce, DCE_RC_OK);
-	return DCE_OK;
-}
-
 dce_result_t dce_handle_SYSTEMP(dce_t *dce, void *group_ctx, int kind, size_t argc, arg_t *argv)
 {
     char line[32] = {0};
@@ -1505,13 +1471,12 @@ dce_result_t dce_handle_SYSTEMP(dce_t *dce, void *group_ctx, int kind, size_t ar
 
 static const command_desc_t basic_commands[] = {
     {"SYSRAM",       &dce_handle_SYSRAM,       DCE_READ},
-    {"VER",    	 &dce_handle_SYS_VER,       DCE_READ},
+    // {"SYSADC",    &dce_handle_SYSADC,       DCE_READ},
     {"SYSIOSETCFG",  &dce_handle_SYSIOSETCFG,  DCE_WRITE},
     {"SYSIOGETCFG",  &dce_handle_SYSIOGETCFG,  DCE_READ},
     {"SYSGPIODIR",   &dce_handle_SYSGPIODIR,   DCE_WRITE},
     {"SYSGPIOWRITE", &dce_handle_SYSGPIOWRITE, DCE_WRITE},
     {"SYSGPIOREAD",  &dce_handle_SYSGPIOREAD,  DCE_READ},
-    {"SYS_SLEEP",  	 &dce_handle_SYS_LIGHTSEELP,  DCE_WRITE},
 //    {"SYSMSG_CUR",   &dce_handle_SYSMSG_CUR,   DCE_READ},
 //    {"SYSMSG_DEF",   &dce_handle_SYSMSG_DEF,   DCE_READ},
     {"SYSTEMP",      &dce_handle_SYSTEMP,      DCE_READ},
@@ -1521,8 +1486,8 @@ static const command_desc_t basic_commands[] = {
     {"RESTORE",      &dce_handle_RESTORE,      DCE_EXEC },
     {"GMR",          &dce_handle_GMR,          DCE_EXEC },
 //    {"GSLP",         &dce_handle_GSLP,         DCE_WRITE },
-//    {"SLEEP",        &dce_handle_SLEEP,        DCE_READ | DCE_WRITE },
-//    {"WAKEUPGPIO",   &dce_handle_WAKEUPGPIO,   DCE_WRITE },
+    {"SLEEP",        &dce_handle_SLEEP,        DCE_READ | DCE_WRITE },
+    {"WAKEUPGPIO",   &dce_handle_WAKEUPGPIO,   DCE_WRITE },
     {"CMD",          &dce_handle_CMD,          DCE_EXEC},
 };
 

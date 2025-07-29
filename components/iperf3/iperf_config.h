@@ -1,7 +1,7 @@
 /* src/iperf_config.h.in.  Generated from configure.ac by autoheader.  */
 
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 /* Define to 1 if you have the `clock_gettime' function. */
 #undef HAVE_CLOCK_GETTIME
 

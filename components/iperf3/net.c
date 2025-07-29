@@ -28,19 +28,19 @@
 
 #include <stdio.h>
 #include <unistd.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <errno.h>
 #endif
 #include <sys/socket.h>
 #include <sys/types.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <assert.h>
 #endif
 #include <netdb.h>
 #include <string.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <fcntl.h>
 #include <limits.h>
 #endif
@@ -178,7 +178,7 @@ netdial(int domain, int proto, char *local, int local_port, char *server, int po
 	    lcladdr->sin_addr.s_addr = INADDR_ANY;
 	    addrlen = sizeof(struct sockaddr_in);
 	}
-#if !defined(__TR_SW__) || LWIP_IPV6
+#if !defined(CONFIG_WIRELESS_IPERF_3) || LWIP_IPV6
 	/* IPv6 */
 	else if (server_res->ai_family == AF_INET6) {
 	    struct sockaddr_in6 *lcladdr = (struct sockaddr_in6 *) &lcl;
@@ -241,7 +241,7 @@ netannounce(int domain, int proto, char *local, int port)
      * On FreeBSD, under the above circumstances, ai_family in the
      * result structure is set to AF_INET6.
      */
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     if (domain == AF_UNSPEC && !local) {
 	hints.ai_family = AF_INET6;
     }
@@ -369,7 +369,7 @@ Nwrite(int fd, const char *buf, size_t count, int prot)
                 printf("%s[%d]mem not enough, please check..\n", __FUNCTION__, __LINE__);
                 return NET_SOFTERROR;
             }
-            os_msleep(10);
+            os_msleep(1);
             r = 0;
 	        break;
 		case EINTR:
@@ -394,7 +394,7 @@ Nwrite(int fd, const char *buf, size_t count, int prot)
 }
 
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 int
 has_sendfile(void)
 {
@@ -482,7 +482,7 @@ setnonblocking(int fd, int nonblocking)
 
     flags = fcntl(fd, F_GETFL, 0);
     if (flags < 0) {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
         perror("fcntl(F_GETFL)");
 #else
         printf("fcntl(F_GETFL)%d,%d\n", fd, flags);
@@ -494,7 +494,7 @@ setnonblocking(int fd, int nonblocking)
     else
 	newflags = flags & ~((int) O_NONBLOCK);
     if (newflags != flags)
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	if (fcntl(fd, F_SETFL, newflags) < 0) {
 	    perror("fcntl(F_SETFL)");
 #else

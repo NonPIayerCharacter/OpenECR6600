@@ -57,14 +57,14 @@ static int run(struct iperf_test *test);
 
 
 /**************************************************************************/
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 int main(int argc, char **argv)
 #else
 int iperf3_main(int argc , char *argv[])
 #endif
 {
     struct iperf_test *test;
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
     int ret = CMD_RET_SUCCESS;
 #endif
 
@@ -108,11 +108,11 @@ int iperf3_main(int argc , char *argv[])
     iperf_defaults(test);    /* sets defaults */
 
     if ((ret = iperf_parse_arguments(test, argc, argv)) < 0) {
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
         if (ret != -2)
 #endif
         iperf_err(test, "parameter error - %s", iperf_strerror(i_errno));
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
         fprintf(stderr, "\n");
         usage_long(stdout);
         exit(1);
@@ -128,21 +128,21 @@ int iperf3_main(int argc , char *argv[])
 
     if (run(test) < 0) {
         iperf_errexit(test, "error - %s", iperf_strerror(i_errno));
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
     ret = CMD_RET_FAILURE;
 #endif
     }
 
     iperf_free_test(test);
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     return 0;
 #else
     return ret;
 #endif
 }
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 static jmp_buf sigend_jmp_buf;
 
 static void __attribute__ ((noreturn))
@@ -156,7 +156,7 @@ sigend_handler(int sig)
 static int
 run(struct iperf_test *test)
 {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     /* Termination signals. */
     iperf_catch_sigend(sigend_handler);
     if (setjmp(sigend_jmp_buf))
@@ -168,7 +168,7 @@ run(struct iperf_test *test)
 
     switch (test->role) {
         case 's':
-#ifndef __TR_SW__            
+#ifndef CONFIG_WIRELESS_IPERF_3
         if (test->daemon) {
         int rc;
         rc = daemon(0, 0);
@@ -193,10 +193,11 @@ run(struct iperf_test *test)
                 os_msleep(10);
             }
             iperf_reset_test(test);
+            vTaskPrioritySet(xTaskGetCurrentTaskHandle(), LWIP_IPERF_TASK_PRIORITY);
             if (iperf_get_test_one_off(test))
                 break;
         }
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
         iperf_delete_pidfile(test);
 #endif
             break;
@@ -213,7 +214,7 @@ run(struct iperf_test *test)
             break;
     }
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     iperf_catch_sigend(SIG_DFL);
     signal(SIGPIPE, SIG_DFL);
 #endif
@@ -222,7 +223,7 @@ run(struct iperf_test *test)
 }
 
 #if 0
-//#ifdef __TR_SW__
+//#ifdef CONFIG_WIRELESS_IPERF_3
 iperf3_test_status_e iperf3_run_status = IPERF3_STATUS_IDLE;
 int iperf_task_handle = 0;
 char ipef3_clibuf[512] = {0};

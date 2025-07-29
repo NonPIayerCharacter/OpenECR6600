@@ -290,7 +290,7 @@ err_t
 tcpip_input(struct pbuf *p, struct netif *inp)
 {
     if (g_lwip_vnet_handle != NULL) {
-        if (g_lwip_vnet_handle(p) != 0) {
+        if (g_lwip_vnet_handle(p, inp) != 0) {
             return 0;
         }
     }

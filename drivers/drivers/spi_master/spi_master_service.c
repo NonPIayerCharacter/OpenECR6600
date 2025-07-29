@@ -23,7 +23,7 @@ spi_service_mem_t g_drop_smem;
     }
 
 typedef struct {
-    unsigned int spiDmaCh;
+    int spiDmaCh;
     os_timer_handle_t spiDmaTimer;
     os_sem_handle_t spiBusSem;
     os_sem_handle_t spiIrqSem;
@@ -39,54 +39,15 @@ typedef struct {
 
 spi_master_priv_t g_spi_priv;
 
-#ifdef SPI_MASTER_DEBUG
-typedef struct {
-    spi_service_event_e state;
-    spi_service_mem_t smem;
-    spi_service_ctrl_t ctrl;
-} spi_master_debug_t;
-
-spi_master_debug_t g_mdebug[128];
-unsigned int g_mdbg_num;
-
-static void spi_master_debug_add(void)
-{
-    spi_master_priv_t *priv = &g_spi_priv;
-    spi_master_debug_t *dbg = &g_mdebug[g_mdbg_num++];
-
-    dbg->state = priv->state;
-    dbg->smem = *(priv->currMem);
-    dbg->ctrl = priv->spiCtlBuff[0];
-
-    if (g_mdbg_num == 128) {
-        g_mdbg_num = 0;
-    }
-}
-
-static void spi_master_debug_dump(void)
-{
-    unsigned int flags = arch_irq_save();
-    spi_master_debug_t *dbg = NULL;
-    int inx;
-
-    os_printf(LM_APP, LL_ERR, "################%d#################\n", g_mdbg_num - 1);
-    for (inx = 0; inx < 128; inx++) {
-        dbg = &g_mdebug[inx];
-        os_printf(LM_APP, LL_ERR, "event%4d  %d\n", inx, dbg->state);
-        os_printf(LM_APP, LL_ERR, "ctrl     0x%x:%d:%d\n", dbg->ctrl.evt, dbg->ctrl.len, dbg->ctrl.type);
-        os_printf(LM_APP, LL_ERR, "data     0x%x:%d:%d\n", dbg->smem.memType, dbg->smem.memLen, dbg->smem.memSlen);
-    }
-    os_printf(LM_APP, LL_ERR, "###################################\n");
-    arch_irq_restore(flags);
-    while(1);
-}
-#endif
-
-void spi_master_sendto_peer(spi_service_mem_t *smem)
+int spi_master_sendto_slave(spi_service_mem_t *smem)
 {
     spi_master_priv_t *priv = &g_spi_priv;
 
-    os_queue_send(priv->spiQueue, (char *)&smem, sizeof(spi_service_mem_t *), WAIT_FOREVER);
+    if (priv->spiQueue != NULL) {
+        return os_queue_send(priv->spiQueue, (char *)&smem, sizeof(spi_service_mem_t *), 0);
+    }
+
+    return -1;
 }
 
 static void spi_master_data_handle(void)
@@ -221,9 +182,7 @@ static void spi_master_rx_data_start(void)
     spi_master_priv_t *priv = &g_spi_priv;
     T_DMA_CFG_INFO dmaInfo;
     unsigned int transLen;
-#ifdef SPI_MASTER_DEBUG
-    spi_master_debug_add();
-#endif
+
     while (((spiReg->status) & SPI_STATUS_BUSY) == SPI_STATUS_BUSY);
     spi_master_clear_fifo();
 
@@ -253,9 +212,6 @@ void spi_master_tx_data_start(void)
     T_DMA_CFG_INFO dmaInfo;
     unsigned int transLen;
 
-#ifdef SPI_MASTER_DEBUG
-    spi_master_debug_add();
-#endif
     while (((spiReg->status) & SPI_STATUS_BUSY) == SPI_STATUS_BUSY);
     spi_master_clear_fifo();
 
@@ -293,15 +249,9 @@ static void spi_master_gpio_int_handle(void *arg)
     os_sem_post(priv->spiIrqSem);
 }
 
-static void spi_master_pinmux_set(void)
+void spi_master_gpio_init(void)
 {
     spi_master_priv_t *priv = &g_spi_priv;
-
-    chip_clk_enable(CLK_SPI1_APB);
-    PIN_FUNC_SET(IO_MUX_GPIO0, FUNC_GPIO0_SPI1_CLK);
-    PIN_FUNC_SET(IO_MUX_GPIO1, FUNC_GPIO1_SPI1_CS0);
-    PIN_FUNC_SET(IO_MUX_GPIO2, FUNC_GPIO2_SPI1_MOSI);
-    PIN_FUNC_SET(IO_MUX_GPIO3, FUNC_GPIO3_SPI1_MIS0);
 
     priv->gpioCall.gpio_callback = spi_master_gpio_int_handle;
     priv->gpioCall.gpio_data = priv;
@@ -310,6 +260,15 @@ static void spi_master_pinmux_set(void)
     drv_gpio_ioctrl(SPI_SERVICE_GPIO_NUM(SPI_MASTER_GPIO), DRV_GPIO_CTRL_INTR_MODE, DRV_GPIO_ARG_INTR_MODE_HIGH);
     drv_gpio_ioctrl(SPI_SERVICE_GPIO_NUM(SPI_MASTER_GPIO), DRV_GPIO_CTRL_REGISTER_ISR, (int)&priv->gpioCall);
     drv_gpio_ioctrl(SPI_SERVICE_GPIO_NUM(SPI_MASTER_GPIO), DRV_GPIO_CTRL_INTR_ENABLE, DRV_GPIO_CTRL_INTR_ENABLE);
+}
+
+static void spi_master_pinmux_set(void)
+{
+    chip_clk_enable(CLK_SPI1_APB);
+    PIN_FUNC_SET(IO_MUX_GPIO0, FUNC_GPIO0_SPI1_CLK);
+    PIN_FUNC_SET(IO_MUX_GPIO1, FUNC_GPIO1_SPI1_CS0);
+    PIN_FUNC_SET(IO_MUX_GPIO2, FUNC_GPIO2_SPI1_MOSI);
+    PIN_FUNC_SET(IO_MUX_GPIO3, FUNC_GPIO3_SPI1_MIS0);
 }
 
 int spi_master_read_data(unsigned int *data, unsigned int len)
@@ -411,10 +370,6 @@ static int spi_master_send_packet(spi_service_mem_t *smem)
         }
         os_sem_post(priv->spiBusSem);
         os_printf(LM_OS, LL_ERR, "spi send state timeout.\n");
-#ifdef SPI_MASTER_DEBUG
-        spi_master_debug_add();
-        spi_master_debug_dump();
-#endif
         return -1;
     }
 
@@ -426,10 +381,6 @@ static int spi_master_send_packet(spi_service_mem_t *smem)
             }
             os_sem_post(priv->spiBusSem);
             os_printf(LM_OS, LL_ERR, "DMA send not match memLen %d-%d\n", smem->memLen, state);
-#ifdef SPI_MASTER_DEBUG
-            spi_master_debug_add();
-            spi_master_debug_dump();
-#endif
             return -1;
         } else {
             os_sem_post(priv->spiBusSem);
@@ -443,7 +394,7 @@ static int spi_master_send_packet(spi_service_mem_t *smem)
     return 0;
 }
 
-void spi_master_read_info(unsigned int len)
+void spi_master_read_info(unsigned int regaddr, unsigned int len)
 {
     spi_master_priv_t *priv = &g_spi_priv;
     spi_service_ctrl_t *cfg = priv->spiCtlBuff;
@@ -455,7 +406,7 @@ void spi_master_read_info(unsigned int len)
         return;
     }
 
-    cfg->evt = SPI_SERVICE_TYPE_INFO;
+    cfg->evt = regaddr;
     cfg->len = len;
     cfg->type = SPI_MASTER_TYPE_READ;
     spi_master_write_data((unsigned int *)cfg, sizeof(spi_service_ctrl_t));
@@ -500,21 +451,18 @@ static void spi_master_read_packet(void)
     state = spi_master_read_state();
     if ((state & 0x10000) == 0) {
         os_sem_post(priv->spiBusSem);
-#ifdef SPI_MASTER_DEBUG
-        spi_master_debug_add();
-        spi_master_debug_dump();
-#endif
         os_printf(LM_OS, LL_ERR, "spi read state timeout.\n");
         return;
     }
 
-    if ((state & SPI_SERVICE_CONTROL_MSG) == SPI_SERVICE_CONTROL_MSG) {
+    if ((state & SPI_SERVICE_DATA_MSG) == SPI_SERVICE_DATA_MSG) {
         cfg->evt = SPI_SERVICE_TYPE_MSG;
-        cfg->len = state & 0xFFF;
-    } else if ((state & SPI_SERVICE_CONTROL_INT) == SPI_SERVICE_CONTROL_INT) {
+        cfg->len = state & SPI_SERVICE_MASK_DAT;
+    } else if ((state & SPI_SERVICE_DATA_INT) == SPI_SERVICE_DATA_INT) {
         cfg->evt = SPI_SERVICE_TYPE_INT;
+        cfg->len = state & SPI_SERVICE_MASK_DAT;
     } else {
-        cfg->len = state & 0xFFFF;
+        cfg->len = state & SPI_SERVICE_MASK_DAT;
     }
 
     if (cfg->len == 0 && cfg->evt != SPI_SERVICE_TYPE_INT) {
@@ -636,15 +584,3 @@ int spi_master_init(void)
 
     return 0;
 }
-
-#ifdef SPI_MASTER_DEBUG
-static int spi_master_debug_get(cmd_tbl_t *t, int argc, char *argv[])
-{
-    spi_master_debug_dump();
-
-    return CMD_RET_SUCCESS;
-}
-
-CLI_CMD(spi_master_debug, spi_master_debug_get, "spi_master_debug_get", "spi_master_debug_get");
-#endif
-

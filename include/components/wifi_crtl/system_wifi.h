@@ -74,6 +74,8 @@ typedef enum {
     AUTH_WPA_PSK,       /**< authenticate mode : WPA_PSK */
     AUTH_WPA2_PSK,      /**< authenticate mode : WPA2_PSK */
     AUTH_WPA_WPA2_PSK,  /**< authenticate mode : WPA_WPA2_PSK */
+    AUTH_WPA3_PSK,      /**< authenticate mode : WPA3_PSK */
+    AUTH_WPA2_WPA3_PSK, /**< authenticate mode : WPA2_WPA3_PSK */
     AUTH_MAX
 } wifi_auth_mode_e;
 
@@ -320,14 +322,15 @@ sys_err_t wifi_set_ap_sta_num(const unsigned char num);
 sys_err_t wifi_get_conn_ap_rssi(char *rssi);
 int wifi_set_country_code(const char *p_country_code);
 int wifi_get_country_code(char *p_country_code);
+uint16_t wifi_get_sta_reason_code();
 
 int wifi_set_scan_method(wifi_scan_method_e method);
 int wifi_get_scan_method(wifi_scan_method_e *method);
-#ifdef CONFIG_VNET_SERVICE
-void wpa_get_ap_info(char *ap_ssid, char *passwd, uint8_t *channel, wifi_auth_mode_e *auth);
-#endif
 
 sys_err_t wifi_request_disconnect(const int vif);
+uint16_t wifi_channel_to_freq(int channel);
+int wifi_set_ap_csa(unsigned short channel, unsigned char csa_count, unsigned char blocktx);
+void wifi_softap_channel_sync(void);
 
 #ifdef __cplusplus
 }

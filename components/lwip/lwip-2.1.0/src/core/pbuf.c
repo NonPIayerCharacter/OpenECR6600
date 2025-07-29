@@ -732,7 +732,7 @@ u8_t
 pbuf_free(struct pbuf *p)
 {
     if (g_pbuf_vnet_free)
-        if (g_pbuf_vnet_free(p) != 0)
+        if (g_pbuf_vnet_free(p, NULL) != 0)
             return 0;
 
   u8_t alloc_src;

@@ -780,7 +780,7 @@ struct wpa_config {
 	/**
 	 * changed_parameters - Bitmap of changed parameters since last update
 	 */
-	//unsigned int changed_parameters;
+	unsigned int changed_parameters;
 
 	/**
 	 * disassoc_low_ack - Disassocicate stations with massive packet loss

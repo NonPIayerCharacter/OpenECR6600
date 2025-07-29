@@ -23,6 +23,9 @@
 #else
 #define wpa_set_eth_eapol_enc(...)
 #endif
+#include "system_config.h"
+#include "../wpa_supplicant/wpas_pmk.h"
+
 
 static const u8 null_rsc[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
@@ -1121,6 +1124,17 @@ static void wpa_supplicant_process_3_of_4(struct wpa_sm *sm,
 #endif /* CONFIG_P2P */
 
 #ifdef CONFIG_ECR6600
+#if defined(CONFIG_IEEE80211W) && defined(CONFIG_NV)
+        if (ie.igtk) {
+            int keylen = wpa_cipher_key_len(sm->pairwise_cipher);
+            if(hal_system_set_config(CUSTOMER_NV_WIFI_STA_WPA3_PTK, sm->ptk.tk, keylen) < 0)
+                os_printf(LM_APP, LL_INFO, "wpa set wpa3_ptk fail!\n");
+        }
+        else {
+               hal_system_del_config(CUSTOMER_NV_WIFI_STA_WPA3_PTK);
+        }
+
+#endif
         if (key_info & WPA_KEY_INFO_INSTALL) {
             if (wpa_supplicant_install_ptk(sm, key))
                 goto failed;
@@ -2176,7 +2190,7 @@ void wpa_sm_notify_disassoc(struct wpa_sm *sm)
 
 	/* Keys are not needed in the WPA state machine anymore */
 	wpa_sm_drop_sa(sm);
-
+    wpas_pmk_info_clean();
 	sm->msg_3_of_4_ok = 0;
 }
 

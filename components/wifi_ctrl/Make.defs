@@ -23,3 +23,7 @@ else
 				$(TOPDIR)/PS/wifi/common/include \
 
 endif
+
+ifeq ($(CONFIG_FAST_CONNECT),y)
+	CFLAGS += -DCONFIG_FAST_CONNECT
+endif

@@ -28,7 +28,7 @@
 #define __IPERF_UTIL_H
 
 #include "iperf_config.h"
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include "iperf_cjson.h"
 #include <sys/select.h>
 #else
@@ -50,7 +50,7 @@ int timeval_equals(struct timeval *tv0, struct timeval *tv1);
 
 double timeval_diff(struct timeval *tv0, struct timeval *tv1);
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 void cpu_util(double pcpu[3]);
 
 const char* get_system_info(void);
@@ -60,13 +60,13 @@ const char* get_optional_features(void);
 
 cJSON* iperf_json_printf(const char *format, ...);
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 void iperf_dump_fdset(FILE *fp, char *str, int nfds, fd_set *fds);
 #else
 void iperf_dump_fdset(char *str, int nfds, fd_set *fds);
 #endif
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #ifndef HAVE_DAEMON
 extern int daemon(int nochdir, int noclose);
 #endif /* HAVE_DAEMON */
@@ -76,7 +76,7 @@ extern int daemon(int nochdir, int noclose);
 ssize_t getline(char **buf, size_t *bufsiz, FILE *fp);
 #endif /* HAVE_GETLINE */
 
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
 int os_gettimeofday(struct timeval *t);
 #endif
 #endif

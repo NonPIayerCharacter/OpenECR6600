@@ -39,6 +39,14 @@ ifeq ($(CONFIG_FLASH_BOYA),y)
 	CSRCS += flash_BOYA.c
 endif
 
+ifeq ($(CONFIG_FLASH_GT),y)
+	CSRCS += flash_GT.c
+endif
+
+ifeq ($(CONFIG_FLASH_KH),y)
+	CSRCS += flash_KH.c
+endif
+
 VPATH += :drivers/flash/flashid
 	
 INCPATHS +=drivers/flash/flashid

@@ -156,7 +156,7 @@ int hal_rtc_utctime_to_date(int utc_time, DATE_RTC * date) //sec --struct
 	{
 		if(IS_LEAP_YEAR(date->year))
 		{
-			if(utc_time < SEC_NUM_YEAR)
+			if(utc_time < SEC_NUM_LEAR_YEAR)
 				break;				
 			utc_time -= SEC_NUM_LEAR_YEAR;
 		}

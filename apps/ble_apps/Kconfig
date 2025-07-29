@@ -8,10 +8,9 @@ choice
 	config BLE_EXAMPLES_NETCFG_SLAVE
 		depends on BLE_PRODUCT_BLEFULL
 		bool "ble netcfg example as slave"
-	
-	config BLE_TUYA_ADAPTER
-		depends on BLE_PRODUCT_BLEFULL
-		bool "ble tuya adapter"
 
+	config BLE_EXAMPLES_SPI_SERVER
+		depends on BLE_PRODUCT_BLEFULL
+		bool "ble spi server"
 endchoice
 

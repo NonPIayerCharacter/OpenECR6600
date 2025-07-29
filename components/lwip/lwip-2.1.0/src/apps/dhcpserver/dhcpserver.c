@@ -217,7 +217,7 @@ static u8_t* add_offer_options(u8_t* optptr)
 
 #ifdef USE_DNS
 	*optptr++ = DHCP_OPTION_DNS_SERVER;
-#if defined ENABLE_LWIP_NAPT || (CONFIG_SPI_REPEATER && CONFIG_SPI_MASTER)
+#if defined ENABLE_LWIP_NAPT
 	*optptr++ = 8;
 
 	#if LWIP_IPV4 && LWIP_IPV6

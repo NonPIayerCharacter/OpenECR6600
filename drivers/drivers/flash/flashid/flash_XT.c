@@ -119,33 +119,58 @@ static int spiFlash_XT_check_addr(unsigned int flash_id, int addr, int length)
  */
 int spiFlash_XT_OTP_Read_CMD(struct _T_SPI_FLASH_DEV * p_flash_dev, int addr, int length,unsigned char *pdata)
 {
-	unsigned int *p_dst_buffer = (unsigned int *)pdata;
+	int i,rx_num;
+	unsigned int data;	//word aligned
+	unsigned int * rxBuf;
 
 	spiFlash_format_addr(SPIFLASH_CMD_OTP_RD, addr, 
 						SPI_TRANSCTRL_CMD_EN |SPI_TRANSCTRL_ADDR_EN 
 						 |SPI_TRANSCTRL_TRAMODE_DR	|SPI_TRANSCTRL_DUMMY_CNT_1
 						 |SPI_TRANSCTRL_DUALQUAD_REGULAR |SPI_TRANSCTRL_RCNT(length-1));
 	
-	unsigned int Rxcount = 0;
-	unsigned int i;
-	unsigned int data = FLASH_SPI_REG->status;
-	while( data & SPI_STATUS_BUSY )
-	{			
-		if (!(data & SPI_STATUS_RXEMPTY))
+	if(((unsigned int)pdata%4==0) && ((unsigned int) length % 4 == 0))
+	{
+		rxBuf = (unsigned int *)pdata;
+		data = (length+3)/4;
+
+		while((FLASH_SPI_REG->status & SPI_STATUS_BUSY) == 1)
 		{
-			Rxcount = ((data & 0x00001f00)>>8) ;
-			for (i = 0; i < Rxcount; i++) 
+			rx_num = ((FLASH_SPI_REG->status) >> 8) & 0x1F;
+			rx_num = MIN(rx_num , data);
+
+			for(i=0; i<rx_num; i++)
 			{
-				*p_dst_buffer++ = FLASH_SPI_REG->data;
+				*rxBuf++ = FLASH_SPI_REG->data;
+			}
+
+			data -= rx_num;
+
+			if(data == 0)
+			{
+				return FLASH_RET_SUCCESS;
 			}
 		}
-		data = FLASH_SPI_REG->status;
-	}
 
-	Rxcount = ((data & 0x00001f00)>>8) ;
-	for (i = 0; i < Rxcount; i++) 
+		for(i=0; i<data; i++)
+		{
+			*rxBuf++ = FLASH_SPI_REG->data;
+		}
+	}
+	else
 	{
-		*p_dst_buffer++ = FLASH_SPI_REG->data;
+		while(length)
+		{
+			rx_num = MIN(4, length);
+			SPI_WAIT_RX_READY(FLASH_SPI_REG->status);
+			data = FLASH_SPI_REG->data;
+
+			for(i=0; i<rx_num; i++)
+			{
+				*pdata++ = (unsigned char)data;
+				data >>= 8;
+				length--;
+			}
+		}
 	}
 
 	return FLASH_RET_SUCCESS;

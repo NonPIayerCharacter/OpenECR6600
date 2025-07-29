@@ -1,0 +1,3 @@
+menuconfig CUSTOM_XSL
+	bool "XSL_SNIFFER"
+	default n

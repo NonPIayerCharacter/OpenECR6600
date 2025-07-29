@@ -19,8 +19,9 @@
 #include <string.h>
 #include "format_conversion.h"
 #include "reg_macro_def.h"
-
-
+#if  defined(CONFIG_FAST_CONNECT)
+#include "system_wifi.h"
+#endif
 
 //#ifndef IN32
 //#define IN32(reg) ( *( (volatile unsigned int *) (reg) ) )
@@ -75,8 +76,13 @@ void hal_system_reset(RST_TYPE type)
 	hal_gpio_dir_set(GPIO_NUM_2, DRV_GPIO_ARG_DIR_OUT);
 	hal_gpio_write(GPIO_NUM_2, LEVEL_HIGH);
 	#endif
-	
+
 	hal_system_reset_handlers_process();
+
+#if  defined(CONFIG_FAST_CONNECT)
+	wifi_stop_station();
+	os_msleep(50);
+#endif
 
 	if(type <= RST_TYPE_UNKOWN)
 	{

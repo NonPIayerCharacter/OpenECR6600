@@ -14,10 +14,9 @@
 #ifndef BLUETOOTH_H
 #define BLUETOOTH_H
 
-#include "bluetooth_err.h"
 #include "stdint.h"
 #include "stdbool.h"
-
+#include "bluetooth_err.h"
 
 /*
  * GLOBAL VARIABLES DEFINITIONS

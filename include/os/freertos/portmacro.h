@@ -36,7 +36,7 @@ extern "C" {
 
 /* System Includes. */
 #include <nds32_intrinsic.h>
-
+#include "projdefs.h"
 /*-----------------------------------------------------------
  * Port specific definitions.
  *

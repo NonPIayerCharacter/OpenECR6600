@@ -15,7 +15,7 @@
 #include "i2c.h"
 #include "oshal.h"
 
-
+#include "uart.h"
 
 #define DRV_DMA_CH_NUM	4
 
@@ -154,8 +154,8 @@ typedef  volatile struct _T_DMA_REG_MAP
 									|CHN_CTRL_DST_ADDR_CTRL(CHN_ADDR_FIX)	\
 									|CHN_CTRL_SRC_ADDR_CTRL(CHN_ADDR_INC)	\
 									|CHN_CTRL_DST_MODE(CHN_SRC_MODE_HANDSHAKE) \
-									|CHN_CTRL_DST_WIDTH(CHN_WIDTH_HALF_WORLD)	\
-									|CHN_CTRL_SRC_WIDTH(CHN_WIDTH_HALF_WORLD)	\
+									|CHN_CTRL_DST_WIDTH(CHN_WIDTH_WORLD)	\
+									|CHN_CTRL_SRC_WIDTH(CHN_WIDTH_WORLD)	\
 									|CHN_CTRL_SRC_BURST_SIZE(CHN_BURST_SIZE_1_TRANS)	\
 									|CHN_CTRL_PRIORITY(CHN_PRIORITY_LOW)
 									
@@ -437,6 +437,49 @@ int drv_dma_cfg(int num, T_DMA_CFG_INFO * cfg)
 	return 0;
 }
 
+DMA_LLDESCRIPTOR dma_cfg_list_info[DRV_DMA_CH_NUM] __attribute__((section(".dma.data")));
+unsigned int drv_dma_looplist_config(int chn_num, unsigned int src_addr, unsigned int dst_addr,unsigned int trans_size, int buff_num, E_DMA_CHN_MODE mode)
+{
+	unsigned int i;	
+	T_DRV_DMA_DEV * p_dma_dev = &dma_dev;
+	DMA_CHAIN * pDMA_chn_chain = &p_dma_dev->p_chn[chn_num].dma_chn_lldes;
+	DMA_LLDESCRIPTOR *pDMA_chn_LLD = &p_dma_dev->reg_base->Ch[chn_num];
+	T_DMA_CFG_INFO dma_cfg_info;
+	
+	if(buff_num > DRV_DMA_CH_NUM) 
+	{
+		return -1;
+	}
+	
+	for(i=0; i<buff_num; i++)
+	{
+		dma_cfg_list_info[i].ChSrcAddr = (unsigned int)(src_addr);
+		dma_cfg_list_info[i].ChDstAddr = (unsigned int)dst_addr + i*trans_size;
+		dma_cfg_list_info[i].ChTranSize = trans_size;
+		dma_cfg_list_info[i].ChLLPointer = (unsigned int)&dma_cfg_list_info[(i+1)%buff_num];
+		if(i == 0)
+		{
+			dma_cfg_info.src = dma_cfg_list_info[0].ChSrcAddr;
+			dma_cfg_info.dst = dma_cfg_list_info[0].ChDstAddr;
+			dma_cfg_info.len = dma_cfg_list_info[0].ChTranSize;
+			dma_cfg_info.mode = mode;
+		}
+		//dma_cfg_list_info[i].ChCtrl = dma_get_ctrl_cfg(&dma_cfg_info) & 0xFFFFFFFD;
+		dma_cfg_list_info[i].ChCtrl = dma_get_ctrl_cfg(&dma_cfg_info);
+	}
+
+	if(dma_cfg_info.len==0) {
+		return -1;
+	}
+
+	pDMA_chn_chain->dma_ctrl_cfg = dma_get_ctrl_cfg(&dma_cfg_info);
+	pDMA_chn_LLD->ChSrcAddr = dma_cfg_info.src;
+	pDMA_chn_LLD->ChDstAddr = dma_cfg_info.dst;
+	pDMA_chn_LLD->ChTranSize = dma_cfg_info.len;
+	pDMA_chn_LLD->ChLLPointer = dma_cfg_list_info[0].ChLLPointer;
+
+	return 0;
+}
 
 void drv_dma_start(int num)
 {
@@ -470,6 +513,28 @@ void drv_dma_isr_register(int num, void (* callback)(void *), void  *data)
 {
 	dma_chn[num].dma_callback.callback = callback;
 	dma_chn[num].dma_callback.data = data;
+}
+
+
+void  drv_dma_ch_release(int chn)
+{
+	unsigned long flags;
+	T_DRV_DMA_DEV * p_dma_dev = &dma_dev;
+
+	if (p_dma_dev->init == 0)
+	{
+		return;
+	}
+
+	flags = system_irq_save();
+	if ((p_dma_dev->alloc_flag & (1<<chn)))
+	{
+		p_dma_dev->reg_base->Ch[chn].ChCtrl = 0;
+		p_dma_dev->alloc_flag = p_dma_dev->alloc_flag & (~(1<<chn));
+		p_dma_dev->p_chn[chn].dma_chn_lldes.count = 0;
+	}
+
+	system_irq_restore(flags);
 }
 
 

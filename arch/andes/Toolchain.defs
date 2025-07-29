@@ -71,8 +71,8 @@ ARCHINCLUDES += -I "${TOPDIR}/PS/wifi/rf/ecr6600/src"
 #
 ###########################################
 
-REL_V ?= 1.0.0
-SDK_V ?= v2.1.22
+REL_V ?= v2.1.23.14
+SDK_V ?= v2.1.23.16
 
 CMARCODEFINES+=-D__RELEASE_VERSION='"relv$(REL_V)"'
 CMARCODEFINES+=-DSDK_VERSION='"ECR6600F_$(SDK_V)"'

@@ -27,7 +27,7 @@
 #ifndef        __IPERF_API_H
 #define        __IPERF_API_H
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <sys/time.h>
 #endif
 #include <setjmp.h>
@@ -50,7 +50,7 @@ struct iperf_time;
 #define Ptcp SOCK_STREAM
 #define Pudp SOCK_DGRAM
 #define Psctp 12
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #define DEFAULT_UDP_BLKSIZE 1460 /* default is dynamically set, else this */
 #define DEFAULT_TCP_BLKSIZE (128 * 1024)  /* default read/write block size */
 #define DEFAULT_SCTP_BLKSIZE (64 * 1024)
@@ -109,7 +109,7 @@ int	iperf_get_test_duration( struct iperf_test* ipt );
 char	iperf_get_test_role( struct iperf_test* ipt );
 int	iperf_get_test_reverse( struct iperf_test* ipt );
 int	iperf_get_test_blksize( struct iperf_test* ipt );
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 FILE*	iperf_get_test_outfile( struct iperf_test* ipt );
 #endif
 uint64_t iperf_get_test_rate( struct iperf_test* ipt );
@@ -127,7 +127,7 @@ char*	iperf_get_test_template( struct iperf_test* ipt );
 int	iperf_get_test_protocol_id( struct iperf_test* ipt );
 int	iperf_get_test_json_output( struct iperf_test* ipt );
 char*	iperf_get_test_json_output_string ( struct iperf_test* ipt );
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 int	iperf_get_test_zerocopy( struct iperf_test* ipt );
 #endif
 int	iperf_get_test_get_server_output( struct iperf_test* ipt );
@@ -160,7 +160,7 @@ void	iperf_set_test_server_hostname( struct iperf_test* ipt, char* server_hostna
 void    iperf_set_test_template( struct iperf_test *ipt, char *tmp_template );
 void	iperf_set_test_reverse( struct iperf_test* ipt, int reverse );
 void	iperf_set_test_json_output( struct iperf_test* ipt, int json_output );
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 int	iperf_has_zerocopy( void );
 void	iperf_set_test_zerocopy( struct iperf_test* ipt, int zerocopy );
 #endif
@@ -252,7 +252,7 @@ int       iperf_init_stream(struct iperf_stream *, struct iperf_test *);
  */
 void      iperf_free_stream(struct iperf_stream * sp);
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 int has_tcpinfo(void);
 int has_tcpinfo_retransmits(void);
 void save_tcpinfo(struct iperf_stream *sp, struct iperf_interval_results *irp);
@@ -269,12 +269,12 @@ int iperf_set_send_state(struct iperf_test *test, signed char state);
 void iperf_check_throttle(struct iperf_stream *sp, struct iperf_time *nowP);
 int iperf_send(struct iperf_test *, fd_set *) /* __attribute__((hot)) */;
 int iperf_recv(struct iperf_test *, fd_set *);
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 void iperf_catch_sigend(void (*handler)(int));
 #endif
 void iperf_got_sigend(struct iperf_test *test) __attribute__ ((noreturn));
 void usage(void);
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 void usage_long(FILE * f);
 #else
 void usage_long(void);
@@ -295,7 +295,7 @@ void iperf_on_test_start(struct iperf_test *);
 void iperf_on_connect(struct iperf_test *);
 void iperf_on_test_finish(struct iperf_test *);
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 extern jmp_buf env;
 #endif
 
@@ -305,7 +305,7 @@ int iperf_connect(struct iperf_test *);
 int iperf_create_streams(struct iperf_test *, int sender);
 int iperf_handle_message_client(struct iperf_test *);
 int iperf_client_end(struct iperf_test *);
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
 int iperf_client_abort(struct iperf_test *test);
 #endif
 
@@ -314,7 +314,7 @@ int iperf_run_server(struct iperf_test *);
 int iperf_server_listen(struct iperf_test *);
 int iperf_accept(struct iperf_test *);
 int iperf_handle_message_server(struct iperf_test *);
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 int iperf_create_pidfile(struct iperf_test *);
 int iperf_delete_pidfile(struct iperf_test *);
 #endif
@@ -323,7 +323,7 @@ int iperf_delete_pidfile(struct iperf_test *);
 int iperf_json_start(struct iperf_test *);
 int iperf_json_finish(struct iperf_test *);
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 /* CPU affinity routines */
 int iperf_setaffinity(struct iperf_test *, int affinity);
 int iperf_clearaffinity(struct iperf_test *);
@@ -331,13 +331,13 @@ int iperf_clearaffinity(struct iperf_test *);
 
 /* Custom printf routine. */
 int iperf_printf(struct iperf_test *test, const char *format, ...) __attribute__ ((format(printf,2,3)));
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 int iflush(struct iperf_test *test);
 #endif
 
 /* Error routines. */
 void iperf_err(struct iperf_test *test, const char *format, ...) __attribute__ ((format(printf,2,3)));
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 void iperf_errexit(struct iperf_test *test, const char *format, ...) __attribute__ ((format(printf,2,3),noreturn));
 #else
 void iperf_errexit(struct iperf_test *test, const char *format, ...) __attribute__ ((format(printf,2,3)));
@@ -431,7 +431,7 @@ enum {
     IEUPDATETIMER = 301,    // Unable to update timer (check perror)
 };
 
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
 typedef enum {
     IPERF3_STATUS_IDLE,
     IPERF3_STATUS_STOPPING,

@@ -46,6 +46,7 @@ static uint8_t dc_flag = 0;
 extern void uart_buff_cpy_for_amt(char *cmd, int cmd_len);
 static int AmtBleTxStart(cmd_tbl_t *t, int argc, char *argv[])
 {
+
 	#if defined(CONFIG_MULTIPLEX_UART)
     uint8_t phy, ch, pkt_type, pdu_len, gain_value;
 	uint8_t tx[4] = {0x01,0x50,0x20,0x09};
@@ -66,7 +67,10 @@ static int AmtBleTxStart(cmd_tbl_t *t, int argc, char *argv[])
 	float di_gain1 = (float)(0.5+((ble_tx_power_index[0]>>8)&0x1F)+((ble_tx_power_index[0]>>13)&0x7) * (ch - 39) /39);
 	float di_gain2 = (float)(0.5+((ble_tx_power_index[1]>>8)&0x1F)+((ble_tx_power_index[1]>>13)&0x7) * (ch - 39) /39);
 	float di_gain3 = (float)(0.5+((ble_tx_power_index[2]>>8)&0x1F)+((ble_tx_power_index[2]>>13)&0x7) * (ch - 39) /39);
-	
+
+
+	REG_PL_WR(0x471080, 0);  //DAC ON during tx test
+    REG_PL_WR(0x202068, 0);
 	switch(gain_value)
 	{
 		case LOW_LEVEL:
@@ -137,6 +141,7 @@ static int AmtBleTxStart(cmd_tbl_t *t, int argc, char *argv[])
 
 	uart_buff_cpy_for_amt((char *)cmd_tm, CMD_TEST_MODE_LEN);
 	#endif
+
 
     return CMD_RET_SUCCESS;
 }
@@ -339,6 +344,8 @@ static int AmtBleDumpDc(cmd_tbl_t *t, int argc, char *argv[])
 
     //WRITE_REG(0x203040, READ_REG(0x203040)&(~0x10001)); //dig_rx_on_tx =1 dif_rx_on_tx = 1;
     WRITE_REG(0x760000, 0x301);//continues mode.
+    REG_PL_WR(0x471080, 1);  //DAC ON during tx test
+    REG_PL_WR(0x202068, 2);
 
     return CMD_RET_SUCCESS;
 }

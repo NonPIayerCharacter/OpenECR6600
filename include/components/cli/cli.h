@@ -35,7 +35,7 @@
 #define BELL       			0x07
 
 #define CLI_CMD_RECEIVE_BUF_NUM			(4)
-#define CLI_CMD_RECEIVE_BUF_LEN			(128)
+#define CLI_CMD_RECEIVE_BUF_LEN			(192)
 #define CLI_CMD_MAX_ARGV				(18)
 #define CLI_PRINT_BUFFER_SIZE			(512)
 #define CLI_PRINT_UART_FIFO_DEPTH		(32)

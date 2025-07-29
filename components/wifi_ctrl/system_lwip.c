@@ -40,7 +40,7 @@
 #include <string.h>
 #include "rtos_al.h"
 #include "rtos_debug.h"
-#ifdef CONFIG_VNET_SERVICE
+#if defined(CONFIG_SPI_SERVICE) && defined(CONFIG_SPI_SLAVE)
 #include "spi_service_mem.h"
 #endif
 
@@ -383,7 +383,7 @@ void at_update_netif_mac(int vif, uint8_t *mac)
     }    
 }
 
-#if defined ENABLE_LWIP_NAPT || (CONFIG_SPI_REPEATER && CONFIG_SPI_MASTER)
+#if defined ENABLE_LWIP_NAPT
 int enable_lwip_napt(int vif, int enable)
 {
     struct netif *nif = NULL;
@@ -445,16 +445,16 @@ void *net_tx_buf_get_next(void *buf)
 
 void *net_tx_mem_alloc(uint32_t len)
 {
-#ifdef CONFIG_VNET_SERVICE
-    return spi_service_mem_pool_alloc(SPI_SERVICE_MEM_RX, len);
+#if defined(CONFIG_SPI_SERVICE) && defined(CONFIG_SPI_SLAVE)
+    return spi_service_mpool_alloc(SPI_SERVICE_MEM_MSG, len);
 #else
     return mem_malloc(len);
 #endif
 }
 void net_tx_mem_free(void *mem)
 {
-#ifdef CONFIG_VNET_SERVICE
-    spi_service_mem_pool_free(mem);
+#if defined(CONFIG_SPI_SERVICE) && defined(CONFIG_SPI_SLAVE)
+    spi_service_mpool_free(mem);
 #else
     mem_free(mem);
 #endif

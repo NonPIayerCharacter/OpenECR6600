@@ -95,7 +95,7 @@ gpietsch@comcast.net
 #include "cli.h"
 
 /* macros */
-#if defined(__TR_SW__)
+#if defined(CONFIG_WIRELESS_IPERF_3)
 #define getenv(x) (0)
 #endif
 

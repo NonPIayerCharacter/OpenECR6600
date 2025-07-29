@@ -135,8 +135,10 @@
 #	define __LITTLE_ENDIAN LITTLE_ENDIAN
 #	define __PDP_ENDIAN    PDP_ENDIAN
 
-#elif defined(__TR_SW__)
+#elif defined(CONFIG_WIRELESS_IPERF_3)
+#ifndef BYTE_ORDER
     #define BYTE_ORDER LITTLE_ENDIAN
+#endif
     #define PP_HTONS(x) ((u16_t)((((x) & (u16_t)0x00ffU) << 8) | (((x) & (u16_t)0xff00U) >> 8)))
     #define PP_NTOHS(x) PP_HTONS(x)
     #define PP_HTONL(x) ((((x) & (u32_t)0x000000ffUL) << 24) | \

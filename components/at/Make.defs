@@ -28,4 +28,11 @@ ifeq ($(CONFIG_APP_AT_COMMAND),y)
 		VPATH += at/mqtt_command 
 		INCPATHS += at/mqtt_command 
 	endif	
+
+	ifeq ($(CONFIG_HTTP_CLIENT),y)
+		CSRCS += http_command.c
+		VPATH += at/http_command
+		INCPATHS += at/http_command
+		INCPATHS += http_client/libhttp
+	endif
 endif

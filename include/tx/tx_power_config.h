@@ -4,33 +4,58 @@
 #include <adc.h>
 #ifndef DFE_VAR  
 #define __DFE extern  
-#define __ARR1(w,x,y,z)
+#define __ARR1(x,y,z)
 #define __ARR2(a0,a1,a2,a3,a4,a5,a6,a7)
 #define __ARR3(b0,b1,b2,b3,b4,b5)
-#define __ARR4(x,y,z)
 #define __VAR1(x)
 #else  
 #define __DFE  
-#define __ARR1(w,x,y,z) ={(w),(x),(y),(z),}
+#define __ARR1(x,y,z) ={(x),(y),(z),}
 #define __ARR2(a0,a1,a2,a3,a4,a5,a6,a7) {a0,a1,a2,a3,a4,a5,a6,a7}
 #define __ARR3(b0,b1,b2,b3,b4,b5) = {b0,b1,b2,b3,b4,b5}
-#define __ARR4(x,y,z) ={(x),(y),(z),}
-
 #define __VAR1(x) = {x}
 #endif
 
 #define MCS_NUM 8
 #define CAL_INDEX 5
 
-__DFE uint32_t pa_bias_6600[DRV_ADC_TEMP_MAX]  __ARR1(0x47FF3CE,/*low temp*/ 0x47FF3CE,/*normal temp*/0x47FF3CE,/*medium temp*/0x47FF4CB/*high temp*/);
-__DFE uint32_t pa_bias_6600a_ldo[DRV_ADC_TEMP_MAX]  __ARR1(0x47FF411,/*low temp*/0x47FE74D,/*normal temp*/0x47FE74D,/*medium temp*/0x46F83CB/*high temp*/);
-__DFE uint32_t pa_bias_6600a_dcdc[DRV_ADC_TEMP_MAX]  __ARR1(0x47FF411,/*low temp*/0x47FE74D,/*normal temp*/0x47FE74D,/*medium temp*/0x46F83CB/*high temp*/);
-#ifdef CONFIG_CUSTOM_YY
-__DFE uint32_t g_cfo [DRV_ADC_TEMP_MAX]  __ARR1(0x155,/*low temp*/0x166,/*normal temp*/0X177,/*medium temp*/0x177/*high temp*/);
-#else
-__DFE uint32_t g_cfo [DRV_ADC_TEMP_MAX]  __ARR1(0x144,/*low temp*/0x155,/*normal temp*/0x166,/*medium temp*/ 0x1cc/*high temp*/);
-#endif
 
+__DFE uint32_t pa_bias_6600[DRV_ADC_TEMP_MAX]  __ARR1(0x47FF3CE,/*low temp*/ 0x47FF3CE,/*normal temp*/ 0x47FF4CB/*high temp*/);
+__DFE uint32_t pa_bias_6600a_ldo[DRV_ADC_TEMP_MAX]  __ARR1(0x47FF411,/*low temp*/0x47FE74D,/*normal temp*/ 0x46F83CB/*high temp*/);
+__DFE uint32_t pa_bias_6600a_dcdc[DRV_ADC_TEMP_MAX]  __ARR1(0x47FF411,/*low temp*/0x47FE74D,/*normal temp*/ 0x46F83CB/*high temp*/);
+
+#ifdef CONFIG_CUSTOM_YY
+__DFE uint32_t g_cfo [DRV_ADC_TEMP_MAX]  __ARR1(0x155,/*low temp*/0x166,/*normal temp*/ 0x177/*high temp*/);
+#else
+__DFE uint32_t g_cfo [DRV_ADC_TEMP_MAX]  __ARR1(0x144,/*low temp*/0x155,/*normal temp*/ 0x1cc/*high temp*/);
+#endif
+#ifdef CONFIG_CALIBRATION_FREE
+	#if defined(CONFIG_CUSTOM_YH)
+		#define FREQ_OFFSET_VALUE_CAL_FREE 0x77166
+		uint8_t g_defTxPower_CAL_FREE[CAL_INDEX][MCS_NUM] __ARR3(__ARR2(0x46, 0x46, 0x46, 0x46, 0x46, 0x46, 0x46, 0x46),/* 11b mcs 1m - 11m */
+													__ARR2(0x41, 0x41, 0x41, 0x33, 0x33, 0x33, 0x33, 0x33),/* 11g 6m - 54m */
+													__ARR2(0x41, 0x41, 0x41, 0x39, 0x33, 0x33, 0x2E, 0x2E),/* 11n mcs 0 - 7 */
+													__ARR2(0x41, 0x41, 0x41, 0x41, 0x39, 0x33, 0x33, 0x33),/* 11n_40M mcs 0 - 7 */
+													__ARR2(0x41, 0x41, 0x41, 0x39, 0x33, 0x33, 0x2E, 0x2E),/* 11ax mcs 0 - 7 */
+													);
+	#elif defined(CONFIG_CUSTOM_AJ)
+		#define FREQ_OFFSET_VALUE_CAL_FREE 0x77166
+		uint8_t g_defTxPower_CAL_FREE[CAL_INDEX][MCS_NUM] __ARR3(__ARR2(0x46, 0x46, 0x46, 0x46, 0x46, 0x46, 0x46, 0x46),/* 11b mcs 1m - 11m */
+													__ARR2(0x41, 0x41, 0x41, 0x33, 0x33, 0x33, 0x33, 0x33),/* 11g 6m - 54m */
+													__ARR2(0x41, 0x41, 0x41, 0x39, 0x33, 0x33, 0x2E, 0x2E),/* 11n mcs 0 - 7 */
+													__ARR2(0x41, 0x41, 0x41, 0x41, 0x39, 0x33, 0x33, 0x33),/* 11n_40M mcs 0 - 7 */
+													__ARR2(0x41, 0x41, 0x41, 0x39, 0x33, 0x33, 0x2E, 0x2E),/* 11ax mcs 0 - 7 */
+													);
+	#else
+	  	#define FREQ_OFFSET_VALUE_CAL_FREE 0x77166
+		uint8_t g_defTxPower_CAL_FREE[CAL_INDEX][MCS_NUM] __ARR3(__ARR2(0x46, 0x46, 0x46, 0x46, 0x46, 0x46, 0x46, 0x46),/* 11b mcs 1m - 11m */
+													__ARR2(0x41, 0x41, 0x41, 0x33, 0x33, 0x33, 0x33, 0x33),/* 11g 6m - 54m */
+													__ARR2(0x41, 0x41, 0x41, 0x39, 0x33, 0x33, 0x2E, 0x2E),/* 11n mcs 0 - 7 */
+													__ARR2(0x41, 0x41, 0x41, 0x41, 0x39, 0x33, 0x33, 0x33),/* 11n_40M mcs 0 - 7 */
+													__ARR2(0x41, 0x41, 0x41, 0x39, 0x33, 0x33, 0x2E, 0x2E),/* 11ax mcs 0 - 7 */
+													);
+	#endif
+#endif
 __DFE uint32_t pa_bias[DRV_ADC_TEMP_MAX] ;
 
 __DFE uint32_t fcc_var __VAR1(0);
@@ -78,7 +103,7 @@ __DFE uint8_t g_calIndex[CAL_INDEX][MCS_NUM] __ARR3(__ARR2(0, 0, 0, 0, 0, 0, 0, 
  * customer can modify the high level as their wants power level.
  */
 //__DFE uint16_t ble_tx_power_index[3] __ARR1(0x6f28,/*lower level, 6dbm*/0x6f2a, /*average level, 8dbm*/ 0x6f2d/*high level, 10dbm*/);
-__DFE uint16_t ble_tx_power_index[4] __ARR1(0x6d28,/*lower level, 6dbm*/0x6f2a, /*average level, 8dbm*/ 0x6f2d/*high level, 10dbm*/,0x6d5d/*max level*/);
+__DFE uint16_t ble_tx_power_index[3] __ARR1(0x6d28,/*lower level, 6dbm*/0x6f2a, /*average level, 8dbm*/ 0x6f2d/*high level, 10dbm*/);
 
 
 //ble tx power

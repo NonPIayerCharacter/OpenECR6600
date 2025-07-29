@@ -75,6 +75,8 @@
 #define CUS_OTP_ADDR_XT		0x1000
 #endif
 
+extern unsigned int Flash_ID;
+extern int flash_init_ret;
 
 
 
@@ -86,6 +88,8 @@
 //static int spiFlash_cmd_rdID(void);
 
 void spiFlash_format_wr(int cmd, int data, int wr_len);
+void spiFlash_format_wr_vol(int cmd, int data, int wr_len);
+
 unsigned int spiFlash_format_rd(int cmd, int rd_len);
 int spiFlash_format_none(int cmd);
 void spiFlash_cmd_wrSR_1(int data);
@@ -98,6 +102,8 @@ int spi_rx_ready(void);
 unsigned int spiFlash_cmd_rdSR_1(void);
 unsigned int spiFlash_cmd_rdSR_2(void);
 void spiFlash_cmd_wrEnable(void);
+void spiFlash_format_wr_nodummy(int cmd, int addr, unsigned int data, int length);
+void spiFlash_format_rd_nodummy(int cmd, int addr, unsigned char * data, int length);
 
 int drv_spiflash_erase(unsigned int addr,  unsigned int len);
 int drv_spiflash_write(unsigned int addr, const unsigned char * buf, unsigned int len);
@@ -125,5 +131,6 @@ int drv_spiflash_write_dma(unsigned int addr, const unsigned char * buf, unsigne
 
 int spiFlash_EDP(void);
 int spiFlash_RDP(void);
+int spiflash_TH_FT(void);
 
 

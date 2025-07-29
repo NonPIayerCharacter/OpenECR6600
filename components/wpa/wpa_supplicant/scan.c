@@ -883,7 +883,7 @@ static void wpa_supplicant_scan(void *eloop_ctx, void *timeout_ctx)
 				ssid->ssid_len;
 			params.num_ssids++;
             if (wpa_s->normal_scans < 2) {
-#ifdef CONFIG_PSM_SUPER_LOWPOWER
+#if (defined(CONFIG_PSM_SUPER_LOWPOWER) || defined(CONFIG_FAST_CONNECT))
     extern unsigned int fast_reconnect_freq;
     if (ssid->frequency ||fast_reconnect_freq) {
         params.freqs = os_malloc(sizeof(int) * 2);

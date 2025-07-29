@@ -63,7 +63,7 @@ static unsigned char pit_ch_status;
                     and 32-bit timer, and start pit1-channel3 channel 
 *      @return      0--Pit initial succeed, 1--Pit initial failed
 */
-int drv_pit_init(void)
+int  __attribute__((no_ex9, used))drv_pit_init(void)
 {
 	chip_clk_enable(CLK_PIT0);
 	chip_clk_enable(CLK_PIT1);
@@ -98,7 +98,7 @@ int drv_pit_init(void)
 /**    @brief       Pit delay.
  *     @param[in]   delay   The number of delay, 24000000 is 1s.
  */
-void drv_pit_delay( long delay)
+void  __attribute__((no_ex9, used))drv_pit_delay( long delay)
 {
 	unsigned long  flags;
 	long tmo = delay;
@@ -134,7 +134,7 @@ void drv_pit_delay( long delay)
 *	   @param[in]	arg    Control parameters, the specific meaning is determined according to the event
 *	   @return  	0--Handle event succeed, -1--Handle event failed
 */
-int drv_pit_ioctrl(unsigned int channel_num, int event, unsigned int arg)
+int  __attribute__((no_ex9, used)) drv_pit_ioctrl(unsigned int channel_num, int event, unsigned int arg)
 {
 	T_PIT_REG_MAP *pit_reg_base;
 	unsigned int value, ch_num;

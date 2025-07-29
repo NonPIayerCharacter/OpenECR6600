@@ -4,19 +4,19 @@ config CPU_ARCH
 
 choice
 	prompt "Chip CPU Clock Source Selection"
-	default CPU_CLK_SRC_96M
+	default CPU_CLK_SRC_160M
 	
-	config CPU_CLK_SRC_96M
-		bool "CLK_96M"
+	#config CPU_CLK_SRC_96M
+	#	bool "CLK_96M"
 	
 	config CPU_CLK_SRC_160M
 		bool "CLK_160M"
 
-	config CPU_CLK_SRC_240M
-		bool "CLK_240M"
+	#config CPU_CLK_SRC_240M
+	#	bool "CLK_240M"
 
-	config CPU_CLK_SRC_40m
-		bool "CLK_40M"
+	#config CPU_CLK_SRC_40m
+	#	bool "CLK_40M"
 
 endchoice
 
@@ -46,3 +46,7 @@ config CPU_ICACHE_ENABLE
 config CPU_DCACHE_ENABLE
 	bool 
 	default y
+
+config CALIBRATION_FREE
+	bool "tx calibration free"
+	default n

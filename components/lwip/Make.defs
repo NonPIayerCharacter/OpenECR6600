@@ -10,6 +10,10 @@ ifeq ($(CONFIG_LWIP),y)
 
 	CFLAGS += -DSTACK_LWIP
 
+	ifeq ($(CONFIG_LWIP_NAPT), y)
+	CFLAGS += -DENABLE_LWIP_NAPT
+	endif
+
 	CSRCS += ip4.c ip4_frag.c ip4_addr.c def.c dns.c inet_chksum.c ip.c stats.c \
 		autoip.c dhcp.c etharp.c icmp.c igmp.c raw.c  timeouts.c sys.c tcp.c \
 		tcp_in.c tcp_out.c udp.c mem.c memp.c netif.c pbuf.c  init.c \

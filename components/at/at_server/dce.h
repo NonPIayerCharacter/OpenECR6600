@@ -18,6 +18,7 @@
 
 #define DCE_MAX_COMMAND_GROUPS 16
 #define DCE_MAX_ARGS 16
+#define COMMAND_LINE_LENGTH   256
 
 #define IS_COMMAND_STATE(state) (state & 1)
 #define BEGINS(buf, c1, c2) (buf[0] == (c1) && buf[1] == (c2))
@@ -99,7 +100,6 @@ struct dce_
 
 void dce_register_command_group(dce_t* dce, const char* groupname, const command_desc_t* desc, int ndesc, void* ctx);
 void dce_emit_extended_result_code_with_args(dce_t* dce, const char* command_name, size_t size, const arg_t* args, size_t argc, int reset_command_pending,  bool arg_in_brackets);
-void TG_dce_emit_extended_result_code_with_args(dce_t* dce, const char* command_name, size_t size, const arg_t* args, size_t argc, int reset_command_pending,  bool arg_in_brackets,int data_len);
 
 void dce_init_defaults(dce_t* dce);
 void dce_emit_response_prefix(dce_t* dce);
@@ -117,6 +117,7 @@ void dce_continue_information_response(dce_t* dce, const char* response, size_t 
 void dce_emit_extended_result_code(dce_t* dce, const char* response, size_t size, int reset_command_pending);
 void dce_emit_pure_response(dce_t* dce, const char* response, size_t size);
 dce_result_t dce_handle_flashEn_arg(int kind, size_t *p_argc, arg_t* argv, bool *p_flash_en);
+dce_result_t dce_parse_args(const char *cbuf, size_t size, const command_desc_t *command, size_t *pargc, arg_t *args);
 
 void dce_uninit(dce_t* dce);
 

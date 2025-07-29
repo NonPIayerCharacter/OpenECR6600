@@ -10,11 +10,6 @@ config SPI_REPEATER
 	depends on SPI_SERVICE
 	default n
 
-config VNET_SERVICE
-	bool "virtual net application"
-	depends on SPI_SERVICE
-	default n
-
 config SPI_SERVICE_UT
 	bool "spi service unit test"
 	depends on SPI_SERVICE

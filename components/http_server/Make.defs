@@ -1,6 +1,8 @@
 ifeq ($(CONFIG_HTTPSERVER),y)
 	CSRCS += src/httpd_main.c
+ifneq ($(CONFIG_HTTP_CLIENT),y)
 	CSRCS += src/http_parser.c
+endif
 	CSRCS += src/httpd_parse.c
 	CSRCS += src/httpd_sess.c
 	CSRCS += src/httpd_txrx.c

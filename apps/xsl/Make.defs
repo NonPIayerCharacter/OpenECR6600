@@ -1,0 +1,15 @@
+ifeq ($(CONFIG_CUSTOM_XSL),y)
+	CSRCS += xsl_sniffer.c xsl_uart.c
+	VPATH += :xsl
+	INCPATHS += $(TOPDIR)/include/components/wifi_crtl \
+				$(TOPDIR)/apps/xsl	\
+				$(TOPDIR)/PS/wifi/common/include \
+				$(TOPDIR)/components/smartconfig \
+				$(TOPDIR)/include/components/cli  \
+				$(TOPDIR)/components/wpa/src/
+endif
+
+
+
+
+

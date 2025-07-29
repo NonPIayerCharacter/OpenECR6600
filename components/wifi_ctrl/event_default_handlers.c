@@ -27,12 +27,7 @@
 #endif
 #include "hal_system.h"
 #include "os_event.h"
-//#include "system_network.h"
 
-#ifdef CONFIG_VNET_SERVICE
-#include "system_config.h"
-void vnet_reg_wifilink_status(int link);
-#endif
 /****************************************************************************
 *                                                Local Macros
 ****************************************************************************/
@@ -73,6 +68,7 @@ static system_event_handler_t default_event_handlers[SYSTEM_EVENT_MAX] = { 0 };
 extern void ap_cap_record_interface();
 #endif
 extern EventGroupHandle_t os_event_handle;
+extern bool is_wifi_conn;
 static sys_err_t system_event_sta_got_ip_default(system_event_t *event)
 {
     struct netif *netif_temp;
@@ -98,12 +94,7 @@ static sys_err_t system_event_sta_got_ip_default(system_event_t *event)
 #endif
 #endif
 
-#ifdef CONFIG_VNET_SERVICE
-    wifi_work_mode_e wifi_mode = WIFI_MODE_STA;
-    vnet_reg_wifilink_status(1);
-    hal_system_set_config(CUSTOMER_NV_WIFI_OP_MODE, &wifi_mode, sizeof(wifi_mode));
-#endif
-
+    is_wifi_conn = true;
     discard_dhcp_wait_timer();
 
     xEventGroupSetBits(os_event_handle, OS_EVENT_STA_GOT_IP);
@@ -118,9 +109,8 @@ static sys_err_t system_event_sta_lost_ip_default(system_event_t *event)
     sntp_stop();
 #endif
 
-#ifdef CONFIG_VNET_SERVICE
-    vnet_reg_wifilink_status(0);
-#endif
+    is_wifi_conn = false;
+
 
     if (event && (wifi_station_dhcpc_status(event->vif) == TCPIP_DHCP_STARTED))
     {
@@ -130,20 +120,14 @@ static sys_err_t system_event_sta_lost_ip_default(system_event_t *event)
 
     return SYS_OK;
 }
-
+extern uint8_t csa_switch;
 sys_err_t system_event_ap_start_handle_default(system_event_t *event)
 {
     wifi_set_status(event->vif, AP_STATUS_STARTED);
     wifi_softap_dhcps_start(event->vif);
-#ifdef CONFIG_VNET_SERVICE
-    wifi_ap_config_t softap_info = {0};
-    wifi_work_mode_e wifi_mode = WIFI_MODE_AP;
-    wpa_get_ap_info((char *)softap_info.ssid, softap_info.password, &softap_info.channel, &softap_info.authmode);
-    wifi_save_ap_nv_info(&softap_info);
-    hal_system_set_config(CUSTOMER_NV_WIFI_OP_MODE, &wifi_mode, sizeof(wifi_mode));
-    vnet_reg_wifilink_status(1);
-#endif
 
+    if(csa_switch)
+        wifi_softap_channel_sync();
     return SYS_OK;
 }
 
@@ -151,9 +135,6 @@ sys_err_t system_event_ap_stop_handle_default(system_event_t *event)
 {
     wifi_set_status(event->vif, AP_STATUS_STOP);
     wifi_softap_dhcps_stop(event->vif);
-#ifdef CONFIG_VNET_SERVICE
-    vnet_reg_wifilink_status(0);
-#endif
 
     return SYS_OK;
 }
@@ -161,10 +142,6 @@ sys_err_t system_event_ap_stop_handle_default(system_event_t *event)
 sys_err_t system_event_wifi_init_ready(system_event_t *event)
 {
     wifi_set_ready_flag(true);
-#if defined CONFIG_SPI_MASTER && CONFIG_SPI_REPEATER
-        extern void vnet_reg_get_peer_value(void);
-        vnet_reg_get_peer_value();
-#endif
 
     return SYS_OK;
 }
@@ -181,6 +158,8 @@ sys_err_t system_event_sta_stop_handle_default(system_event_t *event)
 
 sys_err_t system_event_sta_connected_handle_default(system_event_t *event)
 {
+    if(csa_switch)
+        wifi_softap_channel_sync();
     wifi_handle_sta_connect_event(event, true);
     return SYS_OK;
 }

@@ -188,6 +188,8 @@ int hal_system_get_sta_mac(unsigned char *mac)
 	
 	return ret;
 }
+#if 0
+
 int hal_system_get_ap_mac(unsigned char *mac)
 {
 	int ret = -1;
@@ -202,6 +204,38 @@ int hal_system_get_ap_mac(unsigned char *mac)
 	}	
 	return ret;
 }
+#endif
+extern int custom_rule;
+int hal_system_get_ap_mac(unsigned char *mac)
+{
+	int ret = -1;
+	ret = hal_system_get_sta_mac(mac);
+	if (ret != MAC_LEN)
+	{
+		return ret;
+	}
+	else
+	{
+	  if (custom_rule == 0)
+     	mac[5] ^= 0x01;
+   	  else
+        {
+                if(mac[0] & 0x02)
+                {
+                  mac[0] = ((mac[0] >> 2) ^ (0x01))<< 2;
+                  mac[0] |= 0x02;
+                }
+           		else
+                {
+                  
+                  mac[0] |= 0x02;
+                }
+            
+        }
+	}	
+	return ret;
+}
+
 int hal_system_get_ble_mac(unsigned char *mac)
 {
 	int ret = -1;

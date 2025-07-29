@@ -57,6 +57,7 @@ void wifi_dhcp_close(int vif);
 bool get_wifi_dhcp_use_status(int vif);
 int wifi_station_dhcpc_start(int vif);
 int wifi_station_dhcpc_stop(int vif);
+int wifi_station_dhcpc_stop2(int vif, bool release_dhcp);
 dhcp_status_t wifi_station_dhcpc_status(int vif);
 void wifi_softap_dhcps_start(int intf);
 void wifi_softap_dhcps_stop(int intf);

@@ -338,7 +338,7 @@ void os_check_regs(int task_handle)
     sp += 1;
 #endif
 
-    if(memcmp((char*)reg_layout, (char*)sp, sizeof(pxTcb->reg_dummy)))
+    if (memcmp((char*)reg_layout, (char*)sp, sizeof(pxTcb->reg_dummy)))
     {
         system_assert(0);
     }

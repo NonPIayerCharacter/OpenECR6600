@@ -477,7 +477,8 @@ extern void rf_ble_restore();
 #ifdef CONFIG_PSM_SUPER_LOWPOWER
 bool sta_remove_network_flag;
 #endif
-int wifi_station_dhcpc_stop(int vif)
+
+int wifi_station_dhcpc_stop2(int vif, bool release_dhcp)
 {
     netif_db_t *netif_db = NULL;
 
@@ -504,7 +505,11 @@ int wifi_station_dhcpc_stop(int vif)
 		netifapi_dhcp6_stop(netif_db->net_if);
 		#endif
         netif_db->dhcp_stat = TCPIP_DHCP_STOPPED;
-        netifapi_dhcp_stop(netif_db->net_if);
+        if (release_dhcp) {
+            netifapi_dhcp_stop(netif_db->net_if);
+        } else {
+            netifapi_dhcp_stop_no_release(netif_db->net_if);
+        }
 
 #ifdef CONFIG_PSM_SUPER_LOWPOWER
 		sta_remove_network_flag = false;
@@ -527,6 +532,11 @@ int wifi_station_dhcpc_stop(int vif)
 
     discard_dhcp_wait_timer();
     return 0;
+}
+
+int wifi_station_dhcpc_stop(int vif)
+{
+    return wifi_station_dhcpc_stop2(vif, true);
 }
 
 void dhcp_wait_timeout_func(os_timer_handle_t timer)
@@ -599,7 +609,7 @@ void wifi_softap_dhcps_start(int intf)
         IP4_ADDR(&netif_db->ipconfig.netmask, 255, 255, 255, 0);
     }
 	#endif
-#if defined ENABLE_LWIP_NAPT || (CONFIG_SPI_REPEATER && CONFIG_SPI_MASTER)
+#if defined ENABLE_LWIP_NAPT
 #ifdef CONFIG_IPV6
     if (ip4_addr_isany(&netif_db->ipconfig.dns1.u_addr.ip4)) {
         netif_db->ipconfig.dns1 = (IP_ADDR_ANY != dns_getserver(0)) ? *dns_getserver(0) : netif_db->ipconfig.ip;

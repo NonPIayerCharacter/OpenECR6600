@@ -347,7 +347,7 @@ CLI_CMD_F(pta, pta_test, "pta test", "pta [start/stop]", false);
 #if defined(CFG_HOST) && defined(CONFIG_NV)
 //hongsai
 
-#define BLE_DEVICE_NAME_MAX_LEN		(18)
+#define BLE_DEVICE_NAME_MAX_LEN		(27)
 #define BLE_BD_ADDR_LEN				(6)
 
 static void ble_cli_set_adv_data(ECR_BLE_DATA_T *pdata)
@@ -557,8 +557,10 @@ static void ecr_ble_gatt_event_cb(ECR_BLE_GATT_PARAMS_EVT_T *p_event)
 		
 		case ECR_BLE_GATT_EVT_READ_RX:
 			{
-				os_printf(LM_BLE,LL_INFO,"Char handle %#02x,data:%s\n",p_event->gatt_event.data_read.char_handle,
-																	p_event->gatt_event.data_read.report.p_data);		
+				os_printf(LM_BLE,LL_INFO,"read_data: ");
+				for(uint8_t i = 0; i < p_event->gatt_event.data_read.report.length; i++)
+					os_printf(LM_BLE,LL_INFO,"%x ",p_event->gatt_event.data_read.report.p_data[i]);
+				os_printf(LM_BLE,LL_INFO,"\n");		
 			}
 			break;
 		

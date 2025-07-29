@@ -1,5 +1,6 @@
 
 CSRCS += format_conversion.c
 CSRCS += system_config.c
+CSRCS += platform_list.c
 VPATH += :platform_api
 

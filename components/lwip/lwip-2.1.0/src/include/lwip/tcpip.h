@@ -104,7 +104,7 @@ err_t  tcpip_untimeout(sys_timeout_handler h, void *arg);
 int tcpip_thread_poll_one(void);
 #endif
 
-typedef int (*tcpip_pbuf_vnet_cb)(struct pbuf *p);
+typedef int (*tcpip_pbuf_vnet_cb)(struct pbuf *p, struct netif *inp);
 void tcpip_pbuf_vnet_handle(tcpip_pbuf_vnet_cb cb);
 void tcpip_pbuf_vnet_free(tcpip_pbuf_vnet_cb cb);
 

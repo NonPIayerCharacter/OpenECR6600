@@ -227,19 +227,19 @@ int spi_init_cfg(spi_interface_config_t *spi_master_dev)
 		if((spi_master_dev->spi_trans_mode == SPI_MODE_DUAL)|(spi_master_dev->spi_trans_mode == SPI_MODE_QUAD))
 		{
 			//value = p_spi_reg ->transCtrl |BIT(28) |BIT(29);	
-			spi_master.addr_pha_enable = p_spi_reg ->transCtrl |BIT(28) |BIT(29);	
+			spi_master.addr_pha_enable = BIT(28) |BIT(29);	
 		}
 		else
 		{
 			//value = p_spi_reg ->transCtrl |BIT(29);
-			spi_master.addr_pha_enable = p_spi_reg ->transCtrl |BIT(29);	
+			spi_master.addr_pha_enable = BIT(29);	
 		}
 
 		//p_spi_reg ->transCtrl = value;
 	}
 	else
 	{
-		spi_master.addr_pha_enable = p_spi_reg ->transCtrl ;
+		spi_master.addr_pha_enable = 0 ;
 	}
 
 	/* cfg spi clk */	
@@ -279,11 +279,20 @@ int spi_master_write(unsigned char *bufptr,spi_transaction_t* trans_desc )
 			system_irq_restore(flags);
 			return -2;
 		}
-		if(spi_master.addr_pha_enable == 1)
+		if(spi_master.addr_pha_enable & BIT(29))
 		{
 			p_spi_reg->addr = trans_desc->addr;
 		}
-		p_spi_reg->transCtrl = spi_master.addr_pha_enable | spi_master.dummy_bit | spi_master.cmd_write | SPI_TRANSCTRL_WCNT((trans_desc->length)-1);
+		
+		if(trans_desc->length == 0)
+		{
+			p_spi_reg->transCtrl = spi_master.addr_pha_enable | spi_master.dummy_bit | spi_master.cmd_write;
+		}
+		else
+		{
+			p_spi_reg->transCtrl = spi_master.addr_pha_enable | spi_master.dummy_bit | spi_master.cmd_write | SPI_TRANSCTRL_WCNT((trans_desc->length)-1);
+		}
+		
 		p_spi_reg->cmd =  trans_desc->cmmand;
 
 		while((trans_desc->length)> 0)
@@ -304,7 +313,7 @@ int spi_master_write(unsigned char *bufptr,spi_transaction_t* trans_desc )
 	}
 	else
 	{
-		if(spi_master.addr_pha_enable == 1)
+		if(spi_master.addr_pha_enable & BIT(29))
 		{
 			p_spi_reg->addr = trans_desc->addr;
 		}
@@ -315,7 +324,15 @@ int spi_master_write(unsigned char *bufptr,spi_transaction_t* trans_desc )
 		dma_cfg_info.len = (trans_desc->length);
 		dma_cfg_info.mode = DMA_CHN_SPI_TX;
 		drv_dma_cfg(p_spi_dev_dma->spi_tx_dma_ch, &dma_cfg_info);
-		p_spi_reg->transCtrl = spi_master.addr_pha_enable |spi_master.dummy_bit | spi_master.cmd_write | SPI_TRANSCTRL_WCNT((trans_desc->length)-1);
+		
+		if(trans_desc->length == 0)
+		{
+			p_spi_reg->transCtrl = spi_master.addr_pha_enable |spi_master.dummy_bit | spi_master.cmd_write ;
+		}
+		else
+		{
+			p_spi_reg->transCtrl = spi_master.addr_pha_enable |spi_master.dummy_bit | spi_master.cmd_write | SPI_TRANSCTRL_WCNT((trans_desc->length)-1);
+		}
 		p_spi_reg->cmd = trans_desc->cmmand;
 		drv_dma_start(p_spi_dev_dma->spi_tx_dma_ch);
 		system_irq_restore(flags);
@@ -348,13 +365,21 @@ int spi_master_read_buffer( spi_transaction_t* trans_desc )
 	unsigned long flags = system_irq_save();
 	if(spi_dma_enable == 0)
 	{
-		if(spi_master.addr_pha_enable == 1)
+		if(spi_master.addr_pha_enable & BIT(29))
 		{
 			p_spi_reg->addr = trans_desc->addr;
 		}
 		unsigned int * rxBuf = (unsigned int *)(p_spi_dev->spi_rx_buf+p_spi_dev->spi_rx_buf_head);
 		unsigned int rx_num ,i;
-		p_spi_reg->transCtrl = spi_master.addr_pha_enable |spi_master.dummy_bit | spi_master.cmd_read | SPI_TRANSCTRL_RCNT((trans_desc->length) - 1);
+		
+		if(trans_desc->length == 0)
+		{
+			p_spi_reg->transCtrl = spi_master.addr_pha_enable |spi_master.dummy_bit | spi_master.cmd_read ;
+		}
+		else
+		{
+			p_spi_reg->transCtrl = spi_master.addr_pha_enable |spi_master.dummy_bit | spi_master.cmd_read | SPI_TRANSCTRL_RCNT((trans_desc->length) - 1);
+		}
 		p_spi_reg->cmd = trans_desc->cmmand;
 		while(((p_spi_reg->status)& SPI_STATUS_BUSY) == 1)
 		{
@@ -374,7 +399,7 @@ int spi_master_read_buffer( spi_transaction_t* trans_desc )
 	}
 	else
 	{
-		if(spi_master.addr_pha_enable == 1)
+		if(spi_master.addr_pha_enable & BIT(29))
 		{
 			p_spi_reg->addr = trans_desc->addr;
 		}
@@ -387,7 +412,15 @@ int spi_master_read_buffer( spi_transaction_t* trans_desc )
 		spi_clear_fifo();
 		drv_dma_cfg(p_spi_dev_dma->spi_rx_dma_ch, &dma_cfg_info);
 		drv_dma_start(p_spi_dev_dma->spi_rx_dma_ch);
-		p_spi_reg->transCtrl =spi_master.addr_pha_enable | spi_master.dummy_bit | spi_master.cmd_read |SPI_TRANSCTRL_RCNT((trans_desc->length) - 1);
+		
+		if(trans_desc->length == 0)
+		{
+			p_spi_reg->transCtrl =spi_master.addr_pha_enable | spi_master.dummy_bit | spi_master.cmd_read ;
+		}
+		else
+		{
+			p_spi_reg->transCtrl =spi_master.addr_pha_enable | spi_master.dummy_bit | spi_master.cmd_read |SPI_TRANSCTRL_RCNT((trans_desc->length) - 1);
+		}
 		p_spi_reg->cmd = trans_desc->cmmand;
 		system_irq_restore(flags);
 		os_sem_wait(spi_rx_process, SPI_WAIT_FOREVER);

@@ -15,6 +15,7 @@
 
 #define WIFI_SSID_MAX_LEN   (32 + 1)
 #define WIFI_PWD_MAX_LEN    (64) // pwd string support max length is 63
+extern void fhost_set_wpa3_ptk(unsigned char *wpa3_ptk);
 
 typedef struct {
     unsigned int sync:1;
@@ -31,11 +32,19 @@ typedef struct {
 static   wpas_pmk_info_t wpas_pmk_info;
 
 void wpas_pmk_info_load(void)
-{    
+{
+    int ret;
+    unsigned char wpa3_ptk[16];
+    memset(wpa3_ptk, 0, sizeof(wpa3_ptk));
     memset(&wpas_pmk_info, 0, sizeof(wpas_pmk_info));
-    #if defined (CONFIG_NV)
+#if defined (CONFIG_NV)
     hal_system_get_config(CUSTOMER_NV_WIFI_WPAS_PMKINFO, &wpas_pmk_info, sizeof(wpas_pmk_info));
-    #endif
+    ret = hal_system_get_config(CUSTOMER_NV_WIFI_STA_WPA3_PTK, wpa3_ptk, sizeof(wpa3_ptk));
+    if(ret > 0 && ret != 0xffffffff)
+    {
+        fhost_set_wpa3_ptk(wpa3_ptk);
+    }
+#endif
 }
 
 void wpas_pmk_info_save(char *ssid, char *bssid, char *pwd, char *pmk, char *pmkid)

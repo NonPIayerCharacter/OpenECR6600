@@ -31,7 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <errno.h>
 #endif
 #include <unistd.h>
@@ -39,7 +39,7 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <netinet/in.h>
 #endif
 #include <arpa/inet.h>
@@ -47,7 +47,7 @@
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
 #endif
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <sched.h>
@@ -75,7 +75,7 @@
 int
 iperf_server_listen(struct iperf_test *test)
 {
-    int flag = 7;
+    int flag = 7 << 5;
 
     retry:
     if((test->listener = netannounce(test->settings->domain, Ptcp, test->bind_address, test->server_port)) < 0) {
@@ -100,7 +100,7 @@ iperf_server_listen(struct iperf_test *test)
 	iperf_printf(test, "Server listening on %d\n", test->server_port);
 	iperf_printf(test, "-----------------------------------------------------------\n");
 	if (test->forceflush) {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	    iflush(test);
 #endif
     }
@@ -139,11 +139,11 @@ iperf_accept(struct iperf_test *test)
             return -1;
         }
 
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
         setsockopt(test->ctrl_sck, SOL_SOCKET, SO_RCVTIMEO, &recv_timeout, sizeof(unsigned int));
 #endif
 
-        flag = 7;
+        flag = 7 << 5;
         if (setsockopt(test->ctrl_sck, IPPROTO_IP, IP_TOS, (char *) &flag, sizeof(int))) {
             i_errno = IESETTOS;
             return -1;
@@ -160,7 +160,7 @@ iperf_accept(struct iperf_test *test)
             return -1;
         if (iperf_exchange_parameters(test) < 0)
             return -1;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	if (test->server_affinity != -1) 
 	    if (iperf_setaffinity(test, test->server_affinity) != 0)
 		return -1;
@@ -209,7 +209,7 @@ iperf_handle_message_server(struct iperf_test *test)
             break;
         case TEST_END:
 	    test->done = 1;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
             cpu_util(test->cpu_util);
 #endif
             test->stats_callback(test);
@@ -237,7 +237,7 @@ iperf_handle_message_server(struct iperf_test *test)
 	    // Temporarily be in DISPLAY_RESULTS phase so we can get
 	    // ending summary statistics.
 	    signed char oldstate = test->state;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	    cpu_util(test->cpu_util);
 #endif
 	    test->state = DISPLAY_RESULTS;
@@ -268,7 +268,7 @@ server_timer_proc(TimerClientData client_data, struct iperf_time *nowP)
     struct iperf_test *test = client_data.p;
     struct iperf_stream *sp;
 
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
     printf("server timeout...\n");
     test->timer = NULL;
     test->state = IPERF_DONE;
@@ -330,7 +330,7 @@ create_server_timers(struct iperf_test * test)
     test->timer = test->stats_timer = test->reporter_timer = NULL;
     if (test->duration != 0 ) {
         test->done = 0;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
         test->timer = tmr_create(&now, server_timer_proc, cd, (test->duration + test->omit + grace_period) * SEC_TO_US, 0);
 #else
         test->timer = tmr_create(test, &now, server_timer_proc, cd, (test->duration + test->omit + grace_period) * SEC_TO_US, 0);
@@ -343,7 +343,7 @@ create_server_timers(struct iperf_test * test)
 
     test->stats_timer = test->reporter_timer = NULL;
     if (test->stats_interval != 0) {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
         test->stats_timer = tmr_create(&now, server_stats_timer_proc, cd, test->stats_interval * SEC_TO_US, 1);
 #else	
         test->stats_timer = tmr_create(test, &now, server_stats_timer_proc, cd, (size_t)test->stats_interval * SEC_TO_US, 1);
@@ -354,7 +354,7 @@ create_server_timers(struct iperf_test * test)
 	}
     }
     if (test->reporter_interval != 0) {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
         test->reporter_timer = tmr_create(&now, server_reporter_timer_proc, cd, test->reporter_interval * SEC_TO_US, 1);
 #else
         test->reporter_timer = tmr_create(test, &now, server_reporter_timer_proc, cd, (size_t)test->reporter_interval * SEC_TO_US, 1);
@@ -380,13 +380,13 @@ server_omit_timer_proc(TimerClientData client_data, struct iperf_time *nowP)
 
     /* Reset the timers. */
     if (test->stats_timer != NULL)
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	tmr_reset(nowP, test->stats_timer);
 #else
     tmr_reset(test, nowP, test->stats_timer);
 #endif
     if (test->reporter_timer != NULL)
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	tmr_reset(nowP, test->reporter_timer);
 #else
     tmr_reset(test, nowP, test->reporter_timer);
@@ -409,7 +409,7 @@ create_server_omit_timer(struct iperf_test * test)
 	}
 	test->omitting = 1;
 	cd.p = test;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	test->omit_timer = tmr_create(&now, server_omit_timer_proc, cd, test->omit * SEC_TO_US, 0); 
 #else
     test->omit_timer = tmr_create(test, &now, server_omit_timer_proc, cd, test->omit * SEC_TO_US, 0);
@@ -427,7 +427,7 @@ static void
 cleanup_server(struct iperf_test *test)
 {
     /* Close open test sockets */
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     if (test->ctrl_sck) {
 	close(test->ctrl_sck);
     }
@@ -457,7 +457,7 @@ cleanup_server(struct iperf_test *test)
 
     /* Cancel any remaining timers. */
     if (test->stats_timer != NULL) {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	tmr_cancel(test->stats_timer);
 #else
     tmr_cancel(test, test->stats_timer);
@@ -465,7 +465,7 @@ cleanup_server(struct iperf_test *test)
 	test->stats_timer = NULL;
     }
     if (test->reporter_timer != NULL) {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	tmr_cancel(test->reporter_timer);
 #else
     tmr_cancel(test, test->reporter_timer);
@@ -473,7 +473,7 @@ cleanup_server(struct iperf_test *test)
 	test->reporter_timer = NULL;
     }
     if (test->omit_timer != NULL) {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	tmr_cancel(test->omit_timer);
 #else
     tmr_cancel(test, test->omit_timer);
@@ -485,7 +485,7 @@ cleanup_server(struct iperf_test *test)
 	test->congestion_used = NULL;
     }
     if (test->timer != NULL) {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
         tmr_cancel(test->timer);
 #else
         tmr_cancel(test, test->timer);
@@ -507,7 +507,7 @@ int iperf_run_server(struct iperf_test *test)
     fd_set read_set, write_set;
     struct iperf_stream *sp;
     struct iperf_time now;
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
     struct timeval poll;
     struct timeval timeout;
     int ret = 0;
@@ -516,7 +516,7 @@ int iperf_run_server(struct iperf_test *test)
 #endif
     int flag;
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     if (test->affinity != -1) 
     if (iperf_setaffinity(test, test->affinity) != 0)
         return -2;
@@ -526,7 +526,7 @@ int iperf_run_server(struct iperf_test *test)
     if (iperf_json_start(test) < 0)
         return -2;
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     if (test->json_output) {
         cJSON_AddItemToObject(test->json_start, "version", cJSON_CreateString(version));
         cJSON_AddItemToObject(test->json_start, "system_info", cJSON_CreateString(get_system_info()));
@@ -545,13 +545,13 @@ int iperf_run_server(struct iperf_test *test)
 
     // Open socket and listen
     if (iperf_server_listen(test) < 0) {
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
         cleanup_server(test);
 #endif
         return -2;
     }
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     // Begin calculating CPU utilization
     cpu_util(NULL);
 #endif
@@ -565,12 +565,12 @@ int iperf_run_server(struct iperf_test *test)
         memcpy(&write_set, &test->write_set, sizeof(fd_set));
 
         iperf_time_now(&now);
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
         timeout = tmr_timeout(&now);
 #else
         ret = tmr_timeout(test, &now, &timeout);
 #endif
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
         result = select(test->max_fd + 1, &read_set, &write_set, NULL, timeout);
 #else
         if (!ret)
@@ -628,7 +628,7 @@ int iperf_run_server(struct iperf_test *test)
 
             if (test->state == CREATE_STREAMS) {
                 if (FD_ISSET(test->prot_listener, &read_set)) {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
                     if ((s = test->protocol->accept(test)) < 0)
 #else
                     if ((s = test->protocol->accept_fn(test)) < 0)
@@ -818,7 +818,7 @@ int iperf_run_server(struct iperf_test *test)
                 }
             }
         }
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
         if (result == 0 || (timeout != NULL && timeout->tv_sec == 0 && timeout->tv_usec == 0)) {
             /* Run the timers. */
             iperf_time_now(&now);
@@ -840,7 +840,7 @@ int iperf_run_server(struct iperf_test *test)
             return -1;
     } 
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     iflush(test);
 
     if (test->server_affinity != -1) 

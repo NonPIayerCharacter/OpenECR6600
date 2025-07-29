@@ -268,7 +268,7 @@ static void cmd_process(int argc, char *argv[])
 
 void  cli_cmd_handle(char *cmd)
 {
-	char *argv[CLI_CMD_MAX_ARGV] = {NULL, };
+	char *argv[CLI_CMD_MAX_ARGV+1] = {NULL, };
 	int argc;
 
 	if (!cmd || *cmd == '\0')
@@ -535,7 +535,6 @@ void cli_buf_handle(void)
 
 				default:
 					if (c > 0x1F && c < 0x7F && p_cli_dev->cli_isr_index < CLI_CMD_RECEIVE_BUF_LEN)
-					//if (p_cli_dev->cli_isr_index < CLI_CMD_RECEIVE_BUF_LEN)
 					{
 						p_cli_dev->cli_isr_buffer[p_cli_dev->cli_isr_index++] = c;
 						if(p_cli_dev->echo_open)
@@ -713,13 +712,18 @@ void component_cli_init(E_DRV_UART_NUM uart_num)
 
 void AmtInit()
 {
-#ifdef CONFIG_AMT_UART_0
-    component_cli_init(E_UART_NUM_0);
-#elif CONFIG_AMT_UART_1
-    component_cli_init(E_UART_NUM_1);
-#elif CONFIG_AMT_UART_2
-    component_cli_init(E_UART_NUM_2);
+#ifdef CONFIG_CUSTOM_SY
+	component_cli_init(E_UART_NUM_1);
+#else
+	#ifdef CONFIG_AMT_UART_0
+		component_cli_init(E_UART_NUM_0);
+	#elif CONFIG_AMT_UART_1
+		component_cli_init(E_UART_NUM_1);
+	#elif CONFIG_AMT_UART_2
+		component_cli_init(E_UART_NUM_2);
+	#endif
 #endif
+
 
     s_cli_dev.prefix_open = 0;
     s_cli_dev.mode = E_AMT;

@@ -225,7 +225,7 @@ int  dce_expect_string(char** pbuf, size_t* psize, char** result)
         *dst = c;
         ++dst;
     }
-    os_printf(LM_APP, LL_INFO, "string is missing a closing quote");
+    os_printf(LM_APP, LL_INFO, "string is missing a closing quote\n");
     return -1;
 }
 

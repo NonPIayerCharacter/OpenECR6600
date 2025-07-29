@@ -50,7 +50,7 @@
 #include <sys/socket.h>
 #include <string.h>
 #include <netinet/in.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <errno.h>
 #endif
 

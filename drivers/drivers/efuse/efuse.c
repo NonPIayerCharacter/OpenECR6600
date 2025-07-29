@@ -256,7 +256,7 @@ int drv_efuse_write(unsigned int addr, unsigned int value, unsigned int mask)
 /**    @brief       Initialize efuse related configuration.
  *     @details     Select the corresponding configuration according to different frequencies.
  */
-void drv_efuse_init(void)
+void  __attribute__((no_ex9, used))drv_efuse_init(void)
 {
 	T_EFUSE_REG_MAP * p_efuse_reg = (T_EFUSE_REG_MAP * )MEM_BASE_EFUSE;
 	unsigned int clk_reg_0 = 0, clk_reg_1 = 0;

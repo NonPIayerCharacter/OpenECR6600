@@ -2437,7 +2437,7 @@ static void wpa_supplicant_event_assoc(struct wpa_supplicant *wpa_s,
 }
 
 
-#ifdef CONFIG_PSM_SUPER_LOWPOWER 
+#if (defined(CONFIG_PSM_SUPER_LOWPOWER) || defined(CONFIG_FAST_CONNECT))
 static int disconnect_reason_recoverable(u16 reason_code)
 {
 #if 0
@@ -2502,8 +2502,11 @@ static int could_be_psk_mismatch(struct wpa_supplicant *wpa_s, u16 reason_code,
 }
 
 static wifi_discon_reason_e disconnect_reason_code = 0;
+u16 standard_reason_code = 0;
 void wpa_update_disconnect_reason(u16 reason)
 {
+    standard_reason_code = reason;
+
     switch (reason)
     {
         case WLAN_REASON_CONNECTED:
@@ -2536,8 +2539,12 @@ wifi_discon_reason_e wpa_disconnect_reason()
     return disconnect_reason_code;
 }
 
+u16 wpa_get_reason_code()
+{
+    return standard_reason_code;
+}
 
-#ifdef CONFIG_PSM_SUPER_LOWPOWER
+#if (defined(CONFIG_PSM_SUPER_LOWPOWER) || defined(CONFIG_FAST_CONNECT))
 unsigned int fast_reconnect_freq = 0;
 #endif
 static void wpa_supplicant_event_disassoc_finish(struct wpa_supplicant *wpa_s,
@@ -2547,7 +2554,7 @@ static void wpa_supplicant_event_disassoc_finish(struct wpa_supplicant *wpa_s,
 	const u8 *bssid;
 	int authenticating;
 	u8 prev_pending_bssid[ETH_ALEN];
-#ifdef CONFIG_PSM_SUPER_LOWPOWER 
+#if (defined(CONFIG_PSM_SUPER_LOWPOWER) || defined(CONFIG_FAST_CONNECT))
 	struct wpa_bss *fast_reconnect = NULL;
 	struct wpa_ssid *fast_reconnect_ssid = NULL;
 #endif
@@ -2587,7 +2594,7 @@ static void wpa_supplicant_event_disassoc_finish(struct wpa_supplicant *wpa_s,
 		//wpas_auth_failed(wpa_s, "WRONG_KEY");
 		wpas_notify_sta_4way_hs_failed(wpa_s);
 	}
-#ifdef CONFIG_PSM_SUPER_LOWPOWER 
+#if (defined(CONFIG_PSM_SUPER_LOWPOWER) || defined(CONFIG_FAST_CONNECT))
 	if (!wpa_s->disconnected /*&&
 	    (!wpa_s->auto_reconnect_disabled ||
 	     wpa_s->key_mgmt == WPA_KEY_MGMT_WPS ||
@@ -2624,7 +2631,7 @@ static void wpa_supplicant_event_disassoc_finish(struct wpa_supplicant *wpa_s,
 		//wpa_supplicant_cancel_sched_scan(wpa_s);
 	}
 #else
-    if (wpa_s->wpa_state >= WPA_ASSOCIATING)
+    if (wpa_s->wpa_state >= WPA_ASSOCIATING && (wpa_s->current_ssid->mode != WPAS_MODE_AP))
 		wpa_supplicant_req_scan(wpa_s, 0, 100000);
 #endif
 	bssid = wpa_s->bssid;
@@ -2632,7 +2639,7 @@ static void wpa_supplicant_event_disassoc_finish(struct wpa_supplicant *wpa_s,
 		bssid = wpa_s->pending_bssid;
 	if (wpa_s->wpa_state >= WPA_AUTHENTICATING)
 		wpas_connection_failed(wpa_s, bssid);
-#ifdef CONFIG_PSM_SUPER_LOWPOWER 
+#if (defined(CONFIG_PSM_SUPER_LOWPOWER) || defined(CONFIG_FAST_CONNECT))
     if(fast_reconnect)
     {
         wpa_supplicant_cancel_scan(wpa_s);
@@ -2660,7 +2667,7 @@ static void wpa_supplicant_event_disassoc_finish(struct wpa_supplicant *wpa_s,
 		wpa_s->current_ssid = last_ssid;
 	}
 
-#ifdef CONFIG_PSM_SUPER_LOWPOWER
+#if (defined(CONFIG_PSM_SUPER_LOWPOWER) || defined(CONFIG_FAST_CONNECT))
 	if (fast_reconnect &&
 	    !wpas_network_disabled(wpa_s, fast_reconnect_ssid) &&
 	    !wpas_temp_disabled(wpa_s, fast_reconnect_ssid) /*&&
@@ -3748,7 +3755,27 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 				       data->rx_from_unknown.wds);
 		break;
 	case EVENT_CH_SWITCH:
-        wpa_msg(wpa_s, MSG_INFO, "event %d not support!", event);
+		if (!data || !wpa_s->current_ssid)
+			break;
+
+		wpa_msg(wpa_s, MSG_INFO,
+			"%sfreq=%d ht_enabled=%d ch_offset=%d ch_width=%s cf1=%d cf2=%d",
+			event,
+			data->ch_switch.freq,
+			data->ch_switch.ht_enabled,
+			data->ch_switch.ch_offset,
+			channel_width_to_string(data->ch_switch.ch_width),
+			data->ch_switch.cf1,
+			data->ch_switch.cf2);
+        wpa_s->assoc_freq = data->ch_switch.freq;
+        if (wpa_s->current_ssid->mode == WPAS_MODE_AP) {
+			wpas_ap_ch_switch(wpa_s, data->ch_switch.freq,
+					  data->ch_switch.ht_enabled,
+					  data->ch_switch.ch_offset,
+					  data->ch_switch.ch_width,
+					  data->ch_switch.cf1,
+					  data->ch_switch.cf2);
+		}
 		break;
 #ifdef NEED_AP_MLME
 	case EVENT_DFS_RADAR_DETECTED:

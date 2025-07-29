@@ -450,9 +450,9 @@ void hostapd_event_sta_low_ack(struct hostapd_data *hapd, const u8 *addr)
 void hostapd_event_ch_switch(struct hostapd_data *hapd, int freq, int ht,
 			     int offset, int width, int cf1, int cf2)
 {
-#if 0
+#if 1
 #ifdef NEED_AP_MLME
-	int channel, chwidth, is_dfs;
+	int channel, chwidth, is_dfs __attribute__((unused));
 	u8 seg0_idx = 0, seg1_idx = 0;
 
 	hostapd_logger(hapd, NULL, HOSTAPD_MODULE_IEEE80211,

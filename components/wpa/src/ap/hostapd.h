@@ -243,14 +243,14 @@ struct hostapd_data {
 	void *new_psk_cb_ctx;
 
 	/* channel switch parameters */
-	//struct hostapd_freq_params cs_freq_params;
-	//u8 cs_count;
-	//int cs_block_tx;
-	//unsigned int cs_c_off_beacon;
-	//unsigned int cs_c_off_proberesp;
-	//int csa_in_progress;
-	//unsigned int cs_c_off_ecsa_beacon;
-	//unsigned int cs_c_off_ecsa_proberesp;
+	struct hostapd_freq_params cs_freq_params;
+	u8 cs_count;
+	int cs_block_tx;
+	unsigned int cs_c_off_beacon;
+	unsigned int cs_c_off_proberesp;
+	int csa_in_progress;
+	unsigned int cs_c_off_ecsa_beacon;
+	unsigned int cs_c_off_ecsa_proberesp;
 
 	/* BSS Load */
 	unsigned int bss_load_update_timeout;

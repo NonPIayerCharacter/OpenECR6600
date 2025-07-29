@@ -320,7 +320,7 @@ void net_tx_mem_free(void *mem);
  */
 uint16_t net_rx_buf_extra_size(void);
 
-#if defined ENABLE_LWIP_NAPT || (CONFIG_SPI_REPEATER && CONFIG_SPI_MASTER)
+#ifdef CONFIG_LWIP_NAPT
 int enable_lwip_napt(int vif, int enable);
 #endif
 

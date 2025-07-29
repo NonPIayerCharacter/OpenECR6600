@@ -22,7 +22,7 @@
 
 /* cJSON */
 /* JSON parser in C. */
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 
 #ifdef __GNUC__
 #pragma GCC visibility push(default)
@@ -32,7 +32,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <float.h>
 #include <limits.h>
 #endif
@@ -41,7 +41,7 @@
 #include <stdint.h>
 #endif
 #include <sys/types.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <locale.h>
 #endif
 
@@ -117,7 +117,7 @@ typedef struct internal_hooks
     void *(*reallocate)(void *pointer, size_t size);
 } internal_hooks;
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 static internal_hooks global_hooks = { malloc, free, realloc };
 #else
 extern void *pvPortMalloc(size_t size);
@@ -217,7 +217,7 @@ CJSON_PUBLIC(void) cJSON_Delete(cJSON *item)
 /* get the decimal point character of the current locale */
 static unsigned char get_decimal_point(void)
 {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
         struct lconv *lconv = localeconv();
         return (unsigned char) lconv->decimal_point[0];
 #else
@@ -311,7 +311,7 @@ loop_end:
     }
     else
     {
-	#ifndef __TR_SW__
+	#ifndef CONFIG_WIRELESS_IPERF_3
 		item->valueint = (int64_t)number;
 	#else
         item->valueint = (size_t)number;
@@ -393,7 +393,7 @@ static unsigned char* ensure(printbuffer * const p, size_t needed)
         /* overflow of int, use LLONG_MAX if possible */
         if (needed <= LLONG_MAX)
         {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
             newsize = LLONG_MAX;
 #else
             newsize = (size_t)LLONG_MAX;
@@ -2085,7 +2085,7 @@ CJSON_PUBLIC(cJSON *) cJSON_CreateNumber(double num)
         }
         else
         {
-		#ifndef __TR_SW__
+		#ifndef CONFIG_WIRELESS_IPERF_3
 			item->valueint = (int64_t)num;
 		#else
             item->valueint = (size_t)num;

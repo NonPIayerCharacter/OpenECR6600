@@ -96,4 +96,3 @@ void vnet_interrupt_clear(int num)
 
     system_irq_restore(flag);
 }
-

@@ -52,6 +52,45 @@ static int spi_write_test(cmd_tbl_t *t, int argc, char *argv[])
 
 CLI_CMD(spi_tx, spi_write_test, "test_spi_write", "test_spi_write");
 
+static int spi_write_withaddr_test(cmd_tbl_t *t, int argc, char *argv[])
+{
+	spi_interface_config_t spi_master_dev = 
+	{	
+		.addr_len = 4,
+		.data_len = 8,
+		.spi_clk_pol = 0,
+		.spi_clk_pha = 0,
+		.spi_trans_mode=SPI_MODE_STANDARD,
+		.master_clk = 10,
+		.addr_pha_enable = 1,
+		.cmd_read = SPI_TRANSCTRL_TRAMODE_DR|SPI_TRANSCTRL_CMDEN,
+		.cmd_write = SPI_TRANSCTRL_TRAMODE_DW|SPI_TRANSCTRL_CMDEN,
+		.dummy_bit =SPI_TRANSCTRL_DUMMY_CNT_1,
+		.spi_dma_enable =0
+	};	
+	spi_init_cfg(&spi_master_dev);	
+
+	unsigned int len;
+	len = strtoul(argv[1], NULL, 0);
+	spi_transaction_t config;
+	config.cmmand = 0x51;
+	config.addr = 0x33445566;
+	config.length = len;
+
+	unsigned char test[1024]={0};
+	int i;
+	for(i=0;i<1024;++i)
+	{
+		test[i] = (unsigned char)(i%256);
+
+	}
+	spi_master_write((unsigned char*)test, &config );
+
+	return CMD_RET_SUCCESS;
+}
+
+CLI_CMD(spi_tx_addr, spi_write_withaddr_test, "test_spi_write", "test_spi_write");
+
 static int spi_read_test(cmd_tbl_t *t, int argc, char *argv[])
 {
 	spi_transaction_t config;

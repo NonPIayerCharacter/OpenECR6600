@@ -338,14 +338,13 @@ static u8 * hostapd_eid_wpa(struct hostapd_data *hapd, u8 *eid, size_t len)
 }
 
 
-#ifdef COMPILE_WARNING_OPTIMIZE_WPA
 static u8 * hostapd_eid_csa(struct hostapd_data *hapd, u8 *eid)
 {
 #ifdef CONFIG_TESTING_OPTIONS
 	if (hapd->iface->cs_oper_class && hapd->iconf->ecsa_ie_only)
 		return eid;
 #endif /* CONFIG_TESTING_OPTIONS */
-#if 0
+#if 1
 	if (!hapd->cs_freq_params.channel)
 		return eid;
 
@@ -358,7 +357,7 @@ static u8 * hostapd_eid_csa(struct hostapd_data *hapd, u8 *eid)
 	return eid;
 }
 
-
+#ifdef COMPILE_WARNING_OPTIMIZE_WPA
 static u8 * hostapd_eid_ecsa(struct hostapd_data *hapd, u8 *eid)
 {
 #if 0
@@ -410,8 +409,8 @@ static u8 * hostapd_gen_probe_resp(struct hostapd_data *hapd,
 				   int is_p2p, size_t *resp_len)
 {
 	struct ieee80211_mgmt *resp;
-	//u8 *pos, *epos, *csa_pos;
-	u8 *pos, *epos;
+	u8 *pos, *epos, *csa_pos;
+	//u8 *pos, *epos;
 	size_t buflen;
 #ifdef CONFIG_IEEE80211N
 	u8 disable_ht = 0;
@@ -493,10 +492,10 @@ static u8 * hostapd_gen_probe_resp(struct hostapd_data *hapd,
 	//pos = hostapd_eid_pwr_constraint(hapd, pos);
 
 	/* CSA IE */
-	//csa_pos = hostapd_eid_csa(hapd, pos);
-	//if (csa_pos != pos)
-	//	hapd->cs_c_off_proberesp = csa_pos - (u8 *) resp - 1;
-	//pos = csa_pos;
+	csa_pos = hostapd_eid_csa(hapd, pos);
+	if (csa_pos != pos)
+		hapd->cs_c_off_proberesp = csa_pos - (u8 *) resp - 1;
+	pos = csa_pos;
 
 	/* ERP Information element */
 	pos = hostapd_eid_erp_info(hapd, pos);
@@ -1079,8 +1078,8 @@ int ieee802_11_build_ap_params(struct hostapd_data *hapd,
 	size_t resp_len = 0;
 #ifdef NEED_AP_MLME
 	u16 capab_info;
-	//u8 *pos, *tailpos, *csa_pos;
-	u8 *pos, *tailpos;
+	u8 *pos, *tailpos, *csa_pos;
+	//u8 *pos, *tailpos;
 #ifdef CONFIG_IEEE80211N
 	u8 disable_ht = 0;
 
@@ -1182,10 +1181,10 @@ int ieee802_11_build_ap_params(struct hostapd_data *hapd,
 	//tailpos = hostapd_eid_pwr_constraint(hapd, tailpos);
 
 	/* CSA IE */
-	//csa_pos = hostapd_eid_csa(hapd, tailpos);
-	//if (csa_pos != tailpos)
-	//	hapd->cs_c_off_beacon = csa_pos - tail - 1;
-	//tailpos = csa_pos;
+	csa_pos = hostapd_eid_csa(hapd, tailpos);
+	if (csa_pos != tailpos)
+		hapd->cs_c_off_beacon = csa_pos - tail - 1;
+	tailpos = csa_pos;
 
 	/* ERP Information element */
 	tailpos = hostapd_eid_erp_info(hapd, tailpos);
@@ -1402,10 +1401,10 @@ int ieee802_11_set_beacon(struct hostapd_data *hapd)
 	struct wpabuf *beacon = NULL, *proberesp = NULL, *assocresp = NULL;
 	int res, ret = -1;
 
-	//if (hapd->csa_in_progress) {
-	//	wpa_printf_error(MSG_ERROR, "Cannot set beacons during CSA period");
-	//	return -1;
-	//}
+	if (hapd->csa_in_progress) {
+		wpa_printf_error(MSG_ERROR, "Cannot set beacons during CSA period");
+		return -1;
+	}
 
 	hapd->beacon_set_done = 1;
 

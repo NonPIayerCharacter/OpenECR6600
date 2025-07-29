@@ -70,11 +70,7 @@ static int AmtStart(cmd_tbl_t *t, int argc, char *argv[])
 
     return CMD_RET_SUCCESS;
 }
-#ifdef CONFIG_CUSTOM_YY
 CLI_CMD_M(amt_start, AmtStart, "amtStart", "amtStart", E_ALL);
-#else 
-CLI_CMD_M(amt_start, AmtStart, "amtStart", "amtStart", E_STANDALONE | E_AMT | E_TRANSPORT | E_LMAC_TEST | E_AT);
-#endif
 
 #ifndef NX_ESWIN_SDIO
 static int AmtStop(cmd_tbl_t *t, int argc, char *argv[])

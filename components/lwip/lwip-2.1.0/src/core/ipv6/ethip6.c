@@ -78,9 +78,6 @@
 err_t
 ethip6_output(struct netif *netif, struct pbuf *q, const ip6_addr_t *ip6addr)
 {
-#if defined CONFIG_SPI_REPEATER && CONFIG_SPI_MASTER
-  return 0;
-#else
   struct eth_addr dest;
   const u8_t *hwaddr;
   err_t result;
@@ -121,7 +118,6 @@ ethip6_output(struct netif *netif, struct pbuf *q, const ip6_addr_t *ip6addr)
   /* Send out the packet using the returned hardware address. */
   SMEMCPY(dest.addr, hwaddr, 6);
   return ethernet_output(netif, q, (const struct eth_addr*)(netif->hwaddr), &dest, ETHTYPE_IPV6);
-#endif
 }
 
 #endif /* LWIP_IPV6 && LWIP_ETHERNET */

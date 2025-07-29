@@ -81,6 +81,7 @@ static bool wifi_init_complete_flag = false;
 /****************************************************************************
 * 	                                          Global Function Prototypes
 ****************************************************************************/
+extern uint8_t csa_switch;
 extern uint8_t wifi_ax_config;
 extern char wpa_cmd_receive_str(int vif_id, char *cmd);
 extern struct wpa_supplicant *wpa_get_ctrl_iface(int vif_id);
@@ -95,7 +96,13 @@ extern void get_channel(uint8_t *ch);
 extern int wpa_drv_set_country(const char *p_country_code);
 extern void wpa_drv_get_country(const char *p_country_code);
 extern wifi_discon_reason_e wpa_disconnect_reason();
+extern u16 wpa_get_reason_code();
 extern void fhost_set_heartbeat_enable(uint8_t enable);
+#if defined(CONFIG_FAST_CONNECT)
+int wpa_receive_frist_connect(int vif_id, wifi_config_u *config);
+#endif
+extern int fhost_get_sta_freq(void);
+extern int fhost_get_softap_freq(void);
 
 /****************************************************************************
 * 	                                          Function Definitions
@@ -155,7 +162,7 @@ int wifi_ctrl_iface(int vif, char *cmd)
         return -1;
     }
 
-    SYS_LOGV("--%s--vif[%d]:%s\n", __func__, vif, cmd);
+    SYS_LOGV("vif[%d]:%s", vif, cmd);
     return wpa_cmd_receive_str(vif, cmd);
 }
 
@@ -210,6 +217,7 @@ static void wifi_send_deauth(unsigned char *sa, unsigned char *da, unsigned char
 
     mgmt->frame_control = IEEE80211_FC(WLAN_FC_TYPE_MGMT,
         WLAN_FC_STYPE_DEAUTH);
+    mgmt->frame_control |= WLAN_FC_ISWEP;
     memcpy(mgmt->da, da, ETH_ALEN);
     memcpy(mgmt->sa, sa, ETH_ALEN);
     memcpy(mgmt->bssid, bssid, ETH_ALEN);
@@ -333,7 +341,7 @@ void wifi_handle_sta_connect_event(system_event_t *event, bool nv_save)
         if (wifi_get_status(event->vif) != STA_STATUS_STOP) {
             wifi_set_status(event->vif, STA_STATUS_DISCON);
         }
-        wifi_station_dhcpc_stop(event->vif);
+        wifi_station_dhcpc_stop2(event->vif, false);
         nif->info.channel = 0;
     } else if (event->event_id == SYSTEM_EVENT_STA_CONNECTED) {
         wifi_set_status(event->vif, STA_STATUS_CONNECTED);
@@ -676,15 +684,7 @@ sys_err_t wifi_save_ap_nv_info(wifi_ap_config_t *softap_info)
         hal_system_del_config(CUSTOMER_NV_WIFI_HIDDEN_SSID);
         return SYS_ERR;
     }
-#ifdef CONFIG_VNET_SERVICE
-    else
-    {
-        hal_system_del_config(CUSTOMER_NV_WIFI_STA_SSID);
-        hal_system_del_config(CUSTOMER_NV_WIFI_STA_PWD);
-        hal_system_del_config(CUSTOMER_NV_WIFI_STA_BSSID);
-        hal_system_del_config(CUSTOMER_NV_WIFI_STA_CHANNEL);
-    }
-#endif
+
     return SYS_OK;
 }
 
@@ -871,10 +871,28 @@ sys_err_t wifi_start_station(wifi_config_u *config)
     wifi_config_channel(STATION_IF, config->sta.channel);
     wifi_config_commit(STATION_IF);
     wifi_set_status(STATION_IF, STA_STATUS_START);
+    return SYS_OK;
+}
+#if defined(CONFIG_FAST_CONNECT)
+sys_err_t wifi_frist_start_station(wifi_config_u *config)
+{
+    wifi_work_mode_e wifi_opmode = wifi_get_opmode();
+
+    if (wifi_opmode != WIFI_MODE_STA && wifi_opmode != WIFI_MODE_AP_STA) {
+        return SYS_ERR_WIFI_MODE;
+    }
+
+    if (wifi_get_status(STATION_IF) > STA_STATUS_STOP) {
+        return SYS_ERR_WIFI_BUSY;
+    }
+
+    wpa_receive_frist_connect(STATION_IF,config);
+
+    wifi_set_status(STATION_IF, STA_STATUS_START);
 
     return SYS_OK;
 }
-
+#endif
 #if 0 //#ifdef TEST_DNA_API_WIFI
 #include "dna_api.h"
 static sys_err_t wifi_set_psk(unsigned char type, unsigned char *psk, unsigned char len)
@@ -1079,9 +1097,8 @@ sys_err_t wifi_wait_scan_done(unsigned int timeoutms)
 sys_err_t wifi_scan_start(bool block, const wifi_scan_config_t *config)
 {
     char buf[WIFI_CMD_LEN] = {0}, *pos, *end;
-    unsigned int timeout;
-    unsigned int scan_time;
-    
+    unsigned int scan_time __maybe_unused;
+
     pos = buf;
     end = buf + WIFI_CMD_LEN;
 
@@ -1125,25 +1142,7 @@ sys_err_t wifi_scan_start(bool block, const wifi_scan_config_t *config)
         return SYS_OK;
     }
 
-    if(config)
-	{
-		scan_time = config->scan_time ? config->scan_time : 100;
-	
-		if (config->channel > 0 && config->channel <= 14)
-		{
-			timeout = scan_time + SCAN_DELAY_TIMEMS;
-		}
-		else
-		{
-			timeout = scan_time * 14 + SCAN_DELAY_TIMEMS;
-		}
-	}
-	else
-	{
-		timeout = 100 * 14 + SCAN_DELAY_TIMEMS;
-	}
-
-    return wifi_wait_scan_done(timeout);
+    return wifi_wait_scan_done(portMAX_DELAY);
 }
 
 sys_err_t wifi_get_scan_result(unsigned int index, wifi_info_t *info)
@@ -1275,7 +1274,7 @@ sys_err_t wifi_get_gw_addr(wifi_interface_e vif, unsigned int *gw)
         return SYS_ERR_INVALID_ARG;
     }
 
-    nif = get_netif_by_index(STATION_IF);
+    nif = get_netif_by_index(vif);
     if (nif) {
 		#ifdef CONFIG_IPV6
 		*gw = nif->gw.u_addr.ip4.addr;
@@ -1329,7 +1328,7 @@ sys_err_t wifi_load_nv_info(wifi_nv_info_t *nv_info)
         is_sta_pwd_on = true;
     }
 
-    SYS_LOGE("load wifi nv:ssid[%s],pwd[%s],channel[%d],auto[%d]",
+    SYS_LOGI("nv:s[%s],p[%s],c[%d],a[%d]",
         nv_info->sta_ssid, nv_info->sta_pwd, nv_info->channel, nv_info->auto_conn);
     return SYS_OK;
 
@@ -1338,7 +1337,7 @@ sys_err_t wifi_load_nv_info(wifi_nv_info_t *nv_info)
 sys_err_t wifi_save_nv_info(wifi_nv_info_t *nv_info)
 {
     int ret = 0;
-	SYS_LOGE("wifi_save_nv_info=%d %d",nv_info,nv_info->sta_ssid[0]);
+
     if (!nv_info)
         return SYS_ERR_INVALID_ARG;
     if (!nv_info->sta_ssid[0])
@@ -1350,8 +1349,8 @@ sys_err_t wifi_save_nv_info(wifi_nv_info_t *nv_info)
     ret |= hal_system_set_config(CUSTOMER_NV_WIFI_STA_CHANNEL, &nv_info->channel, sizeof(nv_info->channel));
     ret |= hal_system_set_config(CUSTOMER_NV_WIFI_AUTO_CONN, &nv_info->auto_conn, sizeof(nv_info->auto_conn));
 
-    SYS_LOGE("%d, %d, %d", strlen(nv_info->sta_ssid), strlen(nv_info->sta_pwd), sizeof(nv_info->channel));
-    SYS_LOGE("save wifi nv:ssid[%s],pwd[%s],channel[%d],auto[%d].",
+    SYS_LOGI("%d, %d, %d", strlen(nv_info->sta_ssid), strlen(nv_info->sta_pwd), sizeof(nv_info->channel));
+    SYS_LOGI("save wifi nv:ssid[%s],pwd[%s],channel[%d],auto[%d].",
         nv_info->sta_ssid, nv_info->sta_pwd, nv_info->channel, nv_info->auto_conn);
 
     if (ret) { //roll back.
@@ -1362,17 +1361,6 @@ sys_err_t wifi_save_nv_info(wifi_nv_info_t *nv_info)
         hal_system_del_config(CUSTOMER_NV_WIFI_AUTO_CONN);
         return SYS_ERR;
     }
-		#ifdef CONFIG_VNET_SERVICE
-    else
-    {
-        hal_system_del_config(CUSTOMER_NV_WIFI_AP_SSID);
-        hal_system_del_config(CUSTOMER_NV_WIFI_AP_PWD);
-        hal_system_del_config(CUSTOMER_NV_WIFI_AP_CHANNEL);
-        hal_system_del_config(CUSTOMER_NV_WIFI_AP_AUTH);
-        hal_system_del_config(CUSTOMER_NV_WIFI_MAX_CON);
-        hal_system_del_config(CUSTOMER_NV_WIFI_HIDDEN_SSID);
-    }
-#endif
     nv_info->sync = 1;
 
     return SYS_OK;
@@ -1398,11 +1386,19 @@ sys_err_t wifi_set_sta_by_nv(wifi_nv_info_t *nv_info)
     memcpy(sta_config.sta.ssid, nv_info->sta_ssid, strlen(nv_info->sta_ssid));
 //    memcpy(sta_config.sta.bssid, nv_info->sta_bssid, sizeof(nv_info->sta_bssid));
 //    sta_config.sta.channel = nv_info->channel;
+#if defined(CONFIG_FAST_CONNECT)
+    sta_config.sta.channel = nv_info->channel;
+#endif
+
     if (is_sta_pwd_on) {
         memcpy(sta_config.sta.password, nv_info->sta_pwd, strlen(nv_info->sta_pwd));
     }
-
+#if defined(CONFIG_FAST_CONNECT)
+    //return wifi_frist_start_station(&sta_config);
     return wifi_start_station(&sta_config);
+#else
+    return wifi_start_station(&sta_config);
+#endif
 }
 
 #if 0
@@ -1532,7 +1528,52 @@ wifi_discon_reason_e wifi_get_sta_disconnect_reason ()
     return wpa_disconnect_reason();
 }
 
+u16 wifi_get_sta_reason_code()
+{
+    return wpa_get_reason_code();
+}
 
+int wifi_set_ap_csa(unsigned short channel, unsigned char csa_count, unsigned char blocktx)
+{
+    char dst[64] = {0};
+    unsigned short freq;
+    if (channel > 0 && channel <= 14) {
+        freq = wifi_channel_to_freq(channel);
+    } else {
+        freq = channel;
+    }
+    sprintf(dst, "CHAN_SWITCH %d %d blocktx %d", csa_count, freq, blocktx);
+    wifi_ctrl_iface(SOFTAP_IF, dst);
+    return 0;
+}
+
+void wifi_csa_switch(uint8_t enable)
+{
+    csa_switch = enable;
+}
+
+void wifi_softap_channel_sync(void)
+{
+    int sta_freq, softap_freq;
+
+    if(wifi_get_ap_status() != AP_STATUS_STARTED) {
+        return;
+    }
+
+    sta_freq = fhost_get_sta_freq();
+    softap_freq = fhost_get_softap_freq();
+    if(sta_freq < 0|| softap_freq < 0) {
+        SYS_LOGD("%s sta_freq=%d softap:%d", __func__, sta_freq, softap_freq);
+        return ;
+    }
+
+    if(sta_freq != softap_freq) {
+        SYS_LOGD("%s csa %d -> %d", __func__, softap_freq, sta_freq);
+        wifi_set_ap_csa(sta_freq, 10, 1);
+    }
+
+    return ;
+}
 
 /****************************************************************
 *****************************************************************

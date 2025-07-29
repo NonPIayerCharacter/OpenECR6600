@@ -63,7 +63,6 @@
 
 static int psm_dbg_cmd(cmd_tbl_t *t, int argc, char *argv[])
 {
-	os_printf(LM_APP, LL_INFO, "psm_dbg_cmd(%d)=%s\r\n",argc - 1,argv + 1);
 	psm_dbg_func_cb(argc - 1, argv + 1);
 	return CMD_RET_SUCCESS;
 }

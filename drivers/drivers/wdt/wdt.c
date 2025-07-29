@@ -175,7 +175,7 @@ WDT_RET_CODE drv_wdt_chip_reset(void)
 	return WDT_RET_OK;
 }
 
-WDT_RET_CODE drv_wdt_restore(void)
+WDT_RET_CODE   __attribute__((no_ex9, used))drv_wdt_restore(void)
 {
 	if (p_wdt_dev.active == 1)
 	{

@@ -61,8 +61,11 @@ typedef struct _T_I2S_REG_MAP{
 #define  I2S_MEM_BASE		( MEM_BASE_I2S + 0xC00 )
 #define  SYS_CLK				160000000
 
-unsigned char *i2stxdma=(unsigned char *)0xA0000;
-unsigned char *i2srxdma=(unsigned char *)0xA1000;
+#define I2S_MASTER_BUF_SIZE	1024
+static unsigned char i2stxdma[I2S_MASTER_BUF_SIZE] __attribute__((section(".dma.data"),aligned(4)));
+static unsigned char i2srxdma[I2S_MASTER_BUF_SIZE] __attribute__((section(".dma.data"),aligned(4)));
+
+
 unsigned int remain_len = 0;
 unsigned int I2S_FIFO_DEPTH = 32;
 #define I2S_WAIT_FOREVER 0xffffffff
@@ -305,6 +308,8 @@ int i2s_init_cfg(i2s_cfg_dev *i2s_cfg_dev)
 
 	if(i2s_cfg_dev->i2s_dma == 1)
 	{
+		g_i2s_dev.i2s_tx_reg_base->tx_ism = 0x1;
+		g_i2s_dev.i2s_rx_reg_base->rx_ism = 0x1;
 		g_i2s_dev.i2s_dma_chan=drv_dma_ch_alloc();
 		if (g_i2s_dev.i2s_dma_chan < 0)
 		{
@@ -451,24 +456,13 @@ void i2s_master_write(unsigned char * bufptr, unsigned int length)
 		T_DMA_CFG_INFO i2s_tx_cfg;
 		i2s_tx_cfg.src = (unsigned int)i2stxdma ;
 		i2s_tx_cfg.dst = (unsigned int)&(g_i2s_dev.i2s_tx_reg_base->tx_fifo);
-		if(i2s_cfg .sample_width == I2S_BIT_32_WIDTH)
-		{
-			i2s_tx_cfg.len = (length+3)/4;
-		}
-		else if(i2s_cfg.sample_width == I2S_BIT_16_WIDTH)
-		{
-			i2s_tx_cfg.len = (length+1)/2;
-		}
-		else
-		{
-			i2s_tx_cfg.len = length;
-		}
+		i2s_tx_cfg.len = length;
 		i2s_tx_cfg.mode = DMA_CHN_I2S_TX;
 		drv_dma_cfg(g_i2s_dev.i2s_dma_chan,  &i2s_tx_cfg);
 		drv_dma_start(g_i2s_dev.i2s_dma_chan);
+		arch_irq_restore(flags);
 		os_sem_wait(g_i2s_dev.i2s_process, I2S_WAIT_FOREVER);
 	}
-	arch_irq_restore(flags);
 }
 
 /**

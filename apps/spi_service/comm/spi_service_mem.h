@@ -1,66 +1,46 @@
-#ifndef __SPI_SERVICE_MEM_H__
-#define __SPI_SERVICE_MEM_H__
-#include "system_def.h"
-#include "spi_service.h"
-#include "lwip/pbuf.h"
+#ifndef __SPI_SERVICE_MLIST_H__
+#define __SPI_SERVICE_MLIST_H__
 
-#define SPI_SERVICE_MEM_DEBUG_SUPPORT
-#define CO_ALIGN4_HI(val) (((val)+3) & ~3)
-#define CO_ALIGN2_HI(val) (val)
+#include "spi_service_main.h"
+#include "platform_list.h"
 
-enum SPI_SERVICE_MEM
-{
-    SPI_SERVICE_MEM_RX,
-    SPI_SERVICE_MEM_TX,
-    SPI_SERVICE_MEM_MAX
-};
+#define SPI_SERVICE_ALIGN4(val) (((val)+3)&~3)
+#define SPI_SERVICE_MEM_DATA_SIZE 2048
+#define SPI_SERVICE_MEM_DATA_MTU 1514
+#define SPI_SERVICE_MEM_MSG_SIZE 512
 
-#define KE_LIST_PATTERN           (0xA55A)
-#define KE_ALLOCATED_PATTERN      (0x8338)
-#define KE_FREE_PATTERN           (0xF00F)
+#define SPI_SERVICE_MEM_ALLOC 0xA55A
+#define SPI_SERVICE_MEM_FREE 0x5AA5
 
-#ifndef ASSERT_ERR
-#define ASSERT_ERR(cond)                                                                 \
-    do {                                                                                 \
-        if (!(cond)) {                                                                   \
-            os_printf(LM_OS, LL_ERR, "[ERR]%s line:%d \""#cond"\"!!!\n", __func__, __LINE__);           \
-        }                                                                                \
-    } while(0)
+typedef enum {
+    SPI_SERVICE_MEM_STARX,
+    SPI_SERVICE_MEM_STATX,
+    SPI_SERVICE_MEM_APRX,
+    SPI_SERVICE_MEM_APTX,
+    SPI_SERVICE_MEM_MSG,
+} spi_service_mtype_e;
 
-#define ASSERT_INFO(cond, param0)             \
-    do {                                              \
-        if (!(cond)) {                                \
-            os_printf(LM_OS, LL_INFO, "[ERR]%s line:%d param 0x%x \""#cond"\"!!!\n", __func__, __LINE__, param0); \
-        }                                             \
-    } while(0)
-#endif
+#define SPI_SERVICE_MEM_ALLOC 0xA55A
+#define SPI_SERVICE_MEM_FREE 0x5AA5
+typedef struct {
+    unsigned char idx;
+    unsigned char mtype;
+    unsigned short magic;
+    unsigned int addr;
+} spi_service_rsvhead_t;
 
-struct mblock_free
-{
-    uint16_t corrupt_check;
-    uint16_t free_size;
-    struct mblock_free* next;
-    struct mblock_free* previous;
-};
+typedef struct {
+    spi_service_rsvhead_t *mhead;
+    platform_list_t list;
+} spi_service_lnkhead_t;
 
-struct mblock_used
-{
-    uint16_t corrupt_check;
-    uint16_t size;
-};
-
-void spi_service_mem_init(void);
-struct mblock_free *spi_service_mem_range_check(void *memPtr);
-#if defined  CONFIG_VNET_SERVICE || (CONFIG_SPI_MASTER && CONFIG_SPI_REPEATER)
-void *spi_service_mem_pbuf_alloc(enum SPI_SERVICE_MEM memtype, uint32_t size);
-void *spi_service_mem_pbuf_free(struct pbuf *p);
-#endif
-void *spi_service_mem_pool_alloc(enum SPI_SERVICE_MEM memtype, uint32_t size);
-void *spi_service_mem_pool_free(void *memPtr);
+int spi_service_mem_init(void);
+void *spi_service_mpbuf_alloc(spi_service_mtype_e type, int size);
+void *spi_service_mpbuf_free(struct pbuf *p);
+void *spi_service_mpool_check(void *memPtr);
+void *spi_service_mpool_alloc(spi_service_mtype_e type, int size);
+void *spi_service_mpool_free(void *memPtr);
 void *spi_service_smem_rx_alloc(spi_service_ctrl_t *mcfg, spi_service_mem_t *smem);
-void *spi_service_smem_rx_free(spi_service_mem_t *smem);
 void *spi_service_smem_tx_alloc(spi_service_ctrl_t *mcfg, spi_service_mem_t *smem);
-void *spi_service_smem_tx_free(spi_service_mem_t *smem);
-
+void *spi_service_smem_free(spi_service_mem_t *smem);
 #endif
-

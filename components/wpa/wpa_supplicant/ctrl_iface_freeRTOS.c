@@ -6,6 +6,9 @@
 #include "ctrl_iface.h"
 #include "system_wifi_def.h"
 #include "cli.h"
+#if defined(CONFIG_FAST_CONNECT)
+#include "system_wifi.h"
+#endif
 
 #ifdef CONFIG_NO_STDOUT_DEBUG
 #if 0
@@ -24,7 +27,7 @@ static void wpa_printf(int level, const char *fmt, ...)
 #endif
 #else
 #undef wpa_printf
-#define wpa_printf(x, ...) os_printf(LM_APP, LL_INFO, __VA_ARGS__)
+#define wpa_printf(x, ...) SYS_LOGD( __VA_ARGS__)
 #endif
 #endif
 
@@ -47,8 +50,101 @@ struct wpa_supplicant *wpa_get_ctrl_iface(int vif_id)
 {
 	 return global_ctrl_if->ctrl_if[vif_id]->wpa_s;
 }
+#if defined(CONFIG_FAST_CONNECT)
+void wpa_exec_set_ssid(struct wpa_supplicant *wpa_s, unsigned char *ssid)
+{
+    char buf[128] = {0};
+    char *pos = buf;
+    char *end = buf + 128 - 1;
+    uint8_t ssidLen = 0;
 
+    if (!ssid || !ssid[0]){
+        return ;
+    }
 
+    sprintf(buf, "%s", "set_network 0 ssid ");
+    pos += strlen(buf);
+    while ((pos != end) && (ssid[ssidLen] != '\0') && (ssidLen < WIFI_PWD_MAX_LEN)) {
+        sprintf(pos, "%2X", ssid[ssidLen++]);
+        pos += 2;
+    }
+	
+    ctrl_iface_receive(wpa_s, buf);
+}
+void wpa_exec_set_password(struct wpa_supplicant *wpa_s, char *password)
+{
+    char buf[128] = {0};
+    int passwordLen;
+
+    if (password && password[0]) {
+        passwordLen = strnlen(password, WIFI_PWD_MAX_LEN);
+        if (passwordLen == 5) { //WIFI_PWD_MAX_LEN
+            ctrl_iface_receive(wpa_s, "set_network 0 key_mgmt NONE");
+            sprintf(buf, "set_network 0 wep_key0 \"%s\"", password);
+        } else if(passwordLen == WIFI_PWD_MAX_LEN) {
+            sprintf(buf, "set_network 0 psk %.*s", passwordLen, password);
+        } else {
+            sprintf(buf, "set_network 0 psk \"%s\"", password);
+        }
+    } else {
+        sprintf(buf, "set_network 0 key_mgmt NONE");
+    }
+
+    ctrl_iface_receive(wpa_s, buf);
+}
+void wpa_exec_set_bssid(struct wpa_supplicant *wpa_s, uint8_t *bssid)
+{
+    char buf[128] = {0};
+
+    if ((IS_ZERO_MAC(bssid) || IS_MULTCAST_MAC(bssid)))
+        return;
+
+    sprintf(buf, "set_network 0 bssid %02x:%02x:%02x:%02x:%02x:%02x",
+        bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
+
+    ctrl_iface_receive(wpa_s, buf);
+}
+
+void wpa_task_exec_frist_connect(void *eloop_ctx, void *timeout_ctx)
+{
+    struct wpa_supplicant *wpa_s = (struct wpa_supplicant *)eloop_ctx;
+    wifi_config_u *config = (wifi_config_u *)timeout_ctx;
+    char   cmd[128]={0};
+    int frequency;
+
+    ctrl_iface_receive(wpa_s, "remove_network all");
+    ctrl_iface_receive(wpa_s, "add_network");
+    wpa_exec_set_ssid(wpa_s, config->sta.ssid);
+    wpa_exec_set_password(wpa_s, config->sta.password);
+    wpa_exec_set_bssid(wpa_s, config->sta.bssid);
+    frequency = wifi_channel_to_freq(config->sta.channel);
+    snprintf(cmd, sizeof(cmd), "set_network %d frequency %d", 0, frequency);
+    ctrl_iface_receive(wpa_s, cmd);
+    ctrl_iface_receive(wpa_s,  "select_network 0");
+
+    os_free(config);
+}
+
+int wpa_receive_frist_connect(int vif_id, wifi_config_u *config)
+{
+    int buf_len = sizeof(wifi_config_u);
+    char *cli_buf;
+    
+    if (vif_id >= ESWIN_WIFI_IF_NUM) {
+        return -1;
+    }
+	if (!global_ctrl_if || !global_ctrl_if->ctrl_if[vif_id])
+		return -1;
+
+    cli_buf = os_zalloc(buf_len);
+    if (!cli_buf)
+        return -1;
+    memcpy(cli_buf, config, buf_len);
+    eloop_register_timeout(0, 0, wpa_task_exec_frist_connect, (void *)global_ctrl_if->ctrl_if[vif_id]->wpa_s,
+        (void *)cli_buf);
+    return 0;
+}
+#endif
 char wpa_cmd_receive_str(int vif_id, char *buf)
 {
     int buf_len = strlen(buf) + 1;
@@ -123,7 +219,7 @@ int ctrl_iface_receive(struct wpa_supplicant *wpa_s, char *cmd)
 
 	if(reply_len == 1) {
 		wpa_printf(MSG_DEBUG, "FAIL");
-	} else if(reply_len == 2) {
+	} else if(reply_len >= 2 && (strncmp("OK",reply,2) == 0)) {
 		wpa_printf(MSG_DEBUG, "OK");
 		os_free(reply);
 		return 0;
@@ -137,12 +233,12 @@ int ctrl_iface_receive(struct wpa_supplicant *wpa_s, char *cmd)
     	        	len = PRINT_BUFFER_SIZE;
         	    memcpy(atom, reply + pos, len);
 	    	    atom[len] = '\0';
-    	        wpa_printf_error(MSG_ERROR, atom);
+    	        wpa_printf(MSG_ERROR, "%s",atom);
         	    pos += len;
 	        }
     	} else {
         	reply[reply_len] = 0;
-            wpa_printf_error(MSG_ERROR, reply);
+            wpa_printf(MSG_ERROR, "%s",reply);
         }
 	} else {
 		wpa_printf(MSG_DEBUG, "UNKNOWN");
@@ -207,7 +303,7 @@ struct ctrl_iface_global_priv* wpa_supplicant_global_ctrl_iface_init(struct wpa_
 #include "bss.h"
 #include "common/wpa_common.h"
 #include "rsn_supp/wpa.h"
-
+#if !defined(CONFIG_FAST_CONNECT)
 #define WIFI_SSID_MAX_LEN   (32 + 1)
 #define WIFI_PWD_MAX_LEN    (64) // pwd string support max length is 63
 
@@ -241,7 +337,7 @@ typedef enum {
     AUTH_WPA2_WPA3_PSK, /**< authenticate mode : WPA2_WPA3_PSK */
     AUTH_MAX
 } wifi_auth_mode_e;
-
+#endif
 int wpa_get_scan_num(void)
 {
 	struct wpa_supplicant *wpa_s;	
@@ -456,33 +552,6 @@ void at_get_ap_ssid_passwd_chanel(char *ap_ssid, char *passwd, uint8_t *channel)
 
 	*channel = system_modem_api_mac80211_frequency_to_channel(ssid->frequency);
 }
-
-#ifdef CONFIG_VNET_SERVICE
-void wpa_get_ap_info(char *ap_ssid, char *passwd, uint8_t *channel, uint8_t *auth)
-{
-    uint8_t cipher = 0;
-    struct wpa_supplicant *wpa_s_ap = wpa_get_ctrl_iface(1);
-
-    if (!wpa_s_ap)
-        return;
-
-    struct wpa_ssid *ssid = wpa_s_ap->conf->ssid;
-
-    if (ssid->ssid[0] == 0)
-    {
-        memset(ap_ssid, 0, WIFI_SSID_MAX_LEN);
-        memset(passwd, 0, WIFI_PWD_MAX_LEN);
-    }
-    else
-    {
-        memcpy(ap_ssid, ssid->ssid, ssid->ssid_len);
-        memcpy(passwd, ssid->passphrase, strlen(ssid->passphrase));
-    }
-
-    *channel = system_modem_api_mac80211_frequency_to_channel(ssid->frequency);
-     wpa_get_bss_mode(wpa_s_ap->current_bss, auth, &cipher);
-}
-#endif
 
 sys_err_t wpa_update_wifi_rssi(int8_t rssi)
 {

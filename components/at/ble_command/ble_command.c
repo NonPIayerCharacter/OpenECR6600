@@ -27,14 +27,14 @@
 #include "system_config.h"
 #include "bluetooth.h"
 #include "arch_irq.h"
-#include "ble_thread.h"
+
 
 /****************************************************************************************
  * 
  * Local Macros 
  *
  ****************************************************************************************/
-#define BLE_DEVICE_NAME_MAX_LEN (18)
+#define BLE_DEVICE_NAME_MAX_LEN (27)
 
 /** connectable undirected adv */
 #define  ADV_MODE                        "\x02\x01\x06"
@@ -322,8 +322,8 @@ static  BT_RET_T _ble_gap_connect(int idx)
         return BT_ERROR_UNDEFINED;
     }
     //conn_interval = power and data interaction
-    ECR_BLE_GAP_CONN_PARAMS.conn_interval_min = BLE_CON_INTERVAL_MIN;
-    ECR_BLE_GAP_CONN_PARAMS.conn_interval_max = BLE_CON_INTERVAL_MIN;
+    ECR_BLE_GAP_CONN_PARAMS.conn_interval_min = 80;
+    ECR_BLE_GAP_CONN_PARAMS.conn_interval_max = 80;
     ECR_BLE_GAP_CONN_PARAMS.conn_latency = BLE_CON_LATENCY_MIN;
     ECR_BLE_GAP_CONN_PARAMS.conn_sup_timeout = BLE_CON_SUP_TO_MIN*30;
 	ECR_BLE_GAP_CONN_PARAMS.conn_establish_timeout = 0;
@@ -777,7 +777,7 @@ static void _scan_dev_add_list(BLE_PEER_INFO_T * peer_dev)
 
 static bool _scan_dev_has_existed(ECR_BLE_GAP_ADV_REPORT_T *adv_report)
 {
-    char resp_buf[60]={0};  
+    char resp_buf[100]={0};  
     uint8_t *mac_adr = adv_report->peer_addr.addr;
     BLE_PEER_INFO_T *p = scan_devs.head;    
     bool exist = false;
@@ -865,7 +865,7 @@ static void _scan_dev_clear_list(void)
 
 static void _ble_proc_adv_report_evt(ECR_BLE_GAP_PARAMS_EVT_T *p_event)
 {
-    char resp_buf[60]={0};
+    char resp_buf[100]={0};
     BLE_PEER_INFO_T * peer_dev = NULL;
 
     if(p_event->result != BT_ERROR_NO_ERROR)
@@ -1400,12 +1400,11 @@ static void _ble_app_init(void)
 	}
 
     #if defined(CONFIG_NV)
-	//int status2 = hal_system_get_config(CUSTOMER_NV_BLE_ADVMODE, &ble_cmd_cxt.adv_mod, sizeof(ble_cmd_cxt.adv_mod));
-	int status2 = develop_get_env_blob("BleAdvMode", &ble_cmd_cxt.adv_mod, sizeof(ble_cmd_cxt.adv_mod),NULL);
+	int status2 = hal_system_get_config(CUSTOMER_NV_BLE_ADVMODE, &ble_cmd_cxt.adv_mod, sizeof(ble_cmd_cxt.adv_mod));
 	if((0 == status2) || (0xffffffff == status2))
 	#endif
 	{
-	    ble_cmd_cxt.adv_mod = BLE_ADV_MANUAL;
+	    ble_cmd_cxt.adv_mod = BLE_ADV_AUTO;
 	}
 
     ecr_ble_reset();
@@ -1606,8 +1605,7 @@ dce_result_t at_handle_ADVMOD_command(dce_t *dce,void *group_ctx,int kind,size_t
         {
             ble_cmd_cxt.adv_mod = argv[0].value.number;
 #if defined(CONFIG_NV)
-           // hal_system_set_config(CUSTOMER_NV_BLE_ADVMODE, &ble_cmd_cxt.adv_mod, sizeof(ble_cmd_cxt.adv_mod));
-			develop_set_env_blob("BleAdvMode",&ble_cmd_cxt.adv_mod,sizeof(ble_cmd_cxt.adv_mod));
+            hal_system_set_config(CUSTOMER_NV_BLE_ADVMODE, &ble_cmd_cxt.adv_mod, sizeof(ble_cmd_cxt.adv_mod));
 #endif
             sprintf(resp_buf,"+BLEADVMOD:%d", ble_cmd_cxt.adv_mod);        
             dce_emit_information_response(dce, resp_buf, -1);
@@ -2138,7 +2136,7 @@ void ble_at_init_func(dce_t* dce)
     #if defined(CONFIG_NV)
     if(hal_system_get_config(CUSTOMER_NV_UART_CONFIG, &(config), sizeof(config)))
     {
-       if(config.uart_baud_rate != BAUD_RATE_9600)
+       if(config.uart_baud_rate != BAUD_RATE_9600) 
        {
          //Calculate timeout 40bit 40*1/baud_rate*1000=x.xx ms =x+1 
          uart_recv_timeout = (uint32_t)(4*10*(1/config.uart_baud_rate)*1000)+1;
@@ -2160,36 +2158,7 @@ void ble_at_init_func(dce_t* dce)
     ble_cmd_cxt.conn_timeout = os_timer_create("connect_timeout", BLE_CONNECT_TIMEOUT, 0, _ble_connect_timeout, NULL);
     os_task_create("BLE_PROCESS_MSG", 8, 4096, (task_entry_t)_ble_process_msg_task, NULL);
 }
-static void ecr_ble_adv_start(void)
-{
-	ECR_BLE_GAP_ADV_PARAMS_T adv_param;
-	adv_param.adv_type=ECR_BLE_GAP_ADV_TYPE_CONN_SCANNABLE_UNDIRECTED;
-	memset(&(adv_param.direct_addr),0,sizeof(ECR_BLE_GAP_ADDR_T));
-	adv_param.adv_interval_max=64;
-	adv_param.adv_interval_min=64;
-	adv_param.adv_channel_map=0x07;
-	ecr_ble_gap_adv_start(&adv_param);
-}
 
-dce_result_t at_handle_apps_command(dce_t *dce,void* group_ctx,int kind,size_t argc,arg_t *argv)
-{
-	dce_result_t ret = DCE_RC_OK;
-	if(DCE_EXEC != kind)
-	{
-	    dce_emit_basic_result_code(dce, DCE_RC_ERROR);
-		ret = DCE_RC_ERROR;
-	}
-	ecr_ble_reset();
-	BLE_APPS_INIT();
-	ecr_ble_adv_start();
-    dce_emit_basic_result_code(dce, DCE_RC_OK);
-	ret = DCE_RC_OK;
-			
-		
-	return  ret;
-
-
-}
 
 static const command_desc_t BLE_commands[]={
    
@@ -2206,8 +2175,6 @@ static const command_desc_t BLE_commands[]={
     { "BLESCANSTOP" ,         &at_handle_SCANSTOP_command,           DCE_EXEC},    
     { "BLESCANRLT" ,          &at_handle_SCANRLT_command,           DCE_WRITE},
     { "BLECONN" ,             &at_handle_CONN_command,           DCE_WRITE},
-	{ "BLEAPPS",			&at_handle_apps_command,				DCE_EXEC}
-//	{ "BLEAPPS",			&at_handle_apps_command,				DCE_EXEC}
 };
 
 

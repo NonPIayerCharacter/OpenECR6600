@@ -756,7 +756,7 @@ int ota_write(unsigned char *data, unsigned int len)
     return download_packet_data(g_ota_download, data, len);
 }
 
-int ota_done(bool reset)
+int ota_done(int reset)
 {
     ota_state_t state;
     unsigned int len;
@@ -786,13 +786,13 @@ int ota_done(bool reset)
     state.crc = ef_calc_crc32(0, (char *)&state + len, sizeof(ota_state_t) - len);
     ret = drv_spiflash_erase(g_ota_download->dw_paddr[DOWNLOAD_OTAS_PART], g_ota_download->dw_pdlen[DOWNLOAD_OTAS_PART]/2);
     DOWNLOAD_RET_CHECK_RETURN(ret);
-    ret = drv_spiflash_write(g_ota_download->dw_paddr[DOWNLOAD_OTAS_PART], (const unsigned char *)&state, g_ota_download->dw_pdlen[DOWNLOAD_OTAS_PART]/2);
+    ret = drv_spiflash_write(g_ota_download->dw_paddr[DOWNLOAD_OTAS_PART], (const unsigned char *)&state, sizeof(ota_state_t));
     DOWNLOAD_RET_CHECK_RETURN(ret);
     ret = drv_spiflash_erase(g_ota_download->dw_paddr[DOWNLOAD_OTAS_PART] + g_ota_download->dw_pdlen[DOWNLOAD_OTAS_PART]/2,
         g_ota_download->dw_pdlen[DOWNLOAD_OTAS_PART]/2);
     DOWNLOAD_RET_CHECK_RETURN(ret);
     ret = drv_spiflash_write(g_ota_download->dw_paddr[DOWNLOAD_OTAS_PART] + g_ota_download->dw_pdlen[DOWNLOAD_OTAS_PART]/2,
-        (const unsigned char *)&state, g_ota_download->dw_pdlen[DOWNLOAD_OTAS_PART]/2);
+        (const unsigned char *)&state, sizeof(ota_state_t));
     DOWNLOAD_RET_CHECK_RETURN(ret);
 
     os_printf(LM_APP, LL_INFO, "ota done successs, reset now\n");
@@ -820,8 +820,7 @@ int ota_confirm_update(void)
         return DOWNLOAD_NONE_ERR;
     }
 
-    ret = drv_spiflash_read(g_ota_download->dw_paddr[DOWNLOAD_OTAS_PART], g_ota_download->dw_buff,
-        g_ota_download->dw_pdlen[DOWNLOAD_OTAS_PART]/2);
+    ret = drv_spiflash_read(g_ota_download->dw_paddr[DOWNLOAD_OTAS_PART], g_ota_download->dw_buff, sizeof(ota_state_t));
     DOWNLOAD_RET_CHECK_RETURN(ret);
     state = (ota_state_t *)g_ota_download->dw_buff;
     calcrc = ef_calc_crc32(0, (char *)state + len, sizeof(ota_state_t) - len);
@@ -829,7 +828,7 @@ int ota_confirm_update(void)
     {
         os_printf(LM_APP, LL_DBG, "OTA:master part crc error\n");
         ret = drv_spiflash_read(g_ota_download->dw_paddr[DOWNLOAD_OTAS_PART] + g_ota_download->dw_pdlen[DOWNLOAD_OTAS_PART]/2,
-            g_ota_download->dw_buff, g_ota_download->dw_pdlen[DOWNLOAD_OTAS_PART]/2);
+            g_ota_download->dw_buff, sizeof(ota_state_t));
         DOWNLOAD_RET_CHECK_RETURN(ret);
         calcrc = ef_calc_crc32(0, (char *)state + len, sizeof(ota_state_t) - len);
         if(calcrc != state->crc)
@@ -862,21 +861,20 @@ int ota_confirm_update(void)
 
     ret = drv_spiflash_erase(g_ota_download->dw_paddr[DOWNLOAD_OTAS_PART], g_ota_download->dw_pdlen[DOWNLOAD_OTAS_PART]/2);
     DOWNLOAD_RET_CHECK_RETURN(ret);
-    ret = drv_spiflash_write(g_ota_download->dw_paddr[DOWNLOAD_OTAS_PART], g_ota_download->dw_buff,
-        g_ota_download->dw_pdlen[DOWNLOAD_OTAS_PART]/2);
+     ret = drv_spiflash_write(g_ota_download->dw_paddr[DOWNLOAD_OTAS_PART], g_ota_download->dw_buff, sizeof(ota_state_t));
     DOWNLOAD_RET_CHECK_RETURN(ret);
     ret = drv_spiflash_erase(g_ota_download->dw_paddr[DOWNLOAD_OTAS_PART] + g_ota_download->dw_pdlen[DOWNLOAD_OTAS_PART]/2,
         g_ota_download->dw_pdlen[DOWNLOAD_OTAS_PART]/2);
     DOWNLOAD_RET_CHECK_RETURN(ret);
     ret = drv_spiflash_write(g_ota_download->dw_paddr[DOWNLOAD_OTAS_PART] + g_ota_download->dw_pdlen[DOWNLOAD_OTAS_PART]/2,
-        g_ota_download->dw_buff, g_ota_download->dw_pdlen[DOWNLOAD_OTAS_PART]/2);
+        g_ota_download->dw_buff, sizeof(ota_state_t));
     DOWNLOAD_RET_CHECK_RETURN(ret);
 
     download_mem_release(&g_ota_download);
     return DOWNLOAD_NONE_ERR;
 }
 
-#ifdef CONFIG_SPI_SERVICE
+#if defined(CONFIG_SPI_SERVICE) && defined(CONFIG_SPI_SLAVE)
 int ota_update_image(unsigned char *data, unsigned int len)
 {
     ota_init();

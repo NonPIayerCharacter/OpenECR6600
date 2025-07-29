@@ -17,13 +17,6 @@
 #include "stddef.h"
 #include "dce.h"
 
-#define BUILD_UINT8(loByte, hiByte ) \
-    ((unsigned char)(((loByte) & 0x0F) + (((hiByte) & 0x0F) << 4)))
-unsigned char write_buffer[4110];
-int TG_strtohex(const char * data,int data_len);
-
-
-
 void  target_dce_transmit(const char* data, size_t size);
 
 void  target_dce_request_process_command_line(dce_t* dce);

@@ -775,11 +775,11 @@ void sys_irq_show(void)
 
 #else
 
-unsigned int system_irq_save(void)
+unsigned int __attribute__((no_ex9, used))system_irq_save(void)
 {
     return(portSET_INTERRUPT_MASK_FROM_ISR());
 }
-void system_irq_restore(unsigned int psw)
+void __attribute__((no_ex9, used))system_irq_restore(unsigned int psw)
 {
     portCLEAR_INTERRUPT_MASK_FROM_ISR(psw);
 }

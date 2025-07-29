@@ -12,7 +12,7 @@
 
 
 #include <errno.h>
-#include <http_parser.h>
+#include <http_server/http_parser.h>
 
 #include <http_server_service.h>
 #include "httpd_priv.h"

@@ -90,6 +90,7 @@ typedef void (*UART_CALLBACK)(char);
 #define UART_RX_MODE_INTR				0x00
 #define UART_RX_MODE_DMA				0x01
 #define UART_RX_MODE_USER				0x02
+#define UART_RX_MODE_DMA_POLLLIST		0x03
 
 /**
  * @brief Uart device config
@@ -240,7 +241,21 @@ void drv_uart_set_lineControl(unsigned int regBase, unsigned int databits, unsig
 int drv_uart_get_config(unsigned int regBase, T_DRV_UART_CONFIG * config);
 void drv_uart_set_baudrate(unsigned int regBase, unsigned int baud);
 int drv_uart_set_flowcontrol(unsigned int regBase,unsigned int m_flow_control);
+int drv_uart_get_regbase(E_DRV_UART_NUM uart_num);
 
+#ifdef CONFIG_UART_DMA_LOOPLIST_RX
+//BUF_NUM max-value is 4
+#define UART_BUF_NUM	3
+#define UART_BUF_BLOCK_SIZE	1024
+#else
+//BUF_NUM max-value is 4
+#define UART_BUF_NUM	2
+#define UART_BUF_BLOCK_SIZE	64
+#endif
+
+#define UART_BUF_SIZE	(UART_BUF_BLOCK_SIZE * UART_BUF_NUM)
+extern unsigned char  uart_src[UART_BUF_SIZE];
+unsigned int drv_uart_receive_dma_looplist(E_DRV_UART_NUM uart_num, unsigned int buff_addr);
 
 #endif /* DRV_UART_H */
 

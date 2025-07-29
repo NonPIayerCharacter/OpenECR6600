@@ -18,10 +18,16 @@
 #include "uart.h"
 #include "oshal.h"
 #include "dma.h"
+#include "pit.h"
+
 #ifdef CONFIG_PSM_SURPORT
 #include "psm_system.h"
 #include "rtc.h"
 #endif
+
+
+unsigned char  uart_src[UART_BUF_SIZE]  __attribute__((section(".dma.data")));
+unsigned int  uart_rd = 0;
 
 T_DRV_UART_CONFIG uart_dev_config[3]={{0}}; //uart0/1/2
 
@@ -212,15 +218,20 @@ static unsigned int drv_uart_rx_buf_update(T_DRV_UART_DEV * p_uart_dev, unsigned
 	unsigned int left, remain;
 	unsigned long  flags = system_irq_save();
 
-	if (p_uart_dev->uart_rx_buf_wr >= p_uart_dev->uart_rx_buf_rd)
+	if (p_uart_dev->uart_rx_buf_wr > p_uart_dev->uart_rx_buf_rd)
 	{
 		*len_remain0 = p_uart_dev->uart_rx_buf_wr - p_uart_dev->uart_rx_buf_rd;
 		*len_remain1 = 0;
 	}
-	else
+	else if (p_uart_dev->uart_rx_buf_wr < p_uart_dev->uart_rx_buf_rd || p_uart_dev->uart_rx_overrun)
 	{
 		*len_remain0 = p_uart_dev->uart_rx_buf_size - p_uart_dev->uart_rx_buf_rd;
 		*len_remain1 = p_uart_dev->uart_rx_buf_wr;
+	}
+	else
+	{
+		*len_remain0 = 0;
+		*len_remain1 = 0;
 	}
 
 	remain = *len_remain0 + *len_remain1;
@@ -254,6 +265,7 @@ static void drv_uart_rx_buf_read(T_DRV_UART_DEV * p_uart_dev, char * buf, unsign
 	memcpy(buf , p_uart_dev->uart_rx_buf_addr + p_uart_dev->uart_rx_buf_rd, len);
 	flags = system_irq_save();
 	p_uart_dev->uart_rx_buf_rd = (p_uart_dev->uart_rx_buf_rd + len) % p_uart_dev->uart_rx_buf_size;
+	p_uart_dev->uart_rx_overrun = 0;
 	system_irq_restore(flags);		
 }
 
@@ -608,6 +620,31 @@ static unsigned int drv_uart_receive_dma(unsigned int uart_num, char * buf, unsi
 	}
 }
 
+unsigned int drv_uart_receive_dma_looplist(E_DRV_UART_NUM uart_num, unsigned int buff_addr)
+{
+	int ret;	
+	T_DRV_UART_DEV * p_uart_dev = uart_dev[uart_num];
+	T_UART_REG_MAP * p_uart_reg = p_uart_dev->uart_reg_base;
+	E_DMA_CHN_MODE mode = DMA_CHN_UART2_RX;
+	if (uart_num == E_UART_NUM_0)
+	{
+		mode = DMA_CHN_UART0_RX;
+	}
+	else if (uart_num == E_UART_NUM_1)
+	{
+		mode = DMA_CHN_UART1_RX;
+	}
+	else if (uart_num == E_UART_NUM_2)
+	{
+		mode = DMA_CHN_UART2_RX;
+	}
+
+	ret = drv_dma_looplist_config(p_uart_dev->uart_rx_dma_chn, (unsigned int)&p_uart_reg->Mux0.RBR, (unsigned int)buff_addr, UART_BUF_BLOCK_SIZE, UART_BUF_NUM, mode);
+	
+	drv_dma_start(p_uart_dev->uart_rx_dma_chn);
+	return ret;
+}
+
 /**    @brief		Uart tx/rx interrupts default.
 *	   @details 	Default uart tx/rx interrupts before uart tx/rx starts.
 *	   @param[in]	vector  Register interrupt vector number
@@ -929,6 +966,19 @@ int  drv_uart_open(E_DRV_UART_NUM uart_num, T_DRV_UART_CONFIG * cfg)
 		drv_dma_isr_register(p_uart_dev->uart_rx_dma_chn, drv_uart_receive_dma_isr, (void  *)p_uart_dev);
 		p_uart_reg->Mux2.FCR = DRV_UART_FCR_DMAE|DRV_UART_FCR_FIFORST;
 	}
+	else if (cfg->uart_rx_mode == UART_RX_MODE_DMA_POLLLIST)
+	{
+		p_uart_dev->uart_rx_dma_chn = (unsigned char)drv_dma_ch_alloc();
+		if ( p_uart_dev->uart_rx_dma_chn < 0)
+		{
+			return UART_RET_ENODMA;
+		}
+
+		drv_dma_isr_register(p_uart_dev->uart_rx_dma_chn, drv_uart_receive_dma_isr, (void  *)p_uart_dev);
+		p_uart_reg->Mux2.FCR = DRV_UART_FCR_DMAE|DRV_UART_FCR_FIFORST;
+		uart_rd = 0;
+		drv_uart_receive_dma_looplist(uart_num,(unsigned int)uart_src);
+	}
 	return UART_RET_SUCCESS;
 }
 
@@ -944,6 +994,14 @@ int drv_uart_close(E_DRV_UART_NUM uart_num)
 	{
 	    return UART_RET_ERROR;
 	}
+
+	if (p_uart_dev->uart_rx_mode == UART_RX_MODE_DMA ||
+			p_uart_dev->uart_rx_mode == UART_RX_MODE_DMA_POLLLIST)
+	{
+		drv_dma_stop(p_uart_dev->uart_rx_dma_chn);
+		drv_dma_ch_release(p_uart_dev->uart_rx_dma_chn);
+	}
+
 	while(drv_uart_rx_tstc((unsigned int)p_uart_reg));
 	while(drv_uart_tx_ready((unsigned int)p_uart_reg));
 	os_msdelay(1);
@@ -1039,6 +1097,101 @@ int drv_uart_write(E_DRV_UART_NUM uart_num, char * buf, unsigned int len)
 	return ret;
 }
 
+unsigned int time_inter(unsigned int timer_s,unsigned int timer_e)
+{
+	unsigned int time_inte = 0;
+	if(timer_s > timer_e)
+	{
+		time_inte = timer_e + (0xffffffff - timer_s);
+	}
+	else
+	{
+		time_inte = timer_e - timer_s;
+	}
+	return time_inte;
+}
+
+int drv_uart_receive_dma_polllist(E_DRV_UART_NUM uart_num, char * buf, unsigned int len, unsigned int ms_timeout)
+{
+	unsigned int read_length;
+	unsigned int uart_wr;
+	unsigned int remain_length = 0;
+	unsigned int start_time = 0;
+	unsigned int   msdelay = ms_timeout * (CHIP_CLOCK_APB / 1000);
+	//unsigned long flags;
+	T_DRV_UART_DEV * p_uart_dev = uart_dev[uart_num];
+	
+	start_time = drv_pit_get_tick();
+	do{
+		//flags = system_irq_save();
+		uart_wr = READ_REG(MEM_BASE_DMAC + 0x4C + (p_uart_dev->uart_rx_dma_chn * 0x14)); 
+		if(uart_rd ==   (uart_wr - (unsigned int)uart_src))
+		{
+			remain_length = 0;
+		}
+		else if(uart_rd >    (uart_wr - (unsigned int)uart_src))
+		{
+			remain_length = (UART_BUF_SIZE - uart_rd)    + (uart_wr - (unsigned int)uart_src);
+		}
+		else if(uart_rd <    (uart_wr -(unsigned int) uart_src))
+		{
+			remain_length =  (uart_wr - (unsigned int)uart_src) - uart_rd;
+		}
+		
+		if(remain_length >= len)
+		{
+			read_length = MIN(len, UART_BUF_SIZE-uart_rd);
+			if(read_length < len)
+			{
+				memcpy(buf, &uart_src[uart_rd],read_length);
+				uart_rd = 0;
+				memcpy(&buf[read_length], &uart_src[uart_rd],len - read_length);
+				uart_rd = len - read_length;
+			}
+			else
+			{
+				memcpy(buf, &uart_src[uart_rd],len);
+				uart_rd += len;
+				if(uart_rd == UART_BUF_SIZE)
+				{
+					uart_rd = 0;
+				}
+			}
+			//system_irq_restore(flags);		
+			return len;
+		}
+
+		os_msleep(2);
+		//system_irq_restore(flags);		
+	}while(msdelay > time_inter(start_time,drv_pit_get_tick()));
+	
+	if(remain_length < len)
+	{
+		read_length = MIN(remain_length, UART_BUF_SIZE-uart_rd);
+		if(read_length < remain_length)
+		{
+			memcpy(buf, &uart_src[uart_rd],read_length);
+			uart_rd = 0;
+			memcpy(&buf[read_length], &uart_src[uart_rd],remain_length - read_length);
+			uart_rd = remain_length - read_length;
+		}
+		else
+		{
+			memcpy(buf, &uart_src[uart_rd],remain_length);
+			uart_rd += remain_length;
+			if(uart_rd == UART_BUF_SIZE)
+			{
+				uart_rd = 0;
+			}
+		}
+		//system_irq_restore(flags);		
+
+		return remain_length;
+	}
+
+	return 0;
+}
+
 /**    @brief		Uart receive data.
 *	   @details 	Select uart to receive data in the way of cpu interrupt or dma.
 *	   @param[in]	uart_num    Specifies the uart number to open, using E_DRV_UART_NUM type
@@ -1058,6 +1211,9 @@ int drv_uart_read(E_DRV_UART_NUM uart_num, char * buf, unsigned int len, unsigne
 
 		case UART_RX_MODE_DMA:
 			return drv_uart_receive_dma(uart_num, buf, len, ms_timeout);
+
+		case UART_RX_MODE_DMA_POLLLIST:
+			return drv_uart_receive_dma_polllist(uart_num, buf, len, ms_timeout);
 
 		default:
 			return UART_RET_ERROR;
@@ -1281,9 +1437,8 @@ int drv_uart_set_flowcontrol(unsigned int regBase,unsigned int m_flow_control)
     return 0;
 }
 
-int drv_uart_get_regbase(E_DRV_UART_NUM uart_num){
-	return (int)uart_dev[uart_num]->uart_reg_base;
+ int   __attribute__((no_ex9, used))drv_uart_get_regbase(E_DRV_UART_NUM uart_num)
+{
+	return (int )uart_dev[uart_num]->uart_reg_base;
 }
-
-
 

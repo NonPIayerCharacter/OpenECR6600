@@ -382,7 +382,7 @@ void drv_adc_init(void)
    drv_adc_lock_init();
 }
 
-void psm_drv_adc_init(void)
+void  __attribute__((no_ex9, used))psm_drv_adc_init(void)
 {
     open_adc_power_from_digital();
     chip_clk_enable(CLK_ADC_CAL_40M);
@@ -571,7 +571,9 @@ int get_volt_calibrate_data(void)
 	{
 		if(((value & 0xFF0000)>>16)  == 0)
 		{
-			os_printf(LM_OS, LL_ERR, "No calibrate value In efuse!\r\n"); 
+			#if !defined(CONFIG_FAST_CONNECT)
+			os_printf(LM_OS, LL_ERR, "No calibrate value In efuse!\r\n");
+			#endif
 			return -256;
 		}
 	} 
@@ -954,7 +956,9 @@ int get_25_tempsensor_to_volt()
 	{
 		if((value & 0xFFFF)  == 0)
 		{
-			os_printf(LM_CMD,LL_ERR,"No calibrate value In efuse!\r\n"); 
+			#if !defined(CONFIG_FAST_CONNECT)
+			os_printf(LM_CMD,LL_ERR,"No calibrate value In efuse!\r\n");
+			#endif
 			return -256;
 		}
 	} 
@@ -987,7 +991,7 @@ DRV_ADC_TEMP_TYPE hal_adc_get_temp_type()
     int volt_25 = 0;
     //return DRV_ADC_TEMP_HIGH;  
 	temp_to_volt_now = temprature_sensor_get_pa();
-	os_printf(LM_CMD,LL_DBG,"volt now=%d\r\n", temp_to_volt_now);
+	//os_printf(LM_CMD,LL_DBG,"volt now=%d\r\n", temp_to_volt_now);
 	volt_25 = get_25_tempsensor_to_volt();
     if(volt_25 <= 0)
     {
@@ -999,17 +1003,17 @@ DRV_ADC_TEMP_TYPE hal_adc_get_temp_type()
          volt_25 += 30;
         if(temp_to_volt_now > (volt_25-(ADC_TEMP_SENSOR_TO_TEMP*(25-ADC_TEMP_LOW))))
         {
-            os_printf(LM_CMD,LL_DBG,"--Currently at Low Temperature Status--\n");
+            //os_printf(LM_CMD,LL_DBG,"--Currently at Low Temperature Status--\n");
             return DRV_ADC_TEMP_LOW;  
         }
         else if((temp_to_volt_now <= (volt_25-(ADC_TEMP_SENSOR_TO_TEMP*(25-ADC_TEMP_LOW))))&&(temp_to_volt_now >= (volt_25-(ADC_TEMP_SENSOR_TO_TEMP*(25-ADC_TEMP_NORMAL_TEM)))))
         {
-            os_printf(LM_CMD,LL_DBG,"--Currently at Normal Temperature Status--\n");
+            //os_printf(LM_CMD,LL_DBG,"--Currently at Normal Temperature Status--\n");
             return DRV_ADC_TEMP_NORMAL;
         }
         else 
         {       
-            os_printf(LM_CMD,LL_DBG,"--Currently at High Temperature Status--\n");
+            //os_printf(LM_CMD,LL_DBG,"--Currently at High Temperature Status--\n");
             return DRV_ADC_TEMP_HIGH;
         }  
     }

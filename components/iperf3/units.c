@@ -52,7 +52,7 @@
  * ------------------------------------------------------------------- */
 
 #include <stdio.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <assert.h>
 #endif
 #include <ctype.h>
@@ -61,7 +61,7 @@
 #endif
 #include <sys/socket.h>
 #include <sys/types.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <sys/time.h>
 #endif
 
@@ -96,7 +96,7 @@ extern    "C"
 	double    n;
 	char      suffix = '\0';
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     assert(s != NULL);
 #else
     LWIP_ASSERT("s is null", (s != NULL));
@@ -139,7 +139,7 @@ extern    "C"
 	double    n;
 	char      suffix = '\0';
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     assert(s != NULL);
 #else
     LWIP_ASSERT("s is null", (s != NULL));
@@ -182,14 +182,14 @@ extern    "C"
 
     iperf_size_t unit_atoi(const char *s)
     {
-#ifndef __TR_SW__    
+#ifndef CONFIG_WIRELESS_IPERF_3    
 	double    n;
 #else
     int n;
 #endif
 	char      suffix = '\0';
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     assert(s != NULL);
 #else
     LWIP_ASSERT("s is null", (s != NULL));
@@ -197,7 +197,7 @@ extern    "C"
 
 
 	/* scan the number and any suffices */
-#ifndef __TR_SW__  
+#ifndef CONFIG_WIRELESS_IPERF_3  
 	          sscanf(s, "%lf%c", &n, &suffix);
 #else
               sscanf(s, "%d%c", &n, &suffix);
@@ -296,7 +296,7 @@ extern    "C"
     {
 	int       conv;
 	const char *suffix;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	const char *format;
 #endif
 	/* convert to bits for [bkmga] */
@@ -357,7 +357,7 @@ extern    "C"
 	    suffix = label_byte[conv];
 	}
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	/* print such that we always fit in 4 places */
 	if (inNum < 9.995)
 	{			/* 9.995 would be rounded to 10.0 */
@@ -375,7 +375,7 @@ extern    "C"
 	    format = "%4.0f %s";/* #### */
 	}
 #endif
-    #ifndef __TR_SW__
+    #ifndef CONFIG_WIRELESS_IPERF_3
 	snprintf(s, inLen, format, inNum, suffix);
     #else
     snprintf(s, inLen, "%d.%d %s", (int)inNum, (int)((inNum - (int)inNum) * 100), suffix);

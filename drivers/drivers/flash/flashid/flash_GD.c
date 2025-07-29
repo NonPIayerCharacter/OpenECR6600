@@ -27,6 +27,7 @@
 #define GD25LQ80C			0x1460C8
 #define GD25Q16E			0x1540C8
 #define GD25Q32E			0x1640C8
+#define GD25Q128E			0x1840C8
 
 
 
@@ -71,6 +72,17 @@ static const T_SPI_FLASH_PARAM gd_flash_params[] =
 		.flash_otp_block_num  = FLASH_OTP_BLOCK_NUM_3,
 		.flash_otp_block_interval = FLASH_OTP_BLOCK_INTERNAL_4096_BYTE,
 	},
+
+	{
+		.flash_id = GD25Q128E,
+		.flash_size = FLASH_SIZE_16_MB,
+		.flash_name = "GD25Q128E",		
+		.flash_otp_star_addr  = FLASH_OTP_START_ADDR_0x1000,
+		.flash_otp_block_size = FLASH_OTP_BLOCK_SIZE_1024_BYTE,
+		.flash_otp_block_num  = FLASH_OTP_BLOCK_NUM_3,
+		.flash_otp_block_interval = FLASH_OTP_BLOCK_INTERNAL_4096_BYTE,
+	},
+	
 };
 
 
@@ -95,7 +107,7 @@ static int spiFlash_GD_check_addr(unsigned int flash_id, int addr, int length)
 			return FLASH_RET_PARAMETER_ERROR;
 		}
 	}
-	else if(flash_id == GD25Q32E)
+	else if(flash_id == GD25Q32E || flash_id == GD25Q128E)
 	{
 		if(!((addr>=0x001000 && addr<=0x0013FF && ((addr + length - 1) <= 0x0013FF))
 			||(addr>=0x002000 && addr<=0x0023FF && ((addr + length - 1) <= 0x0023FF))
@@ -125,33 +137,58 @@ static int spiFlash_GD_check_addr(unsigned int flash_id, int addr, int length)
  */
 int spiFlash_GD_OTP_Read_CMD(struct _T_SPI_FLASH_DEV * p_flash_dev, int addr, int length,unsigned char *pdata)
 {
-	unsigned int *p_dst_buffer = (unsigned int *)pdata;
+	int i,rx_num;
+	unsigned int data;	//word aligned
+	unsigned int * rxBuf;
 
 	spiFlash_format_addr(SPIFLASH_CMD_OTP_RD, addr, 
 						SPI_TRANSCTRL_CMD_EN |SPI_TRANSCTRL_ADDR_EN 
 						 |SPI_TRANSCTRL_TRAMODE_DR	|SPI_TRANSCTRL_DUMMY_CNT_1
 						 |SPI_TRANSCTRL_DUALQUAD_REGULAR |SPI_TRANSCTRL_RCNT(length-1));
 	
-	unsigned int Rxcount = 0;
-	unsigned int i;
-	unsigned int data = FLASH_SPI_REG->status;
-	while( data & SPI_STATUS_BUSY )
-	{			
-		if (!(data & SPI_STATUS_RXEMPTY))
+	if(((unsigned int)pdata%4==0) && ((unsigned int) length % 4 == 0))
+	{
+		rxBuf = (unsigned int *)pdata;
+		data = (length+3)/4;
+
+		while((FLASH_SPI_REG->status & SPI_STATUS_BUSY) == 1)
 		{
-			Rxcount = ((data & 0x00001f00)>>8) ;
-			for (i = 0; i < Rxcount; i++) 
+			rx_num = ((FLASH_SPI_REG->status) >> 8) & 0x1F;
+			rx_num = MIN(rx_num , data);
+
+			for(i=0; i<rx_num; i++)
 			{
-				*p_dst_buffer++ = FLASH_SPI_REG->data;
+				*rxBuf++ = FLASH_SPI_REG->data;
+			}
+
+			data -= rx_num;
+
+			if(data == 0)
+			{
+				return FLASH_RET_SUCCESS;
 			}
 		}
-		data = FLASH_SPI_REG->status;
-	}
 
-	Rxcount = ((data & 0x00001f00)>>8) ;
-	for (i = 0; i < Rxcount; i++) 
+		for(i=0; i<data; i++)
+		{
+			*rxBuf++ = FLASH_SPI_REG->data;
+		}
+	}
+	else
 	{
-		*p_dst_buffer++ = FLASH_SPI_REG->data;
+		while(length)
+		{
+			rx_num = MIN(4, length);
+			SPI_WAIT_RX_READY(FLASH_SPI_REG->status);
+			data = FLASH_SPI_REG->data;
+
+			for(i=0; i<rx_num; i++)
+			{
+				*pdata++ = (unsigned char)data;
+				data >>= 8;
+				length--;
+			}
+		}
 	}
 
 	return FLASH_RET_SUCCESS;
@@ -255,7 +292,7 @@ int spiFlash_GD_OTP_Lock(struct _T_SPI_FLASH_DEV *  p_flash_dev, int LB)
 				return FLASH_RET_PARAMETER_ERROR;
 		}
 	}
-	else if(flash_id == GD25Q32E)
+	else if(flash_id == GD25Q32E || flash_id == GD25Q128E)
 	{
 		data = data>>8;
 		switch (LB)
@@ -323,7 +360,7 @@ int spiFlash_GD_OTP_Se(struct _T_SPI_FLASH_DEV *  p_flash_dev, unsigned int addr
 			return FLASH_RET_PARAMETER_ERROR;
 		}
 	}
-	else if(flash_id == GD25Q32E)
+	else if(flash_id == GD25Q32E || flash_id == GD25Q128E)
 	{
 	
 		if (!((addr>=0x001000 && addr<=0x0013FF) || (addr>=0x002000 && addr<=0x0023FF) || (addr>=0x003000 && addr<=0x0033FF)))

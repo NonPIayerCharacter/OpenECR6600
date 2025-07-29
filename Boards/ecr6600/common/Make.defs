@@ -4,4 +4,3 @@ ASRCS += chip_entry.S
 
 VPATH += :ecr6600/common
 INCPATHS += ecr6600/common/include
-INCPATHS += $(TOPDIR)/sdk/include/drivers/aes

@@ -1547,14 +1547,9 @@ dhcp_reboot(struct netif *netif)
   return result;
 }
 
-/**
- * @ingroup dhcp4
- * Release a DHCP lease and stop DHCP statemachine (and AUTOIP if LWIP_DHCP_AUTOIP_COOP).
- *
- * @param netif network interface
- */
-void
-dhcp_release_and_stop(struct netif *netif)
+/* ESWIN modified to allow not sending release */
+static void
+dhcp_release_and_stop2(struct netif *netif, int release)
 {
   struct dhcp *dhcp = netif_dhcp_data(netif);
   ip_addr_t server_ip_addr;
@@ -1584,7 +1579,7 @@ dhcp_release_and_stop(struct netif *netif)
   dhcp->t1_renew_time = dhcp->t2_rebind_time = dhcp->lease_used = dhcp->t0_timeout = 0;
 
   /* send release message when current IP was assigned via DHCP */
-  if (dhcp_supplied_address(netif)) {
+  if (dhcp_supplied_address(netif) && release) {
     /* create and initialize the DHCP message header */
     struct pbuf *p_out;
     u16_t options_out_len;
@@ -1628,6 +1623,18 @@ dhcp_release_and_stop(struct netif *netif)
 
 /**
  * @ingroup dhcp4
+ * Release a DHCP lease and stop DHCP statemachine (and AUTOIP if LWIP_DHCP_AUTOIP_COOP).
+ *
+ * @param netif network interface
+ */
+void
+dhcp_release_and_stop(struct netif *netif)
+{
+  dhcp_release_and_stop2(netif, 1);
+}
+
+/**
+ * @ingroup dhcp4
  * This function calls dhcp_release_and_stop() internally.
  * @deprecated Use dhcp_release_and_stop() instead.
  */
@@ -1647,6 +1654,13 @@ void
 dhcp_stop(struct netif *netif)
 {
   dhcp_release_and_stop(netif);
+}
+
+/* ESWIN added to allow not sending release */
+void
+dhcp_stop_no_release(struct netif *netif)
+{
+  dhcp_release_and_stop2(netif, 0);
 }
 
 /*
@@ -2076,7 +2090,7 @@ dhcp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr,
       if ((netif->flags & NETIF_FLAG_ETHARP) != 0) {
         /* check if the acknowledged lease address is already in use */
         dhcp_check(netif);
-        #ifdef CONFIG_PSM_SUPER_LOWPOWER
+        #if (defined(CONFIG_PSM_SUPER_LOWPOWER) || defined(CONFIG_FAST_CONNECT))
         dhcp_bind(netif);
         #endif
       } else {

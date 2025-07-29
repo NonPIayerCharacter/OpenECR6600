@@ -434,6 +434,8 @@ dce_result_t dce_handle_CIPAP(dce_t* dce, void* group_ctx, int kind, size_t argc
             argv[2].type == ARG_TYPE_STRING)
         {
             ip_info_t ip_info;
+
+	    memset(&ip_info, 0, sizeof(ip_info));
             if (ipaddr_aton(argv[0].value.string, &(ip_info.ip)) &&
                 ipaddr_aton(argv[1].value.string, &(ip_info.gw)) &&
                 ipaddr_aton(argv[2].value.string, &(ip_info.netmask)))
@@ -737,6 +739,11 @@ dce_result_t dce_handle_CIPSTART(dce_t* dce, void* group_ctx, int kind, size_t a
         
         if (client.type != conn_type_udp) {
             client.priv.tcp.keep_alive = argv[i].value.number;
+            if((client.priv.tcp.keep_alive < 0 ) || (client.priv.tcp.keep_alive > 7200)) {
+                os_printf(LM_APP, LL_INFO, " keep_alive is not within the scope\r\n");
+                dce_emit_basic_result_code(dce, DCE_RC_ERROR);
+                return DCE_RC_ERROR;
+            }
         } else {
             client.ip_info.src_port = argv[i].value.number;
         }

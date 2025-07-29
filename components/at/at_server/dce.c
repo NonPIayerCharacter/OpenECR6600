@@ -107,83 +107,6 @@ void  dce_emit_basic_result_code(dce_t* dce, dce_result_code_t result)
     target_dce_transmit(text, length);
     dce_emit_response_suffix(dce);
 }
-void  TG_dce_emit_extended_result_code_with_args(dce_t* dce, const char* command_name, size_t size, const arg_t* args, size_t argc, int reset_command_pending, bool arg_in_brackets,int data_len)
-{
-    if (reset_command_pending)
-        dce->command_pending = 0;
-    
-    if (dce->suppress_rc)   // 6.2.5 Result code suppression
-        return;
-    //dce_emit_response_prefix(dce);
-    
-    if (size == -1)
-        size = strlen(command_name);
-    target_dce_transmit("+", 1);
-    target_dce_transmit(command_name, size);
-    target_dce_transmit(":", 1);
-
-    if(arg_in_brackets == true){
-        target_dce_transmit("(", 1);
-    }
-
-    size_t iarg;
-	if (argc==1)
-		{
-		os_printf(LM_APP, LL_INFO, "----argc=1---\r\n");
-
-		if (args->type == ARG_TYPE_STRING)
-        {
-            target_dce_transmit("\"", 1);
-            // TODO: escape any quotes in arg->value.string
-           const  char* str = args->value.string;
-			size_t str_size = strlen(str);
-		
-			str_size =(size_t) data_len;
-	
-			os_printf(LM_APP, LL_INFO, "----str_size=%d---\r\n",str_size);
-            target_dce_transmit(str, str_size);
-			
-            target_dce_transmit("\"", 1);
-			
-    		dce_emit_response_suffix(dce); 
-        }
-		return;
-		}
-    for (iarg = 0; iarg < argc; ++iarg)
-    {
-        const arg_t* arg = args + iarg;
-        if (arg->type == ARG_TYPE_STRING)
-        {
-            target_dce_transmit("\"", 1);
-            // TODO: escape any quotes in arg->value.string
-           const  char* str = arg->value.string;
-			size_t str_size = strlen(str);
-			
-			
-			if(iarg==3)
-				 str_size =(size_t) data_len;
-           		
-		   
-			
-            target_dce_transmit(str, str_size);
-			
-            target_dce_transmit("\"", 1);
-        }
-        else if (arg->type == ARG_TYPE_NUMBER)
-        {
-            char buf[12];
-            size_t str_size;
-            dce_itoa(arg->value.number, buf, sizeof(buf), &str_size);
-            target_dce_transmit(buf, str_size);
-        }
-        if (iarg != argc - 1)
-            target_dce_transmit(",", 1);
-    }
-    if(arg_in_brackets == true){
-        target_dce_transmit(")", 1);
-    }
-    dce_emit_response_suffix(dce); 
-}
 
 void  dce_emit_extended_result_code_with_args(dce_t* dce, const char* command_name, size_t size, const arg_t* args, size_t argc, int reset_command_pending, bool arg_in_brackets)
 {
@@ -212,15 +135,8 @@ void  dce_emit_extended_result_code_with_args(dce_t* dce, const char* command_na
         {
             target_dce_transmit("\"", 1);
             // TODO: escape any quotes in arg->value.string
-           const char* str = arg->value.string;
-			
-           size_t str_size = strlen(str);
-		   
-			//system_printf("str_size=-------%d------------\n",str_size);
-			//for(int i =0;i<str_size;i++)
-				//{
-				//os_printf(LM_APP, LL_INFO, "str_size[%d]=%02x-------------------\n",i,(unsigned char )str[i]);
-				//}
+            const char* str = arg->value.string;
+            size_t str_size = strlen(str);
             target_dce_transmit(str, str_size);
             target_dce_transmit("\"", 1);
         }
@@ -357,7 +273,7 @@ dce_result_t  dce_parse_args(const char* cbuf, size_t size, const command_desc_t
         else if (c != ',')
         {
 
-            os_printf(LM_APP, LL_INFO, "expected ,");
+            os_printf(LM_APP, LL_INFO, "expected ,\n");
             return DCE_INVALID_INPUT;
         }
         else if (c == ','){
@@ -367,7 +283,7 @@ dce_result_t  dce_parse_args(const char* cbuf, size_t size, const command_desc_t
         }
         if (argc == DCE_MAX_ARGS)
         {
-            os_printf(LM_APP, LL_INFO, "too many arguments");
+            os_printf(LM_APP, LL_INFO, "too many arguments\n");
             return DCE_INVALID_INPUT;
         }
         args[argc++] = arg;
@@ -421,7 +337,7 @@ dce_result_code_t  dce_process_args_run_command(dce_t* ctx, const command_group_
             int rc = dce_parse_args(buf + 1, size - 1, command, &argc, args);
             if (rc != DCE_OK || argc == 0)
             {
-                os_printf(LM_APP, LL_INFO, "failed to parse args");
+                os_printf(LM_APP, LL_INFO, "failed to parse args\n");
                 dce_emit_basic_result_code(ctx, DCE_RC_ERROR);
                 return DCE_OK;
             }
@@ -430,7 +346,7 @@ dce_result_code_t  dce_process_args_run_command(dce_t* ctx, const command_group_
             return (*command->fn)(ctx, group->context, kind, argc, args);
         }
     }
-    os_printf(LM_APP, LL_INFO, "should be unreachable");
+    os_printf(LM_APP, LL_INFO, "should be unreachable\n");
     return DCE_OK;
 }
 
@@ -465,7 +381,7 @@ dce_result_t  dce_process_extended_format_command(dce_t* ctx, const char* buf, s
         }
     }
 
-    os_printf(LM_APP, LL_INFO, "command handler not found");
+    os_printf(LM_APP, LL_INFO, "command handler not found\n");
     dce_emit_basic_result_code(ctx, DCE_RC_ERROR);
     return DCE_OK;
 }

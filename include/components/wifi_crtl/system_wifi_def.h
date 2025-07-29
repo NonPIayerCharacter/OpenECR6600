@@ -3,6 +3,8 @@
 #include "lwip/arch.h"
 #include "lwip/ip_addr.h"
 #include "system_def.h"
+#include "system_log.h"
+
 //#include "netinet/in.h"  //liuyong
 #define __maybe_unused __attribute__((unused))
 

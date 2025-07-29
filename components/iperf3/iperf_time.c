@@ -51,7 +51,7 @@ iperf_time_now(struct iperf_time *time1)
 #else
 
 #include <sys/time.h>
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
 #include "iperf_util.h"
 #endif
 int
@@ -59,7 +59,7 @@ iperf_time_now(struct iperf_time *time1)
 {
     struct timeval tv;
     int result;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     result = gettimeofday(&tv, NULL);
 #else	
     result = os_gettimeofday(&tv);

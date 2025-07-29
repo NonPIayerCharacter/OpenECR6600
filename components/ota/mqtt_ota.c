@@ -298,7 +298,7 @@ int mqtt_service_update_handle(trs_mqtt_event_handle_t event)
 	if(0 == g_ota_is_downloading)
 	{
 		g_ota_is_downloading = 1;
-		if (http_client_download_file(item->valuestring, strlen(item->valuestring)) != 0)
+		if (http_client_download_file(item->valuestring) != 0)
 		{
 			mqtt_service_pub_errinfo_with_code(client, 1, "download failed");
 			os_printf(LM_APP, LL_ERR, "OTA:download failed!\n");

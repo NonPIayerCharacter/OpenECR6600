@@ -15,25 +15,36 @@
  * @par History 2:
  */
 
+#ifdef CONFIG_WIRELESS_IPERF_3
 #include "cli.h"
 #include "iperf.h"
 #include "iperf_api.h"
 
-#define IPERF_LINK_MAX_NUM 16
-#define IPERF_LINK_SERVER 4
-#define IPERF_LINK_CLIENT 16
+#define IPERF3_LINK_MAX_NUM 16
+#define IPERF3_LINK_SERVER 8
+#define IPERF3_LINK_CLIENT 8
 
-struct iperf_test *iperf_thread[IPERF_LINK_MAX_NUM];
+struct iperf_test *g_iperf3_threads[IPERF3_LINK_MAX_NUM];
 extern int iperf3_main(int argc , char *argv[]);
 
-static int iperf_thread_dump(void)
+static bool iperf_bandwidth_limit = true;
+
+int iperf_toggle_limit(cmd_tbl_t *t, int argc, char *argv[])
+{
+    iperf_bandwidth_limit = !iperf_bandwidth_limit;
+    return CMD_RET_SUCCESS;
+}
+
+CLI_CMD(iperf_toggle_limit, iperf_toggle_limit, "toggle iperf bandwidth limit", "");
+
+static int iperf3_thread_dump(void)
 {
     int index;
     struct iperf_test *test;
 
-    for (index = 0; index < IPERF_LINK_MAX_NUM; index++)
+    for (index = 0; index < IPERF3_LINK_MAX_NUM; index++)
     {
-        test = iperf_thread[index];
+        test = g_iperf3_threads[index];
         if (test == NULL)
             continue;
 
@@ -46,14 +57,14 @@ static int iperf_thread_dump(void)
     return CMD_RET_SUCCESS;
 }
 
-static int iperf_stop_server(int port)
+static int iperf3_stop_server(int port)
 {
     int index;
     struct iperf_test *server;
 
-    for (index = 0; index < IPERF_LINK_MAX_NUM; index++)
+    for (index = 0; index < IPERF3_LINK_MAX_NUM; index++)
     {
-        server = iperf_thread[index];
+        server = g_iperf3_threads[index];
         if (server == NULL)
             continue;
 
@@ -68,14 +79,14 @@ static int iperf_stop_server(int port)
     return CMD_RET_FAILURE;
 }
 
-static int iperf_stop_client(char *ip, int port)
+static int iperf3_stop_client(char *ip, int port)
 {
     int index;
     struct iperf_test *client;
 
-    for (index = 0; index < IPERF_LINK_MAX_NUM; index++)
+    for (index = 0; index < IPERF3_LINK_MAX_NUM; index++)
     {
-        client = iperf_thread[index];
+        client = g_iperf3_threads[index];
         if (client == NULL)
             continue;
 
@@ -95,21 +106,21 @@ static int iperf_stop_client(char *ip, int port)
     return CMD_RET_FAILURE;
 }
 
-int iperf_sc_check(struct iperf_test *sc)
+int iperf3_sc_check(struct iperf_test *sc)
 {
     int index;
     int tcpnum = 0;
     int udpnum = 0;
     int snum = 0;
 
-    for (index = 0; index < IPERF_LINK_MAX_NUM; index++)
+    for (index = 0; index < IPERF3_LINK_MAX_NUM; index++)
     {
-        if (iperf_thread[index] == NULL)
+        if (g_iperf3_threads[index] == NULL)
             continue;
 
         if (sc->role == 'c')
         {
-            if (sc != iperf_thread[index] && sc->server_port == iperf_thread[index]->server_port && !strcmp(sc->server_hostname, iperf_thread[index]->server_hostname))
+            if (sc != g_iperf3_threads[index] && sc->server_port == g_iperf3_threads[index]->server_port && !strcmp(sc->server_hostname, g_iperf3_threads[index]->server_hostname))
             {
                 printf("client donot start same ip %s port %d\n", sc->server_hostname, sc->server_port);
                 return CMD_RET_FAILURE;
@@ -118,44 +129,68 @@ int iperf_sc_check(struct iperf_test *sc)
 
         if (sc->role == 's')
         {
-            if (sc != iperf_thread[index] && iperf_thread[index]->role == 's' && sc->server_port == iperf_thread[index]->server_port)
+            if (sc != g_iperf3_threads[index] && g_iperf3_threads[index]->role == 's' && sc->server_port == g_iperf3_threads[index]->server_port)
             {
                 printf("server donot start same port %d\n", sc->server_port);
                 return CMD_RET_FAILURE;
             }
         }
 
-        if (iperf_thread[index]->role == 's')
+        if (g_iperf3_threads[index]->role == 's')
         {
-            if ((sc->state > 0) && sc->state != IPERF_START)
+            if ((g_iperf3_threads[index]->state > 0) && g_iperf3_threads[index]->state != IPERF_START)
             {
-                tcpnum += 1;
+                if (g_iperf3_threads[index]->protocol->id == SOCK_DGRAM)
+                {
+                    udpnum += g_iperf3_threads[index]->num_streams;
+                }
+                else
+                {
+                    tcpnum += g_iperf3_threads[index]->num_streams;
+                }
             }
             snum += 1;
-            if (snum > IPERF_LINK_SERVER)
+            if (snum > IPERF3_LINK_SERVER)
             {
                 printf("server max link, please check...\n");
+                iperf3_thread_dump();
                 return CMD_RET_FAILURE;
             }
         }
         else
         {
-            tcpnum += 1;
+            if (g_iperf3_threads[index]->protocol->id == SOCK_DGRAM)
+            {
+                udpnum += g_iperf3_threads[index]->num_streams;
+            }
+            else
+            {
+                tcpnum += g_iperf3_threads[index]->num_streams;
+            }
         }
 
-        if (iperf_thread[index]->protocol->id == SOCK_DGRAM)
-        {
-            udpnum += iperf_thread[index]->num_streams;
-        }
-        else
-        {
-            tcpnum += iperf_thread[index]->num_streams;
-        }
-
-        if (udpnum + tcpnum > IPERF_LINK_CLIENT || udpnum > IPERF_LINK_CLIENT/2)
+        if (tcpnum > IPERF3_LINK_CLIENT || udpnum > IPERF3_LINK_CLIENT)
         {
             printf("iperf max link, please check...\n");
+            iperf3_thread_dump();
             return CMD_RET_FAILURE;
+        }
+    }
+
+    if (udpnum + tcpnum > 1) {
+        for (index = 0; index < IPERF3_LINK_MAX_NUM; index++) {
+            if (sc->role == 's') {
+                continue;
+            }
+
+            if (iperf_bandwidth_limit && sc->settings->rate > 1000*1000) {
+                sc->settings->rate = 1000*1000;
+            }
+
+            if (sc->settings->blksize > 1460) {
+                //printf("blksize %d too big with multicast iperf running, auto to 1460 \n");
+                sc->settings->blksize = 1460;
+            }
         }
     }
 
@@ -179,7 +214,7 @@ int iperf3_test(cmd_tbl_t *t, int argc, char *argv[])
         {
             if (argc == 4)
                 port = atoi(argv[3]);
-            return iperf_stop_server(port);
+            return iperf3_stop_server(port);
         }
 
         if (strcmp(argv[2], "ip") == 0)
@@ -188,7 +223,7 @@ int iperf3_test(cmd_tbl_t *t, int argc, char *argv[])
             {
                 port = atoi(argv[5]);
             }
-            return iperf_stop_client(argv[3], port);
+            return iperf3_stop_client(argv[3], port);
         }
 
         os_printf(LM_CMD, LL_INFO, "iperf stop port[ip] xxx\n");
@@ -197,7 +232,7 @@ int iperf3_test(cmd_tbl_t *t, int argc, char *argv[])
 
     if (strcmp(argv[1], "print") == 0)
     {
-        return iperf_thread_dump();
+        return iperf3_thread_dump();
     }
 
     if (argc == 2 && !strcmp(argv[1], "-h"))
@@ -206,36 +241,36 @@ int iperf3_test(cmd_tbl_t *t, int argc, char *argv[])
         return CMD_RET_SUCCESS;
     }
 
-    for (index = 0; index < IPERF_LINK_MAX_NUM; index++)
+    for (index = 0; index < IPERF3_LINK_MAX_NUM; index++)
     {
-        if (iperf_thread[index] == NULL)
+        if (g_iperf3_threads[index] == NULL)
         {
-            iperf_thread[index] = iperf_new_test();
-            if (!iperf_thread[index])
+            g_iperf3_threads[index] = iperf_new_test();
+            if (!g_iperf3_threads[index])
             {
                 printf("iperf_new_test failed\n");
                 return CMD_RET_FAILURE;
             }
 
-            iperf_defaults(iperf_thread[index]);
-            if (iperf_parse_arguments(iperf_thread[index], argc, argv) < 0)
+            iperf_defaults(g_iperf3_threads[index]);
+            if (iperf_parse_arguments(g_iperf3_threads[index], argc, argv) < 0)
             {
                 printf("iperf_parse_arguments failed\n");
-                iperf_free_test(iperf_thread[index]);
-                iperf_thread[index] = NULL;
+                iperf_free_test(g_iperf3_threads[index]);
+                g_iperf3_threads[index] = NULL;
                 return CMD_RET_SUCCESS;
             }
 
-            if (!iperf_sc_check(iperf_thread[index]))
+            if (!iperf3_sc_check(g_iperf3_threads[index]))
             {
-                snprintf(taskname, sizeof(taskname), "iperf_%c_%d", iperf_thread[index]->role, iperf_thread[index]->server_port);
-                os_task_create(taskname, LWIP_IPERF_TASK_PRIORITY, LWIP_IPERF_TASK_STACK_SIZE, iperf3_thread, &iperf_thread[index]);
-                printf("iperf %c port %d start\n",  iperf_thread[index]->role, iperf_thread[index]->server_port);
+                snprintf(taskname, sizeof(taskname), "iperf_%c_%d", g_iperf3_threads[index]->role, g_iperf3_threads[index]->server_port);
+                os_task_create(taskname, LWIP_IPERF_TASK_PRIORITY, LWIP_IPERF_TASK_STACK_SIZE, iperf3_thread, &g_iperf3_threads[index]);
+                printf("iperf %c port %d start\n",  g_iperf3_threads[index]->role, g_iperf3_threads[index]->server_port);
                 return CMD_RET_SUCCESS;
             } else {
-                iperf_free_test(iperf_thread[index]);
-                iperf_thread[index] = NULL;
-	    }
+                iperf_free_test(g_iperf3_threads[index]);
+                g_iperf3_threads[index] = NULL;
+            }
 
             return CMD_RET_FAILURE;
         }
@@ -247,6 +282,5 @@ int iperf3_test(cmd_tbl_t *t, int argc, char *argv[])
 
 
 CLI_CMD(iperf, iperf3_test, "iperf3 cli", "iperf3 test cli");
-
-
+#endif
 

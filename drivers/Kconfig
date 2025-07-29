@@ -73,6 +73,10 @@ menu "UART_NUM"
 	endchoice
 endmenu
 
+menuconfig UART_DMA_LOOPLIST_RX
+	bool "open uart dma looplist MACRO"
+	default n
+
 source "drivers/drivers/uart/Kconfig"
 source "drivers/drivers/pit/Kconfig"
 source "drivers/drivers/gpio/Kconfig"

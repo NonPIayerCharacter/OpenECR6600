@@ -88,7 +88,7 @@ gpietsch@comcast.net
 #define GETOPT_H
 
 
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
 #define _EXFUN(name, proto) name proto
 #else
 #include <_ansi.h>

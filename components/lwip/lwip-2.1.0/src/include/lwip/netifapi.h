@@ -145,6 +145,8 @@ err_t netifapi_netif_index_to_name(u8_t index, char *name);
   */
 #define netifapi_dhcp_release_and_stop(n) netifapi_netif_common(n, dhcp_release_and_stop, NULL)
 
+#define netifapi_dhcp_stop_no_release(n) netifapi_netif_common(n, dhcp_stop_no_release, NULL)
+
 #if LWIP_IPV6
 /** @ingroup netifapi_dhcp6_stateless
   * @see dhcp6_stateless_start()

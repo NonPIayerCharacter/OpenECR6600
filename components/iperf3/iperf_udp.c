@@ -27,20 +27,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <errno.h>
 #endif
 #include <unistd.h>
 #include <assert.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <netinet/in.h>
 #endif
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
 #endif
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <sys/time.h>
 #include <sys/select.h>
 #endif
@@ -51,7 +51,7 @@
 #include "iperf_udp.h"
 #include "timer.h"
 #include "net.h"
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include "iperf_cjson.h"
 #else
 #include "cJSON.h"
@@ -116,7 +116,7 @@ iperf_udp_recv(struct iperf_stream *sp)
 	}
 
 	if (sp->test->debug)
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	    fprintf(stderr, "pcount %" PRIu64 " packet_count %d\n", pcount, sp->packet_count);
 #else
 	    printf("pcount %" PRIu64 " packet_count %d\n", pcount, sp->packet_count);
@@ -163,7 +163,7 @@ iperf_udp_recv(struct iperf_stream *sp)
 	
 	    /* Log the out-of-order packet */
 	    if (sp->test->debug) 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 		fprintf(stderr, "OUT OF ORDER - incoming packet sequence %" PRIu64 " but expected sequence %d on stream %d", pcount, sp->packet_count, sp->socket);
 #else
 		printf("OUT OF ORDER - incoming packet sequence %" PRIu64 " but expected sequence %d on stream %d", pcount, sp->packet_count, sp->socket);
@@ -278,7 +278,7 @@ int
 iperf_udp_buffercheck(struct iperf_test *test, int s)
 {
     int rc = 0;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     int sndbuf_actual, rcvbuf_actual;
 #else
     int rcvbuf_actual;
@@ -296,7 +296,7 @@ iperf_udp_buffercheck(struct iperf_test *test, int s)
             i_errno = IESETBUF;
             return -1;
         }
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
         if (setsockopt(s, SOL_SOCKET, SO_SNDBUF, &opt, sizeof(opt)) < 0) {
             i_errno = IESETBUF;
             return -1;
@@ -304,7 +304,7 @@ iperf_udp_buffercheck(struct iperf_test *test, int s)
 #endif
     }
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     /* Read back and verify the sender socket buffer size */
     optlen = sizeof(sndbuf_actual);
     if (getsockopt(s, SOL_SOCKET, SO_SNDBUF, &sndbuf_actual, &optlen) < 0) {
@@ -352,7 +352,7 @@ iperf_udp_buffercheck(struct iperf_test *test, int s)
 
     if (test->json_output) {
 	cJSON_AddNumberToObject(test->json_start, "sock_bufsize", test->settings->socket_bufsize);
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	cJSON_AddNumberToObject(test->json_start, "sndbuf_actual", sndbuf_actual);
 #endif
 	cJSON_AddNumberToObject(test->json_start, "rcvbuf_actual", rcvbuf_actual);
@@ -501,7 +501,7 @@ iperf_udp_connect(struct iperf_test *test)
 {
     int s, buf, sz;
 #ifdef SO_RCVTIMEO
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     struct timeval tv;
 #endif
 #endif
@@ -563,7 +563,7 @@ iperf_udp_connect(struct iperf_test *test)
     }
 
 #ifdef SO_RCVTIMEO
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
     unsigned int recv_timeout = 2000;
     setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &recv_timeout, sizeof(unsigned int));
 #else
@@ -574,8 +574,6 @@ iperf_udp_connect(struct iperf_test *test)
 #endif    
 #endif
 
-    rc = 0;
-RETRY:
     /*
      * Write a datagram to the UDP stream to let the server know we're here.
      * The server learns our address by obtaining its peer's address.
@@ -592,15 +590,10 @@ RETRY:
      * Wait until the server replies back to us.
      */
     if ((sz = recv(s, &buf, sizeof(buf), 0)) < 0) {
-        if (rc == 0)
-            printf("udp client mode, server should replies back to us here.\n");
-        if (test->state != IPERF_DONE && rc++ < 30) {
-            goto RETRY;
-        } else {
-            i_errno = IESTREAMREAD;
-            close(s);
-            return -1;
-        }
+        printf("udp client mode, server should replies back to us here.\n");
+        i_errno = IESTREAMREAD;
+        close(s);
+        return -1;
     }
 
     return s;

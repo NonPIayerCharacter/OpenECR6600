@@ -36,7 +36,7 @@
 #include <string.h>
 #include <time.h>
 #include <getopt.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <errno.h>
 #endif
 #include <signal.h>
@@ -45,7 +45,7 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <netinet/in.h>
 #endif
 #include <arpa/inet.h>
@@ -53,7 +53,7 @@
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
 #endif
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <netinet/tcp.h>
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -83,7 +83,7 @@
 #endif /* HAVE_SCTP */
 #include "timer.h"
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include "iperf_cjson.h"
 #else
 #include "cJSON.h"
@@ -97,7 +97,7 @@
 #include "iperf_auth.h"
 #endif /* HAVE_SSL */
 
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
 #include "getopt.h"
 #include "oshal.h"
 #define free    os_free
@@ -108,7 +108,7 @@ static int send_parameters(struct iperf_test *test);
 static int get_parameters(struct iperf_test *test);
 static int send_results(struct iperf_test *test);
 static int get_results(struct iperf_test *test);
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 static int diskfile_send(struct iperf_stream *sp);
 static int diskfile_recv(struct iperf_stream *sp);
 #endif
@@ -119,7 +119,7 @@ static cJSON *JSON_read(int fd);
 
 /*************************** Print usage functions ****************************/
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 void
 usage()
 {
@@ -149,7 +149,7 @@ usage_long(void)
 
 void warning(char *str)
 {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     fprintf(stderr, "warning: %s\n", str);
 #else
     printf("warning: %s\n", str);
@@ -243,7 +243,7 @@ iperf_get_test_blksize(struct iperf_test *ipt)
     return ipt->settings->blksize;
 }
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 FILE *
 iperf_get_test_outfile (struct iperf_test *ipt)
 {
@@ -311,7 +311,7 @@ iperf_get_test_json_output_string(struct iperf_test *ipt)
     return ipt->json_output_string;
 }
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 int
 iperf_get_test_zerocopy(struct iperf_test *ipt)
 {
@@ -475,7 +475,7 @@ iperf_set_test_num_streams(struct iperf_test *ipt, int num_streams)
 static void
 check_sender_has_retransmits(struct iperf_test *ipt)
 {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     if (ipt->mode != RECEIVER && ipt->protocol->id == Ptcp && has_tcpinfo_retransmits())
 	ipt->sender_has_retransmits = 1;
     else
@@ -488,15 +488,21 @@ iperf_set_test_role(struct iperf_test *ipt, char role)
 {
     ipt->role = role;
     if (!ipt->reverse) {
-        if (role == 'c')
+        if (role == 'c') {
             ipt->mode = SENDER;
-        else if (role == 's')
+            vTaskPrioritySet(xTaskGetCurrentTaskHandle(), LWIP_IPERF_TASK_C_PRIORITY);
+        } else if (role == 's') {
             ipt->mode = RECEIVER;
+            vTaskPrioritySet(xTaskGetCurrentTaskHandle(), LWIP_IPERF_TASK_PRIORITY);
+        }
     } else {
-        if (role == 'c')
+        if (role == 'c') {
             ipt->mode = RECEIVER;
-        else if (role == 's')
+            vTaskPrioritySet(xTaskGetCurrentTaskHandle(), LWIP_IPERF_TASK_PRIORITY);
+        } else if (role == 's') {
             ipt->mode = SENDER;
+            vTaskPrioritySet(xTaskGetCurrentTaskHandle(), LWIP_IPERF_TASK_C_PRIORITY);
+        }
     }
     check_sender_has_retransmits(ipt);
 }
@@ -518,15 +524,21 @@ iperf_set_test_reverse(struct iperf_test *ipt, int reverse)
 {
     ipt->reverse = reverse;
     if (!ipt->reverse) {
-        if (ipt->role == 'c')
+        if (ipt->role == 'c') {
             ipt->mode = SENDER;
-        else if (ipt->role == 's')
+            vTaskPrioritySet(xTaskGetCurrentTaskHandle(), LWIP_IPERF_TASK_C_PRIORITY);
+        } else if (ipt->role == 's') {
             ipt->mode = RECEIVER;
+            vTaskPrioritySet(xTaskGetCurrentTaskHandle(), LWIP_IPERF_TASK_PRIORITY);
+        }
     } else {
-        if (ipt->role == 'c')
+        if (ipt->role == 'c') {
             ipt->mode = RECEIVER;
-        else if (ipt->role == 's')
+            vTaskPrioritySet(xTaskGetCurrentTaskHandle(), LWIP_IPERF_TASK_PRIORITY);
+        } else if (ipt->role == 's') {
             ipt->mode = SENDER;
+            vTaskPrioritySet(xTaskGetCurrentTaskHandle(), LWIP_IPERF_TASK_C_PRIORITY);
+        }
     }
     check_sender_has_retransmits(ipt);
 }
@@ -537,7 +549,7 @@ iperf_set_test_json_output(struct iperf_test *ipt, int json_output)
     ipt->json_output = json_output;
 }
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 int
 iperf_has_zerocopy( void )
 {
@@ -706,13 +718,13 @@ void
 iperf_on_connect(struct iperf_test *test)
 {
     time_t now_secs;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     const char* rfc1123_fmt = "%a, %d %b %Y %H:%M:%S GMT";
     char now_str[100];
 #else /*FIXME: how to get calendar datetime ? */
     struct timeval now;
 #endif
-#if !defined(__TR_SW__) || LWIP_IPV6
+#if !defined(CONFIG_WIRELESS_IPERF_3) || LWIP_IPV6
     char ipr[INET6_ADDRSTRLEN];
 #else
     char ipr[INET_ADDRSTRLEN];
@@ -720,12 +732,12 @@ iperf_on_connect(struct iperf_test *test)
     int port;
     struct sockaddr_storage sa;
     struct sockaddr_in *sa_inP;
-#if !defined(__TR_SW__) || LWIP_IPV6
+#if !defined(CONFIG_WIRELESS_IPERF_3) || LWIP_IPV6
     struct sockaddr_in6 *sa_in6P;
 #endif
     socklen_t len;
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     now_secs = time((time_t*) 0);
     (void) strftime(now_str, sizeof(now_str), rfc1123_fmt, gmtime(&now_secs));
     if (test->json_output)
@@ -765,7 +777,7 @@ iperf_on_connect(struct iperf_test *test)
             inet_ntop(AF_INET, &sa_inP->sin_addr, ipr, sizeof(ipr));
 	    port = ntohs(sa_inP->sin_port);
         } else {
-#if !defined(__TR_SW__) || LWIP_IPV6
+#if !defined(CONFIG_WIRELESS_IPERF_3) || LWIP_IPV6
 	    sa_in6P = (struct sockaddr_in6 *) &sa;
             inet_ntop(AF_INET6, &sa_in6P->sin6_addr, ipr, sizeof(ipr));
 	    port = ntohs(sa_in6P->sin6_port);
@@ -775,7 +787,7 @@ iperf_on_connect(struct iperf_test *test)
         }
 	mapped_v4_to_regular_v4(ipr);
 	if (test->json_output)
-	#ifndef __TR_SW__
+	#ifndef CONFIG_WIRELESS_IPERF_3
 		cJSON_AddItemToObject(test->json_start, "accepted_connection", iperf_json_printf("host: %s  port: %d", ipr, (int64_t) port));
 	#else
 	    cJSON_AddItemToObject(test->json_start, "accepted_connection", iperf_json_printf("host: %s  port: %d", ipr, port));
@@ -824,7 +836,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
         {"port", required_argument, NULL, 'p'},
         {"format", required_argument, NULL, 'f'},
         {"interval", required_argument, NULL, 'i'},
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
         {"daemon", no_argument, NULL, 'D'},
 #endif
         {"one-off", no_argument, NULL, '1'},
@@ -856,7 +868,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
 #if defined(HAVE_FLOWLABEL)
         {"flowlabel", required_argument, NULL, 'L'},
 #endif /* HAVE_FLOWLABEL */
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
         {"zerocopy", no_argument, NULL, 'Z'},
 #endif
         {"omit", required_argument, NULL, 'O'},
@@ -875,7 +887,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
         {"nstreams", required_argument, NULL, OPT_NUMSTREAMS},
         {"xbind", required_argument, NULL, 'X'},
 #endif
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	{"pidfile", required_argument, NULL, 'I'},
 	{"logfile", required_argument, NULL, OPT_LOGFILE},
 #endif
@@ -948,7 +960,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                     return -1;
                 }
                 break;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
             case 'D':
 		test->daemon = 1;
 		server_flag = 1;
@@ -965,7 +977,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                 test->json_output = 1;
                 break;
             case 'v':
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
                 printf("%s (cJSON %s)\n%s\n%s\n", version, cJSON_Version(), get_system_info(),
 		       get_optional_features());
                 exit(0);
@@ -1023,7 +1035,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
 			return -1;
 		    }
 		}
-		#ifndef __TR_SW__
+		#ifndef CONFIG_WIRELESS_IPERF_3
 				test->settings->rate = unit_atof_rate(optarg);
 		#else
                 test->settings->rate = (size_t)unit_atof_rate(optarg);
@@ -1162,7 +1174,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                 }
 		TAILQ_INSERT_TAIL(&test->xbind_addrs, xbe, link);
                 break;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
             case 'Z':
                 if (!has_sendfile()) {
                     i_errno = IENOSENDFILE;
@@ -1184,7 +1196,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                 }
 		client_flag = 1;
                 break;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
             case 'F':
                 test->diskfile_name = optarg;
                 break;
@@ -1227,7 +1239,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
 	    case 'd':
 		test->debug = 1;
 		break;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	    case 'I':
 		test->pidfile = strdup(optarg);
 		server_flag = 1;
@@ -1288,7 +1300,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
 		client_flag = 1;
 		break;
 	    case 'h':
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 		usage_long(stdout);
 		exit(0);
 #else
@@ -1297,7 +1309,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
                 break;
 #endif
             default:
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
                 usage_long(stderr);
                 exit(1);
 #else
@@ -1307,7 +1319,7 @@ iperf_parse_arguments(struct iperf_test *test, int argc, char **argv)
         }
     }
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     /* Set logging to a file if specified, otherwise use the default (stdout) */
     if (test->logfile) {
         test->outfile = fopen(test->logfile, "a+");
@@ -1457,7 +1469,7 @@ iperf_set_send_state(struct iperf_test *test, signed char state)
 void
 iperf_check_throttle(struct iperf_stream *sp, struct iperf_time *nowP)
 {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     struct iperf_time temp_time;
     double seconds;
 #endif
@@ -1466,7 +1478,7 @@ iperf_check_throttle(struct iperf_stream *sp, struct iperf_time *nowP)
     if (sp->test->done)
         return;
 
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
     bits_per_second = sp->result->bytes_sent_this_interval * 8;
 #else
     iperf_time_diff(&sp->result->start_time_fixed, nowP, &temp_time);
@@ -1564,7 +1576,7 @@ iperf_init_test(struct iperf_test *test)
     struct iperf_time now;
     struct iperf_stream *sp;
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     if (test->protocol->init) {
         if (test->protocol->init(test) < 0)
 #else
@@ -1616,7 +1628,7 @@ iperf_create_send_timers(struct iperf_test * test)
         sp->green_light = 1;
 	if (test->settings->rate != 0) {
 	    cd.p = sp;
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
         sp->send_timer = tmr_create(test, NULL, send_timer_proc, cd, test->settings->pacing_timer, 1);
 #else
 	    sp->send_timer = tmr_create(NULL, send_timer_proc, cd, test->settings->pacing_timer, 1);
@@ -1688,7 +1700,7 @@ iperf_exchange_parameters(struct iperf_test *test)
         }
 #endif //HAVE_SSL
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
         if ((s = test->protocol->listen(test)) < 0) {
 #else
         if ((s = test->protocol->listen_fn(test)) < 0) {
@@ -1763,7 +1775,7 @@ send_parameters(struct iperf_test *test)
         else if (test->protocol->id == Psctp)
             cJSON_AddTrueToObject(j, "sctp");
 	cJSON_AddNumberToObject(j, "omit", test->omit);
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	if (test->server_affinity != -1)
 	    cJSON_AddNumberToObject(j, "server_affinity", test->server_affinity);
 #endif
@@ -1856,7 +1868,7 @@ get_parameters(struct iperf_test *test)
             set_protocol(test, Psctp);
 	if ((j_p = cJSON_GetObjectItem(j, "omit")) != NULL)
 	    test->omit = j_p->valueint;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	if ((j_p = cJSON_GetObjectItem(j, "server_affinity")) != NULL)
 	    test->server_affinity = j_p->valueint;
 #endif
@@ -1908,7 +1920,7 @@ get_parameters(struct iperf_test *test)
 	if ((j_p = cJSON_GetObjectItem(j, "authtoken")) != NULL)
         test->settings->authtoken = strdup(j_p->valuestring);
 #endif //HAVE_SSL
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	if (test->mode && test->protocol->id == Ptcp && has_tcpinfo_retransmits())
 	    test->sender_has_retransmits = 1;
 #endif		
@@ -1916,8 +1928,8 @@ get_parameters(struct iperf_test *test)
         cJSON_AddNumberToObject(test->json_start, "target_bitrate", test->settings->rate);
 	cJSON_Delete(j);
     }
-    extern int iperf_sc_check(struct iperf_test *sc);
-    if (iperf_sc_check(test) != 0)
+    extern int iperf3_sc_check(struct iperf_test *sc);
+    if (iperf3_sc_check(test) != 0)
     {
         i_errno = IERECVPARAMS;
         r = -1;
@@ -2284,7 +2296,7 @@ add_to_interval_list(struct iperf_stream_result * rp, struct iperf_interval_resu
 void
 connect_msg(struct iperf_stream *sp)
 {
-#if !defined(__TR_SW__) || LWIP_IPV6
+#if !defined(CONFIG_WIRELESS_IPERF_3) || LWIP_IPV6
     char ipl[INET6_ADDRSTRLEN], ipr[INET6_ADDRSTRLEN];
 #else
     char ipl[INET_ADDRSTRLEN], ipr[INET_ADDRSTRLEN];
@@ -2299,7 +2311,7 @@ connect_msg(struct iperf_stream *sp)
         lport = ntohs(((struct sockaddr_in *) &sp->local_addr)->sin_port);
         rport = ntohs(((struct sockaddr_in *) &sp->remote_addr)->sin_port);
     } else {
-#if !defined(__TR_SW__) || LWIP_IPV6
+#if !defined(CONFIG_WIRELESS_IPERF_3) || LWIP_IPV6
         inet_ntop(AF_INET6, (void *) &((struct sockaddr_in6 *) &sp->local_addr)->sin6_addr, ipl, sizeof(ipl));
 	mapped_v4_to_regular_v4(ipl);
         inet_ntop(AF_INET6, (void *) &((struct sockaddr_in6 *) &sp->remote_addr)->sin6_addr, ipr, sizeof(ipr));
@@ -2341,7 +2353,7 @@ iperf_new_test()
     }
     memset(test->settings, 0, sizeof(struct iperf_settings));
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     /* By default all output goes to stdout */
     test->outfile = stdout;
 #endif
@@ -2382,7 +2394,7 @@ iperf_defaults(struct iperf_test *testp)
 
     testp->omit = OMIT;
     testp->duration = DURATION;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     testp->diskfile_name = (char*) 0;
     testp->affinity = -1;
     testp->server_affinity = -1;
@@ -2407,7 +2419,7 @@ iperf_defaults(struct iperf_test *testp)
     testp->stats_interval = testp->reporter_interval = 1;
     testp->num_streams = 1;
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	testp->settings->domain = AF_UNSPEC;
 #else
     testp->settings->tos = 6 << 5; /* AC_VO */
@@ -2438,7 +2450,7 @@ iperf_defaults(struct iperf_test *testp)
 
     tcp->id = Ptcp;
     tcp->name = "TCP";
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     tcp->accept = iperf_tcp_accept;
     tcp->listen = iperf_tcp_listen;
     tcp->connect = iperf_tcp_connect;
@@ -2463,7 +2475,7 @@ iperf_defaults(struct iperf_test *testp)
 
     udp->id = Pudp;
     udp->name = "UDP";
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     udp->accept = iperf_udp_accept;
     udp->listen = iperf_udp_listen;
     udp->connect = iperf_udp_connect;
@@ -2492,7 +2504,7 @@ iperf_defaults(struct iperf_test *testp)
 
     sctp->id = Psctp;
     sctp->name = "SCTP";
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     sctp->accept = iperf_sctp_accept;
     sctp->listen = iperf_sctp_listen;
     sctp->connect = iperf_sctp_connect;
@@ -2567,25 +2579,25 @@ iperf_free_test(struct iperf_test *test)
     if (test->remote_congestion_used)
 	free(test->remote_congestion_used);
     if (test->omit_timer != NULL)
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
     tmr_cancel(test, test->omit_timer);
 #else
 	tmr_cancel(test->omit_timer);
 #endif
     if (test->timer != NULL)
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
     tmr_cancel(test, test->timer);
 #else
 	tmr_cancel(test->timer);
 #endif
     if (test->stats_timer != NULL)
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
     tmr_cancel(test, test->stats_timer);
 #else
 	tmr_cancel(test->stats_timer);
 #endif
     if (test->reporter_timer != NULL)
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
     tmr_cancel(test, test->reporter_timer);
 #else
 	tmr_cancel(test->reporter_timer);
@@ -2653,7 +2665,7 @@ iperf_reset_test(struct iperf_test *test)
         iperf_free_stream(sp);
     }
     if (test->omit_timer != NULL) {
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
         tmr_cancel(test, test->omit_timer);
 #else
         tmr_cancel(test->omit_timer);
@@ -2661,7 +2673,7 @@ iperf_reset_test(struct iperf_test *test)
 	test->omit_timer = NULL;
     }
     if (test->timer != NULL) {
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
         tmr_cancel(test, test->timer);
 #else
         tmr_cancel(test->timer);
@@ -2669,7 +2681,7 @@ iperf_reset_test(struct iperf_test *test)
 	test->timer = NULL;
     }
     if (test->stats_timer != NULL) {
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
         tmr_cancel(test, test->stats_timer);
 #else
         tmr_cancel(test->stats_timer);
@@ -2677,7 +2689,7 @@ iperf_reset_test(struct iperf_test *test)
 	test->stats_timer = NULL;
     }
     if (test->reporter_timer != NULL) {
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
         tmr_cancel(test, test->reporter_timer);
 #else
         tmr_cancel(test->reporter_timer);
@@ -2694,7 +2706,7 @@ iperf_reset_test(struct iperf_test *test)
     set_protocol(test, Ptcp);
     test->omit = OMIT;
     test->duration = DURATION;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     test->server_affinity = -1;
 #endif
 #if defined(HAVE_CPUSET_SETAFFINITY)
@@ -2793,7 +2805,7 @@ iperf_reset_stats(struct iperf_test *test)
         rp->bytes_received = 0;
         rp->bytes_sent_this_interval = rp->bytes_received_this_interval = 0;
 	if (test->sender_has_retransmits == 1) {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	    struct iperf_interval_results ir; /* temporary results structure */
 	    save_tcpinfo(sp, &ir);
 	    rp->stream_prev_total_retrans = get_total_retransmits(&ir);
@@ -2839,7 +2851,7 @@ iperf_stats_callback(struct iperf_test *test)
         iperf_time_diff(&temp.interval_start_time, &temp.interval_end_time, &temp_time);
         temp.interval_duration = iperf_time_in_secs(&temp_time);
 	if (test->protocol->id == Ptcp) {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	    if ( has_tcpinfo()) {
 		save_tcpinfo(sp, &temp);
 		if (test->sender_has_retransmits == 1) {
@@ -2884,7 +2896,7 @@ iperf_stats_callback(struct iperf_test *test)
 	    temp.outoforder_packets = sp->outoforder_packets;
 	    temp.cnt_error = sp->cnt_error;
 	}
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
 	/* Cant' find any reason to keep all interval results */
 	{
             struct iperf_interval_results *irp, *nirp;
@@ -3179,7 +3191,7 @@ iperf_print_results(struct iperf_test *test)
         int sender_total_packets = 0, receiver_total_packets = 0; /* running total */
         char ubuf[UNIT_LEN];
         char nbuf[UNIT_LEN];
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
         struct stat sb;
         char sbuf[UNIT_LEN];
 #endif		
@@ -3195,7 +3207,7 @@ iperf_print_results(struct iperf_test *test)
         int stream_must_be_sender = current_mode * current_mode;
 
 
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
         memset(ubuf, 0, UNIT_LEN);
         memset(nbuf, 0, UNIT_LEN);
         memset(mbuf, 0, UNIT_LEN);
@@ -3369,7 +3381,7 @@ iperf_print_results(struct iperf_test *test)
                     }
                 }
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
                 if (sp->diskfile_fd >= 0) {
                     if (fstat(sp->diskfile_fd, &sb) == 0) {
                         /* In the odd case that it's a zero-sized file, say it was all transferred. */
@@ -3746,7 +3758,7 @@ print_interval_results(struct iperf_test *test, struct iperf_stream *sp, cJSON *
 	}
     }
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     if (test->logfile || test->forceflush)
         iflush(test);
 #endif
@@ -3759,7 +3771,7 @@ iperf_free_stream(struct iperf_stream *sp)
     struct iperf_interval_results *irp, *nirp;
 
     /* XXX: need to free interval list too! */
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     munmap(sp->buffer, sp->test->settings->blksize);
     close(sp->buffer_fd);
     if (sp->diskfile_fd >= 0)
@@ -3773,7 +3785,7 @@ iperf_free_stream(struct iperf_stream *sp)
     }
     free(sp->result);
     if (sp->send_timer != NULL)
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
     tmr_cancel(sp->test, sp->send_timer);
 #else
     tmr_cancel(sp->send_timer);
@@ -3788,7 +3800,7 @@ iperf_new_stream(struct iperf_test *test, int s, int sender)
     struct iperf_stream *sp;
     int ret = 0;
 
-#ifndef __TR_SW__ 
+#ifndef CONFIG_WIRELESS_IPERF_3 
     char template[1024];
     if (test->tmp_template) {
         snprintf(template, sizeof(template) / sizeof(char), "%s", test->tmp_template);
@@ -3831,7 +3843,7 @@ iperf_new_stream(struct iperf_test *test, int s, int sender)
     memset(sp->result, 0, sizeof(struct iperf_stream_result));
     TAILQ_INIT(&sp->result->interval_results);
 
-#ifndef __TR_SW__ 
+#ifndef CONFIG_WIRELESS_IPERF_3 
     /* Create and randomize the buffer */
     sp->buffer_fd = mkstemp(template);
     if (sp->buffer_fd == -1) {
@@ -3877,7 +3889,7 @@ iperf_new_stream(struct iperf_test *test, int s, int sender)
     /* Set socket */
     sp->socket = s;
 
-#ifndef __TR_SW__ 
+#ifndef CONFIG_WIRELESS_IPERF_3 
     sp->snd = test->protocol->send;
     sp->rcv = test->protocol->recv;
 #else
@@ -3885,7 +3897,7 @@ iperf_new_stream(struct iperf_test *test, int s, int sender)
     sp->rcv = test->protocol->recv_fn;
 #endif
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     if (test->diskfile_name != (char*) 0) {
 	sp->diskfile_fd = open(test->diskfile_name, sender ? O_RDONLY : (O_WRONLY|O_CREAT|O_TRUNC), S_IRUSR|S_IWUSR);
 	if (sp->diskfile_fd == -1) {
@@ -3910,7 +3922,7 @@ iperf_new_stream(struct iperf_test *test, int s, int sender)
         ret = readentropy(sp->buffer, test->settings->blksize);
 
     if ((ret < 0) || (iperf_init_stream(sp, test) < 0)) {
-#ifndef __TR_SW__        
+#ifndef CONFIG_WIRELESS_IPERF_3        
         close(sp->buffer_fd);
         munmap(sp->buffer, sp->test->settings->blksize);
 #else
@@ -3993,7 +4005,7 @@ iperf_add_stream(struct iperf_test *test, struct iperf_stream *sp)
     }
 }
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 /* This pair of routines gets inserted into the snd/rcv function pointers
 ** when there's a -F flag. They handle the file stuff and call the real
 ** snd/rcv functions, which have been saved in snd2/rcv2.
@@ -4064,7 +4076,7 @@ diskfile_recv(struct iperf_stream *sp)
 void
 iperf_catch_sigend(void (*handler)(int))
 {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     signal(SIGINT, handler);
     signal(SIGTERM, handler);
     signal(SIGHUP, handler);
@@ -4211,7 +4223,7 @@ iperf_json_finish(struct iperf_test *test)
     test->json_output_string = cJSON_Print(test->json_top);
     if (test->json_output_string == NULL)
         return -1;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     fprintf(test->outfile, "%s\n", test->json_output_string);
     iflush(test);
 #else
@@ -4222,7 +4234,7 @@ iperf_json_finish(struct iperf_test *test)
     return 0;
 }
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 /* CPU affinity stuff - Linux, FreeBSD, and Windows only. */
 
 int
@@ -4330,7 +4342,7 @@ iperf_printf(struct iperf_test *test, const char* format, ...)
      * to be buffered up anyway.
      */
     if (test->role == 'c') {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	if (test->title)
 	    fprintf(test->outfile, "%s:  ", test->title);
 	va_start(argp, format);
@@ -4345,7 +4357,7 @@ iperf_printf(struct iperf_test *test, const char* format, ...)
 #endif
     }
     else if (test->role == 's') {
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	char linebuffer[1024];
 	va_start(argp, format);
 	r = vsnprintf(linebuffer, sizeof(linebuffer), format, argp);
@@ -4357,7 +4369,7 @@ iperf_printf(struct iperf_test *test, const char* format, ...)
 	va_end(argp);
 #endif
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	if (test->role == 's' && iperf_get_test_get_server_output(test)) {
 	    struct iperf_textline *l = (struct iperf_textline *) malloc(sizeof(struct iperf_textline));
 	    l->line = strdup(linebuffer);
@@ -4368,7 +4380,7 @@ iperf_printf(struct iperf_test *test, const char* format, ...)
     return r;
 }
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 int
 iflush(struct iperf_test *test)
 {

@@ -27,6 +27,26 @@
 /* TH */
 #define TH25Q16HB			0x1560EB
 
+/* memory protect */
+#define PROTECT_TYPE_VOL 			0x01
+#define PROTECT_TYPE_NOVOL			0x02
+
+
+#define PROTECT_ED_0x1FF000			0x4244			//511/512
+#define PROTECT_ED_0x1FE000			0x4248			//255/256
+#define PROTECT_ED_0x1FC000			0x424C			//127/128
+#define PROTECT_ED_0x1F8000			0x4250			//63/64
+#define PROTECT_ED_0x1F0000			0x4204 			//31/32
+#define PROTECT_ED_0x1E0000			0x4208 			//15/16
+#define PROTECT_ED_0x1C0000			0x420C 			//7/8
+#define PROTECT_ED_0x180000			0x4210			//3/4
+#define PROTECT_ED_0x100000			0x0234			//1/2
+#define PROTECT_ED_0x200000			0x0218			//all
+
+
+
+#define TH_BP_BIT					0x427C
+#define TH_BP_MASK					0xBD83
 
 static const T_SPI_FLASH_PARAM th_flash_params[] = 
 {
@@ -78,33 +98,58 @@ static int spiFlash_TH_check_addr(unsigned int flash_id, int addr, int length)
  */
 int spiFlash_TH_OTP_Read_CMD(struct _T_SPI_FLASH_DEV * p_flash_dev, int addr, int length,unsigned char *pdata)
 {
-	unsigned int *p_dst_buffer = (unsigned int *)pdata;
+	int i,rx_num;
+	unsigned int data;	//word aligned
+	unsigned int * rxBuf;
 
 	spiFlash_format_addr(SPIFLASH_CMD_OTP_RD, addr, 
 						SPI_TRANSCTRL_CMD_EN |SPI_TRANSCTRL_ADDR_EN 
-						 |SPI_TRANSCTRL_TRAMODE_DR  |SPI_TRANSCTRL_DUMMY_CNT_1
+						 |SPI_TRANSCTRL_TRAMODE_DR	|SPI_TRANSCTRL_DUMMY_CNT_1
 						 |SPI_TRANSCTRL_DUALQUAD_REGULAR |SPI_TRANSCTRL_RCNT(length-1));
 	
-	unsigned int Rxcount = 0;
-	unsigned int i;
-	unsigned int data = FLASH_SPI_REG->status;
-	while( data & SPI_STATUS_BUSY )
-	{           
-		if (!(data & SPI_STATUS_RXEMPTY))
-	  	{
-	        Rxcount = ((data & 0x00001f00)>>8) ;
-	        for (i = 0; i < Rxcount; i++) 
-			{
-				*p_dst_buffer++ = FLASH_SPI_REG->data;
-	        }
-	    }
-		data = FLASH_SPI_REG->status;
-	}
-
-	Rxcount = ((data & 0x00001f00)>>8) ;
-	for (i = 0; i < Rxcount; i++) 
+	if(((unsigned int)pdata%4==0) && ((unsigned int) length % 4 == 0))
 	{
-		*p_dst_buffer++ = FLASH_SPI_REG->data;
+		rxBuf = (unsigned int *)pdata;
+		data = (length+3)/4;
+
+		while((FLASH_SPI_REG->status & SPI_STATUS_BUSY) == 1)
+		{
+			rx_num = ((FLASH_SPI_REG->status) >> 8) & 0x1F;
+			rx_num = MIN(rx_num , data);
+
+			for(i=0; i<rx_num; i++)
+			{
+				*rxBuf++ = FLASH_SPI_REG->data;
+			}
+
+			data -= rx_num;
+
+			if(data == 0)
+			{
+				return FLASH_RET_SUCCESS;
+			}
+		}
+
+		for(i=0; i<data; i++)
+		{
+			*rxBuf++ = FLASH_SPI_REG->data;
+		}
+	}
+	else
+	{
+		while(length)
+		{
+			rx_num = MIN(4, length);
+			SPI_WAIT_RX_READY(FLASH_SPI_REG->status);
+			data = FLASH_SPI_REG->data;
+
+			for(i=0; i<rx_num; i++)
+			{
+				*pdata++ = (unsigned char)data;
+				data >>= 8;
+				length--;
+			}
+		}
 	}
 
 	return FLASH_RET_SUCCESS;
@@ -386,7 +431,165 @@ int spiFlash_TH_OTP_Write(struct _T_SPI_FLASH_DEV *  p_flash_dev, unsigned int a
 }
 
 
+int   __attribute__((no_ex9, used))spiflash_TH_FT(void)
+{
+	T_SPI_FLASH_DEV  p_flash_dev ;
+	unsigned int otp_write_value,otp_read_value;
+	unsigned int j;
+	unsigned int data;
+	int ret;
+	unsigned int irq_flag = system_irq_save();
 
+	if ( (Flash_ID & 0xFF)  == 0xEB )
+	{
+		//os_printf(LM_CMD,LL_INFO,"Flash_ID = 0x%x\n", Flash_ID);
+		ret = spiFlash_format_none(0x33);
+		if(ret != FLASH_RET_SUCCESS )
+		{
+			goto error;
+		}
+		
+		ret = spiFlash_format_none(0xCC);
+		if(ret != FLASH_RET_SUCCESS )
+		{
+			goto error;
+		}
+
+		ret = spiFlash_format_none(0xAA);
+		if(ret != FLASH_RET_SUCCESS )
+		{
+			goto error;
+		}
+
+		otp_write_value = 0x0000;
+		ret = spiFlash_TH_OTP_Program((T_SPI_FLASH_DEV * )&p_flash_dev, 0xCFE, (unsigned char*)(&otp_write_value), 0x2);
+		if(ret != FLASH_RET_SUCCESS )
+		{
+			goto error;
+		}
+		
+		for (j = 0; j<SPIFLASH_TIMEOUT_COUNT; j++)
+		{
+			data = spiFlash_cmd_rdSR_1();
+			if((data & SPIFLASH_STATUS_WIP) == 0)
+			{
+				break;
+			}
+		}
+		
+		if(data & SPIFLASH_STATUS_WIP)
+		{
+			ret = FLASH_RET_WIP_NOT_SET;
+			goto error;
+		}
+
+		spiFlash_format_wr_nodummy(0xFA, 0x030400,0xFAFC, 2);
+		spiFlash_format_rd_nodummy(0xFA, 0x040400,(unsigned char *)&otp_read_value, 2);
+		
+		if((otp_read_value & 0xffff) != 0x0503)
+		{
+		
+			ret = FLASH_RET_READ_ERROR;
+			goto error;
+		}
+		
+		spiFlash_format_wr_nodummy(0xFA, 0x030200,0xF379, 2);
+		spiFlash_format_rd_nodummy(0xFA, 0x040200,(unsigned char *)&otp_read_value, 2);
+			
+		if((otp_read_value & 0xffff) != 0x0C86)
+		{
+			ret = FLASH_RET_READ_ERROR;
+			goto error;
+		}
+
+		spiFlash_format_none(0x55);
+		spiFlash_format_none(0x88);
+		system_irq_restore(irq_flag);
+//		os_printf(LM_CMD,LL_INFO,"ft ok !!! \n");
+
+	}
+
+	return FLASH_RET_SUCCESS;
+	
+	error:
+		spiFlash_format_none(0x55);
+		spiFlash_format_none(0x88);
+		system_irq_restore(irq_flag);
+//		os_printf(LM_CMD,LL_INFO,"ft error !!! \n");
+		return ret;
+
+}
+
+
+unsigned int  spiflash_TH_wr_protect(unsigned int addr)
+{
+	unsigned int rdsr = 0;
+	unsigned int protect_value = 0;
+	
+	if ( (Flash_ID & 0xFF)  == 0xEB )
+	{
+		if((addr >= 0x1FF000))
+		{
+//			os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x1FF000\n ");
+			protect_value = PROTECT_ED_0x1FF000;
+		}
+		else if(addr >= 0x1FE000)
+		{
+//			os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x1FE000\n ");
+			protect_value = PROTECT_ED_0x1FE000;
+		}
+		else if(addr >= 0x1FC000)
+		{
+//			os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x1FC000\n ");
+			protect_value = PROTECT_ED_0x1FC000;
+		}
+		else if(addr >= 0x1F8000)
+		{
+//			os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x1F8000\n ");
+			protect_value = PROTECT_ED_0x1F8000;
+		}
+		else if(addr >= 0x1F0000)
+		{
+//			os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x1F0000\n ");
+			protect_value = PROTECT_ED_0x1F0000;
+		}
+		else if(addr >= 0x1E0000)
+		{
+//			os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x1E0000\n ");
+			protect_value = PROTECT_ED_0x1E0000;
+		}
+		else if(addr >= 0x1C0000)
+		{
+//			os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x1C0000\n ");
+			protect_value = PROTECT_ED_0x1C0000;
+		}	
+		else if(addr >= 0x180000)
+		{
+//			os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x180000\n ");
+			protect_value = PROTECT_ED_0x180000;
+		}
+		else if(addr >= 0x100000)
+		{
+//			os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x100000\n ");
+			protect_value = PROTECT_ED_0x100000;
+		}
+		else
+		{
+//			os_printf(LM_CMD,LL_INFO,"222PROTECT_ED_0x200000\n ");
+			protect_value = PROTECT_ED_0x200000;
+		}
+		
+		spiFlash_format_wr_vol(SPIFLASH_CMD_WRSR_1, protect_value , 2);
+//		os_printf(LM_CMD,LL_INFO,"protect_value = 0x%x\n ",protect_value);
+    	rdsr = (spiFlash_cmd_rdSR_1() & 0xff )| ((spiFlash_cmd_rdSR_2() & 0xff) << 8);
+    	if((rdsr & TH_BP_BIT)   != protect_value )
+    	{
+    		os_printf(LM_CMD,LL_INFO,"error: protect_value = 0x%x,rdsr = 0x%x\n ",protect_value, rdsr);
+    		system_assert(0);
+    	}
+	}
+	return protect_value;
+}
 
 
 int spiFlash_TH_probe(T_SPI_FLASH_DEV *p_flash_dev)

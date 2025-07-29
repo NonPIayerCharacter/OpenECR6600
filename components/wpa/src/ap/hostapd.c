@@ -2782,7 +2782,7 @@ void hostapd_set_state(struct hostapd_iface *iface, enum hostapd_iface_state s)
 
 #ifdef NEED_AP_MLME
 
-#ifdef COMPILE_WARNING_OPTIMIZE_WPA
+#if 1  //def COMPILE_WARNING_OPTIMIZE_WPA
 static void free_beacon_data(struct beacon_data *beacon)
 {
 	os_free(beacon->head);
@@ -2961,7 +2961,7 @@ static int hostapd_change_config_freq(struct hostapd_data *hapd,
 static int hostapd_fill_csa_settings(struct hostapd_data *hapd,
 				     struct csa_settings *settings)
 {
-#if 0
+#if 1
 	struct hostapd_iface *iface = hapd->iface;
 	struct hostapd_freq_params old_freq;
 	int ret;
@@ -3040,7 +3040,7 @@ static int hostapd_fill_csa_settings(struct hostapd_data *hapd,
 
 void hostapd_cleanup_cs_params(struct hostapd_data *hapd)
 {
-#if 0
+#if 1
 	os_memset(&hapd->cs_freq_params, 0, sizeof(hapd->cs_freq_params));
 	hapd->cs_count = 0;
 	hapd->cs_block_tx = 0;
@@ -3056,7 +3056,7 @@ void hostapd_cleanup_cs_params(struct hostapd_data *hapd)
 int hostapd_switch_channel(struct hostapd_data *hapd,
 			   struct csa_settings *settings)
 {
-#if 0
+#if 1
 	int ret;
 
 	if (!(hapd->iface->drv_flags & WPA_DRIVER_FLAGS_AP_CSA)) {

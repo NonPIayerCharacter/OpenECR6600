@@ -8341,7 +8341,7 @@ static int i2s_init(void)
         .data_align_format = DATA_ALIGN_LEFT,
         .trans_mode = MONO_MODE,
         .compre_bit_width = COMPRE_BIT_16_WIDTH,
-        .i2s_dma = 0
+        .i2s_dma = 1
     };
     if(i2s_init_cfg(&i2s_cfg_dev) < 0)
     {
@@ -8352,9 +8352,20 @@ static int i2s_init(void)
 
 static int i2s_write_test(cmd_tbl_t *t, int argc, char *argv[])
 {
+	int i,len,all_len;
+	int offset = 0;
     if(i2s_init() < 0)
+    {
         return CMD_RET_FAILURE;
-    i2s_master_write((unsigned char *)voicedata , sizeof(voicedata));
+	}
+	all_len = sizeof(voicedata);
+	for(i = 0; i <all_len; i+= len)
+	{
+		len = all_len < 512 ? all_len : 512;
+   		i2s_master_write((unsigned char *)&voicedata[offset] , len);
+		all_len -= len;
+		offset += len;
+	}
     drv_i2s_close();
     return CMD_RET_SUCCESS;
 }
@@ -8370,59 +8381,12 @@ static int i2s_read_test(cmd_tbl_t *t, int argc, char *argv[])
 }
 CLI_CMD(i2s_read_loop, i2s_read_test, "i2s_read_test", "i2s_read_test");
 
-int g_read_st;
-int g_read_handle;
-static void i2s_read_task(void *arg)
-{
-    unsigned char buff[14*1024] = {0};
-    FATFS myfile;
-    FIL file;
-    FRESULT fR;
-    UINT bytesCnt = 0;
-
-    fR = f_mount(&myfile, "", 1);
-    if (fR)
-        os_printf(LM_CMD, LL_INFO, "f_mount failed\n");
-
-    fR = f_open(&file, "nh.pcm", FA_CREATE_NEW | FA_WRITE);
-    if (fR)
-        os_printf(LM_CMD, LL_INFO,"f_open failed\n");
-
-    while (g_read_st)
-    {
-        i2s_master_read(buff , sizeof(buff));
-        fR = f_write(&file, buff, sizeof(buff), &bytesCnt);
-        if (fR)
-            os_printf(LM_CMD, LL_INFO, "f_write failed\n");
-    }
-    f_close(&file);
-    f_mount(0, "", 0);
-    os_task_delete(g_read_handle);
-}
-
-static int i2s_read_start_test(cmd_tbl_t *t, int argc, char *argv[])
-{
-    if(i2s_init() < 0)
-        return CMD_RET_FAILURE;
-    g_read_st = 1;
-
-    g_read_handle = os_task_create("i2s_read_task", 5, (16*1024), (task_entry_t)i2s_read_task, NULL);
-    return CMD_RET_SUCCESS;
-}
-CLI_CMD(i2s_read_start, i2s_read_start_test, "i2s_read_start_test", "i2s_read_start_test");
-
-static int i2s_read_stop_test(cmd_tbl_t *t, int argc, char *argv[])
-{
-    g_read_st = 0;
-    drv_i2s_close();
-    return CMD_RET_SUCCESS;
-}
-CLI_CMD(i2s_read_stop, i2s_read_stop_test, "i2s_read_stop_test", "i2s_read_stop_test");
-
 static int  i2c_init(void)
 {
     I2C_InitTypeDef I2C_InitTypeDef=
     {
+    	.scl_num        = I2C_SCL_USED_GPIO2,
+        .sda_num        = I2C_SDA_USED_GPIO3,
         .I2C_Speed      = I2C_Speed_100K,
         .I2C_AddressBit = I2C_Address_7bit,
         .I2C_Mode       = I2C_Mode_Master,
@@ -8465,20 +8429,6 @@ static int i2c_nau_config(cmd_tbl_t *t, int argc, char *argv[])
     return CMD_RET_SUCCESS;
 }
 CLI_CMD(i2c_nau_cfg, i2c_nau_config, "i2c_nau_cfg", "i2c_nau_cfg");
-
-static int i2c_nau_writecfg(cmd_tbl_t *t, int argc, char *argv[])
-{
-    unsigned char data[2] = {0};
-    if(i2c_init() < 0)
-        return CMD_RET_FAILURE;
-
-    data[0] = ((strtoul(argv[1], NULL, 0) << 1) | strtoul(argv[2], NULL, 0));
-    data[1] = (strtoul(argv[3], NULL, 0));
-    i2c_master_write(0x1A, (uint8_t *)data, 2);
-    drv_i2c_close();
-    return CMD_RET_SUCCESS;
-}
-CLI_CMD(i2c_nau_write, i2c_nau_writecfg, "i2c_nau_write", "i2c_nau_write");
 
 static int i2c_nauconfig_read(cmd_tbl_t *t, int argc, char *argv[])
 {

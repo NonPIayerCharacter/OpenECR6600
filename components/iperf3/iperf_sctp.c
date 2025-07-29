@@ -29,17 +29,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <errno.h>
 #endif
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <netinet/in.h>
 #endif
 #include <netdb.h>
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <sys/time.h>
 #include <sys/select.h>
 #endif
@@ -177,7 +177,7 @@ iperf_sctp_listen(struct iperf_test *test)
      * family specified, then force us to get an AF_INET6 socket.
      * More details in the comments in netanounce().
      */
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     if (test->settings->domain == AF_UNSPEC && !test->bind_address) {
         hints.ai_family = AF_INET6;
     } else {
@@ -335,7 +335,7 @@ iperf_sctp_connect(struct iperf_test *test)
 	    lcladdr->sin_addr.s_addr = INADDR_ANY;
 	    addrlen = sizeof(struct sockaddr_in);
 	}
-#if !defined(__TR_SW__) || LWIP_IPV6
+#if !defined(CONFIG_WIRELESS_IPERF_3) || LWIP_IPV6
 	/* IPv6 */
 	else if (server_res->ai_family == AF_INET6) {
 	    struct sockaddr_in6 *lcladdr = (struct sockaddr_in6 *) &lcl;
@@ -554,7 +554,7 @@ iperf_sctp_bindx(struct iperf_test *test, int s, int is_server)
     if (!is_server) {
         struct sockaddr *sa;
         struct sockaddr_in *sin;
-#if !defined(__TR_SW__) || LWIP_IPV6
+#if !defined(CONFIG_WIRELESS_IPERF_3) || LWIP_IPV6
         struct sockaddr_in6 *sin6;
 #endif
         int eport;
@@ -588,7 +588,7 @@ iperf_sctp_bindx(struct iperf_test *test, int s, int is_server)
         if (sa->sa_family == AF_INET) {
             sin = (struct sockaddr_in *)ai->ai_addr;
             eport = sin->sin_port;
-#if !defined(__TR_SW__) || LWIP_IPV6
+#if !defined(CONFIG_WIRELESS_IPERF_3) || LWIP_IPV6
         } else if (sa->sa_family == AF_INET6) {
             sin6 = (struct sockaddr_in6 *)ai->ai_addr;
             eport = sin6->sin6_port;

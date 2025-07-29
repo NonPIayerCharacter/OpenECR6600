@@ -23,6 +23,7 @@
 #define FLASH_SIZE_2_MB		0x00200000
 #define FLASH_SIZE_4_MB		0x00400000
 #define FLASH_SIZE_8_MB		0x00800000
+#define FLASH_SIZE_16_MB	0x01000000
 
 #define FLASH_OTP_START_ADDR_0x0			0x00000000
 #define FLASH_OTP_START_ADDR_0x1000			0x00001000
@@ -42,7 +43,9 @@
 #define FLASH_OTP_BLOCK_NUM_4		0x4
 
 #define FLASH_OTP_BLOCK_INTERNAL_256_BYTE	0x00000100
+#define FLASH_OTP_BLOCK_INTERNAL_512_BYTE	0x00000200
 #define FLASH_OTP_BLOCK_INTERNAL_1024_BYTE	0x00000400
+#define FLASH_OTP_BLOCK_INTERNAL_2048_BYTE	0x00000800
 #define FLASH_OTP_BLOCK_INTERNAL_4096_BYTE	0x00001000
 
 
@@ -56,6 +59,8 @@
 #define FLASH_ID_EN			0x1C
 #define FLASH_ID_TH			0xEB
 #define FLASH_ID_BOYA		0x68
+#define FLASH_ID_GT			0xC4
+#define FLASH_ID_KH			0xC2
 
 
 /* Number of cycles */
@@ -64,6 +69,7 @@
 #define SPIFLASH_TIMEOUT_COUNT			0xFFFFFFFF
 
 /* SPI-FLASH COMMAND SET  */
+#define SPIFLASH_CMD_WREN_VOL			0x50
 #define SPIFLASH_CMD_WREN				0x06
 #define SPIFLASH_CMD_RDID				0x9F
 #define SPIFLASH_CMD_RDSR_1				0x05
@@ -94,6 +100,8 @@
 #define SPIFLASH_CMD_OTP_RD 			0x48
 #define SPIFLASH_CMD_OTP_ENTRY			0x3A
 #define SPIFLASH_CMD_OTP_EXIT			0x04
+#define SPIFLASH_CMD_OTP_ENTRY_KH		0xB1
+#define SPIFLASH_CMD_OTP_EXIT_KH		0xC1
 
 /* QPI instructions */
 #define SPIFLASH_CMD_ENTER_QPI			0x38
@@ -109,6 +117,7 @@
 /* SPI-FLASH STATUS-2 REG */
 #define SPIFLASH_STATUS_2_ST			0x00
 #define SPIFLASH_STATUS_2_QE			0x02
+#define SPIFLASH_STATUS_QE_SPECIAL		0x40
 
 
 
@@ -195,6 +204,8 @@ int spiFlash_ZB_probe(T_SPI_FLASH_DEV *p_flash_dev);
 int spiFlash_TH_probe(T_SPI_FLASH_DEV *p_flash_dev);
 int spiFlash_EN_probe(T_SPI_FLASH_DEV *p_flash_dev);
 int spiFlash_BOYA_probe(T_SPI_FLASH_DEV *p_flash_dev);
+int spiFlash_GT_probe(T_SPI_FLASH_DEV *p_flash_dev);
+int spiFlash_KH_probe(T_SPI_FLASH_DEV *p_flash_dev);
 
 
 int spiFlash_probe(T_SPI_FLASH_DEV *p_flash_dev);
@@ -206,8 +217,9 @@ int spi_fifo_reset(void);
 int spi_rx_ready(void);
 int spiFlash_format_addr(int cmd, unsigned int addr, unsigned int param);
 
+unsigned int  spiflash_TH_wr_protect(unsigned int addr);
 
-
+int spiflash_TH_FT(void);
 
 
 

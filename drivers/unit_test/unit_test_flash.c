@@ -8,6 +8,7 @@
 #include "oshal.h"
 #include "hal_flash.h"
 #include "flash.h"
+#include "flash_internal.h"
 
 //#ifndef MIN
 //#define MIN(x,y) (x < y ? x : y)
@@ -101,6 +102,15 @@ static int stress_tet(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_flash, stress, stress_tet, "unit test flash erase", "ut_flash erase [address] [length]");
 #endif
 
+static int utest_flash_status(cmd_tbl_t *t, int argc, char *argv[])
+{
+	os_printf(LM_CMD,LL_ERR,"SR1 =  0x%x\n", spiFlash_cmd_rdSR_1() & 0xffff);
+	os_printf(LM_CMD,LL_ERR,"SR2 =  0x%x\n", spiFlash_cmd_rdSR_2() & 0xffff);
+	
+	return CMD_RET_SUCCESS;
+	
+}
+CLI_SUBCMD(ut_flash, status, utest_flash_status, "unit test flash status", "ut_flash status");
 
 static int utest_flash_erase(cmd_tbl_t *t, int argc, char *argv[])
 {
@@ -192,7 +202,29 @@ static int utest_flash_write(cmd_tbl_t *t, int argc, char *argv[])
 }
 CLI_SUBCMD(ut_flash, write, utest_flash_write, "unit test flash write", "ut_flash write [address] [length]");
 
+#ifdef CONFIG_FLASH_TH
 
+static int utest_flash_pro(cmd_tbl_t *t, int argc, char *argv[])
+{
+	unsigned int addr;
+
+	if (argc >= 2)
+	{
+		addr = strtoul(argv[1], NULL, 0);
+	}
+	else
+	{
+		os_printf(LM_CMD,LL_ERR,"PARAMETER NUM(: %d) IS ERROR!!  ut_flash write [address] [length] ([value])\n", argc);
+		return CMD_RET_FAILURE;
+	}
+	
+	spiflash_TH_wr_protect( addr);
+	return CMD_RET_SUCCESS;
+
+}
+CLI_SUBCMD(ut_flash, pro, utest_flash_pro, "unit test flash pro", "ut_flash pro [address] [length]");
+
+#endif
 static int utest_flash_read(cmd_tbl_t *t, int argc, char *argv[])
 {
 	unsigned int addr;
@@ -250,6 +282,59 @@ static int utest_flash_read(cmd_tbl_t *t, int argc, char *argv[])
 }
 CLI_SUBCMD(ut_flash, read, utest_flash_read, "unit test flash read", "ut_flash read [address] [length]");
 
+#ifdef CONFIG_FLASH_TH
+	static int utest_flash_FT(cmd_tbl_t *t, int argc, char *argv[])
+	{
+		int ret;
+		ret = spiflash_TH_FT();
+
+		os_printf(LM_CMD,LL_INFO,"FT ret = %d\n", ret);
+		return CMD_RET_SUCCESS;
+	}
+	CLI_SUBCMD(ut_flash, ft, utest_flash_FT, "unit test flash FT", "ut_flash FT");
+#endif
+static int utest_flash_cs_stress(cmd_tbl_t *t, int argc, char *argv[])
+{
+
+	unsigned int i,j = 0,ret;
+	unsigned int num = 0;
+	unsigned char sfTest[256] = {0};
+	unsigned char sf_Test_2[256]  =  {0};
+//	unsigned char sf_Test_1[256]  =	{0};
+
+	for(i = 0; i < 256; i++)
+	{
+		sfTest[i] = 0;
+	}
+	os_printf(LM_CMD,LL_INFO,"erase all flash memory\r\n");
+	hal_flash_erase(0x15000,0x1000);
+	
+	os_printf(LM_CMD,LL_INFO,"write all flash memory\r\n");
+	
+	ret = hal_flash_write(0x15000, (unsigned char *)sfTest, 256);
+	if(ret != 0)
+	{
+		os_printf(LM_CMD,LL_INFO,"drv_spiflash_write, ret = %d, add = 0x%x\n", ret, 0 + j*F_SIZE);
+		return -1;
+	}
+	
+	while(1)
+	{		
+		hal_flash_read(0x15000, (unsigned char *)sf_Test_2, 256);
+		if(memcmp(sfTest, sf_Test_2,256))
+		{ 
+			os_printf(LM_CMD,LL_INFO,"memcpy error. num = 0x%x)\r\n", num);
+			return -1 ;
+		}
+		num++;
+		if((num%0x500000) == 0)
+		{
+			os_printf(LM_CMD,LL_INFO,"0x%x ok\r\n", num);
+		}
+	}
+	return CMD_RET_SUCCESS;
+}
+CLI_SUBCMD(ut_flash, cs_stress, utest_flash_cs_stress, "unit test flash FT", "ut_flash FT");
 
 #if 0
 unsigned char sf_Test_[F_SIZE]  __attribute__((section(".dma.data")));
@@ -517,17 +602,30 @@ static int utest_flash_otp_erase(cmd_tbl_t *t, int argc, char *argv[])
 	//unsigned int length = F_SIZE;
  	unsigned int addr = strtoul(argv[1], NULL, 0);
 	unsigned int length = strtoul(argv[2], NULL, 0);
+	unsigned int offset    = 0;
+	unsigned int write_data = 0;
 	unsigned int ret = 0;
 	unsigned char sfTest[F_SIZE] = {0};
 	//ret = hal_flash_otp_erase(addr);
 	//ret = spiFlash_OTP_Se(addr);
 	//ret = p_flash_dev->flash_otp_ops.flash_otp_erase(p_flash_dev, addr);
-	for(i=0;i<length;++i)
+	for(i=0;i<F_SIZE;++i)
 	{
 		sfTest[i] = 0xff;
 	}
 
-	ret = drv_spiflash_OTP_Write(addr, length, (unsigned char *)sfTest);
+	while(length)
+	{
+	    offset = MIN(F_SIZE, length);
+		ret = hal_flash_otp_write(addr+write_data, (unsigned char *)&sfTest, offset);	
+		if(ret!=0)
+		{
+			os_printf(LM_CMD,LL_ERR,"sf_otp_write error, ret = %d\n", ret);
+			return CMD_RET_FAILURE;
+		}
+		length -= offset;
+		write_data += offset;
+	}
 	
 	os_printf(LM_APP, LL_INFO, "sf_otp_erase, ret = %d\n", ret);
 	if(ret != 0)	
@@ -535,6 +633,7 @@ static int utest_flash_otp_erase(cmd_tbl_t *t, int argc, char *argv[])
 
 	return CMD_RET_SUCCESS;
 }
+
 CLI_SUBCMD(ut_flash, otperase, utest_flash_otp_erase, "unit test flash otperase", "ut_flash otperase [address] )");
 #endif
 

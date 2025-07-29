@@ -5,13 +5,14 @@ menuconfig OTA
 menuconfig OTA_LOCAL
 	bool "OTA_LOCAL Servers Support"
 	depends on OTA
+	select HTTP_CLIENT
 	
 menuconfig OTA_SERVICE
 	bool "OTA_REMOTE Cloud Servers Support"
 	depends on OTA
 	select CJSON
 	select MQTT
-	
+	select HTTP_CLIENT
 choice
 	depends on OTA
 	prompt "OTA Mode"

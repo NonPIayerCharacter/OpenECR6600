@@ -1,2 +1,3 @@
 source "apps/ble_apps/Kconfig"
 source "apps/spi_service/Kconfig"
+source "apps/xsl/Kconfig"

@@ -1,9 +1,9 @@
 #ifndef __OTA_H__
 #define __OTA_H__
 
-
+#if defined(CONFIG_LWIP)
 #include "lwip/sockets.h"
-
+#endif
 
 #define OTA_STAT_PART_SIZE      (4 * 1024)
 #define OTA_BACKUP_PART_SIZE    (28 * 1024)
@@ -100,6 +100,7 @@ typedef struct
 	unsigned char crc;
 } ota_send_pack_t;
 
+#if defined(CONFIG_LWIP)
 typedef struct
 {
 	unsigned char version[OTA_VERSION_NUM];
@@ -109,6 +110,7 @@ typedef struct
 	unsigned char mac[6];
 	struct sockaddr_in client_addr;
 } ota_info_t;
+#endif
 
 typedef struct {
     unsigned char magic[3];
@@ -164,7 +166,7 @@ typedef struct {
 
 int ota_init(void);
 int ota_write(unsigned char *data, unsigned int len);
-int ota_done(bool reset);
+int ota_done(int reset);
 int ota_confirm_update(void);
 int ota_get_flash_crc(unsigned int addr, unsigned int size);
 int ota_firmware_check(unsigned int data_len, unsigned int crc);

@@ -29,21 +29,21 @@
 
 #include "iperf_config.h"
 
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <sys/time.h>
 #endif
 #include <sys/types.h>
 #ifdef HAVE_STDINT_H
 #include <stdint.h>
 #endif
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <sys/select.h>
 #endif
 #include <sys/socket.h>
 #ifndef _GNU_SOURCE
 # define _GNU_SOURCE
 #endif
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include <netinet/tcp.h>
 #endif
 
@@ -66,7 +66,7 @@
 
 #include "timer.h"
 #include "queue.h"
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 #include "iperf_cjson.h"
 #else
 #include "cJSON.h"
@@ -85,7 +85,7 @@ struct iperf_interval_results
     iperf_size_t bytes_transferred; /* bytes transfered in this interval */
     struct iperf_time interval_start_time;
     struct iperf_time interval_end_time;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
 	float     interval_duration;
 #else
     int     interval_duration;
@@ -190,7 +190,7 @@ struct iperf_stream
     struct iperf_stream_result *result;	/* structure pointer to result */
     Timer     *send_timer;
     int       green_light;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     int       buffer_fd;	/* data to send, file descriptor */
     char      *buffer;		/* data to send, mmapped */
     int       diskfile_fd;	/* file to send, file descriptor */
@@ -232,7 +232,7 @@ struct iperf_stream
 struct protocol {
     int       id;
     char      *name;
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     int       (*accept)(struct iperf_test *);
     int       (*listen)(struct iperf_test *);
     int       (*connect)(struct iperf_test *);
@@ -283,7 +283,7 @@ struct iperf_test
     int       server_port;
     int       omit;                             /* duration of omit period (-O flag) */
     int       duration;                         /* total duration of test (-t flag) */
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     char     *diskfile_name;			/* -F option */
     int       affinity, server_affinity;	/* -A option */
 #if defined(HAVE_CPUSET_SETAFFINITY)
@@ -295,7 +295,7 @@ struct iperf_test
     char     *congestion;			/* -C option */
     char     *congestion_used;			/* what was actually used */
     char     *remote_congestion_used;		/* what the other side used */
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     char     *pidfile;				/* -P option */
 
     char     *logfile;				/* --logfile option */
@@ -313,7 +313,7 @@ struct iperf_test
 #endif // HAVE_SSL
 
     /* boolean variables for Options */
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     int       daemon;                           /* -D option */
 #else
     Timer     *timers;
@@ -325,7 +325,7 @@ struct iperf_test
     int       bidirectional;                    /* --bidirectional */
     int	      verbose;                          /* -V option - verbose mode */
     int	      json_output;                      /* -J option - JSON output */
-#ifndef __TR_SW__
+#ifndef CONFIG_WIRELESS_IPERF_3
     int	      zerocopy;                         /* -Z option - use sendfile */
 #endif
     int       debug;				/* -d option - enable debug */
@@ -448,7 +448,7 @@ static os_mutex_handle_t iperf_mutex = NULL;
 #define MAX_MSS (9 * 1024)
 #define MAX_STREAMS 128
 
-#ifdef __TR_SW__
+#ifdef CONFIG_WIRELESS_IPERF_3
 #define	TCP_MAXSEG	2	/* set maximum segment size */
 #define malloc  os_malloc
 #define free    os_free

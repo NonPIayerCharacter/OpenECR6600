@@ -34,7 +34,7 @@
 #include "pmu_reg.h"
 #include "chip_pinmux.h"	
 #endif
-
+#include "timers.h"
 #ifndef NULL
 #define NULL ((void *)0)
 #endif
@@ -116,6 +116,18 @@
 #define ALARM_CLOCK			32768			//32k rtc cnt per sec
 // 100 rtc,  SYSTEM_CLOCK couter num
 #define THEORY_OSC_CNT				(SYSTEM_CLOCK*CAL_RTC_CNT/ALARM_CLOCK) // 122070
+int calibration = 0;
+extern void psm_phy_hw_set_channel_interface();
+unsigned int sec_step_add_num = 0;
+unsigned int sec_step_sub_num = 0;
+typedef struct{
+	unsigned int rtc_diff_prev;
+	unsigned int rtc_diff_timer;
+	int rtc_pit_diff;
+	TimerHandle_t rtc_pit_timer_handler;
+
+}rtc_pit_diff;
+rtc_pit_diff g_rtc_pit_diff;
 
 /**
  * @brief RTC register map.
@@ -159,7 +171,7 @@ void rtc_ready_to_write()
 /**    @brief		Get rtc number of cnt 32k counter(rtc data format:hour|min|sec|cnt_32K)
 *	   @return  	the rtc number of cnt 32k counter 
 */
-unsigned int drv_rtc_get_32K_cnt(void)
+unsigned int __attribute__((no_ex9, used))drv_rtc_get_32K_cnt(void)
 {
 	unsigned int rtcMsCnt = rtc_reg_base->Cnt;
 	while(1)
@@ -259,6 +271,7 @@ int drv_rtc_init()
 	#ifdef CONFIG_CLI_UART_0
 	PIN_FUNC_SET(IO_MUX_GPIO22, FUNC_GPIO22_UART0_TXD);
 	PIN_FUNC_SET(IO_MUX_GPIO21, FUNC_GPIO21_UART0_RXD);
+	WRITE_REG(AON_PAD_MODE_REG, READ_REG(AON_PAD_MODE_REG) & ( ~(3 << 21)));
 	#endif
 	WRITE_REG(AON_PAD_PE_REG, (READ_REG(AON_PAD_PE_REG) &~ (0x3<<5)));//25:0 map to pullup gpio5~13 14~15 18 pullup
 	WRITE_REG(AON_PAD_PS_REG, (READ_REG(AON_PAD_PS_REG) &~ (0x3<<5)));//25:0 map to pulldown gpio0~4 13 16~17 20~25 pulldown
@@ -574,7 +587,7 @@ int drv_rtc_get_alarm(struct rtc_time *time)
 *	   @param[in]	now_rtc    now data in RTC format
 *	   @return  	toltal cnt of interval (unit: 1cnt) note:1cnt = 1/32768s.
 */
-unsigned int drv_rtc_get_interval_cnt(unsigned       int pre_rtc,unsigned int now_rtc)
+unsigned int __attribute__((no_ex9, used))drv_rtc_get_interval_cnt(unsigned       int pre_rtc,unsigned int now_rtc)
 {
 	struct rtc_time tm;
 	if (RTC_ALARM_GET_HOUR(pre_rtc) > RTC_ALARM_GET_HOUR(now_rtc))
@@ -916,10 +929,6 @@ int cal_rtc_diff_cnt(void)
 }
 
 
-int calibration = 0;
-extern void psm_phy_hw_set_channel_interface();
-unsigned int sec_step_add_num = 0;
-unsigned int sec_step_sub_num = 0;
 void rtc_sec_isr(void)
 {	
 	unsigned int efuse_ctrl_value,cnt_for_100_32k_cycle;
@@ -1017,6 +1026,100 @@ void rtc_sec_isr(void)
 	}
 }
 
+void rtc_bias_time_cal()
+{	
+	static unsigned long long sec_cnt = 0,sec_cal_cnt = 0;
+	unsigned int sec_step = 0;//(sec_cnt * calibration) / cnt_for_100_32k_cycle;
+	struct rtc_time time = {0};
+	rtc_pit_diff *rtc_pit_diff_ptr;
+	rtc_pit_diff_ptr = &g_rtc_pit_diff;
+	sec_cnt++;
+	sec_cal_cnt ++;
+	if(sec_cnt >= RTC_COMP_PERIOD)
+	{
+		drv_rtc_get_time(&time);
+		if(time.sec < 20||time.sec > 40)
+			return;
+		sec_step = (ABS(rtc_pit_diff_ptr->rtc_pit_diff)*sec_cnt)/rtc_pit_diff_ptr->rtc_diff_timer;//ms
+		if(sec_step%1000 > 500)
+			sec_step = sec_step/1000 + 1;
+		else
+			sec_step = sec_step/1000;
+		//os_printf(LM_OS, LL_INFO, "%d, %s %d %d %d %d %d\n", __LINE__, __func__,rtc_pit_diff_ptr->rtc_pit_diff,sec_step,sec_cnt,sec_step%1000,rtc_pit_diff_ptr->rtc_diff_timer);
+		if(rtc_pit_diff_ptr->rtc_pit_diff >= 0)
+		{
+			time.sec -= sec_step;
+		}
+		else
+		{
+			time.sec += sec_step;
+		}
+		drv_rtc_set_time(&time);
+		sec_cnt = 0;
+	}
+	if(sec_cal_cnt >= (RTC_COMP_PERIOD*5-5))
+	{	
+		sec_cal_cnt = 0;
+		rtc_pit_diff_ptr->rtc_diff_prev = drv_rtc_get_32K_cnt();
+		
+		if(rtc_pit_diff_ptr->rtc_pit_timer_handler)
+		{
+			if (xTimerStart(rtc_pit_diff_ptr->rtc_pit_timer_handler, portMAX_DELAY) != pdPASS) {
+				os_printf(LM_OS, LL_ERR, "rtc pit timer start fail\n");
+			}
+			#ifdef CONFIG_PSM_SURPORT
+			psm_set_device_status(PSM_DEVICE_TIMER,PSM_DEVICE_STATUS_ACTIVE);
+			#endif
+		}
+	}
+
+}
+
+void rtc_get_pit_diff()
+{
+	int rtc_diff = 0;
+	rtc_pit_diff *rtc_pit_diff_ptr;
+	
+	unsigned int now_rtc = drv_rtc_get_32K_cnt();
+	rtc_pit_diff_ptr = &g_rtc_pit_diff;
+	
+	if (xTimerStop(rtc_pit_diff_ptr->rtc_pit_timer_handler, portMAX_DELAY) != pdPASS) {
+		os_printf(LM_OS, LL_ERR, "rtc pit timer stop fail\n");
+	}
+	rtc_diff = drv_rtc_get_interval_cnt(rtc_pit_diff_ptr->rtc_diff_prev ,now_rtc)*305/10 - rtc_pit_diff_ptr->rtc_diff_timer*1000;//us
+	if(ABS(rtc_diff) > rtc_pit_diff_ptr->rtc_diff_timer*15)
+		return;
+	rtc_pit_diff_ptr->rtc_pit_diff = drv_rtc_get_interval_cnt( rtc_pit_diff_ptr->rtc_diff_prev ,now_rtc)*305/10 - rtc_pit_diff_ptr->rtc_diff_timer*1000;
+	
+	#ifdef CONFIG_PSM_SURPORT
+	psm_set_device_status(PSM_DEVICE_TIMER,PSM_DEVICE_STATUS_IDLE);
+	#endif
+	//os_printf(LM_OS, LL_INFO, "***********************%d,%d 0x%x 0x%x\n", drv_rtc_get_interval_cnt( rtc_pit_diff_ptr->rtc_diff_prev ,now_rtc),rtc_pit_diff_ptr->rtc_pit_diff,rtc_pit_diff_ptr->rtc_diff_prev ,now_rtc);
+	
+
+}
+
+void rtc_pit_diff_trigger()
+{
+	rtc_pit_diff *rtc_pit_diff_ptr;
+	rtc_pit_diff_ptr = &g_rtc_pit_diff;
+	
+	rtc_pit_diff_ptr->rtc_diff_timer = 6000;
+	#ifdef CONFIG_PSM_SURPORT
+	psm_set_device_status(PSM_DEVICE_TIMER,PSM_DEVICE_STATUS_ACTIVE);
+	#endif	
+	rtc_pit_diff_ptr->rtc_diff_prev = drv_rtc_get_32K_cnt();
+   	rtc_pit_diff_ptr->rtc_pit_timer_handler = xTimerCreate("rtc pit diff timer", pdMS_TO_TICKS(rtc_pit_diff_ptr->rtc_diff_timer), pdTRUE, (void *)0, rtc_get_pit_diff);
+
+	if(rtc_pit_diff_ptr->rtc_pit_timer_handler)
+	{
+		if (xTimerStart(rtc_pit_diff_ptr->rtc_pit_timer_handler, portMAX_DELAY) != pdPASS) {
+			os_printf(LM_OS, LL_ERR, "rtc pit timer start fail\n");
+		}
+	}
+}
+
+ 
 void rtc_hour_isr(void)
 {
 	os_printf(LM_OS, LL_INFO, "%d, %s\n", __LINE__, __func__);
