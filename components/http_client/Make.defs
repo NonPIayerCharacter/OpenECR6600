@@ -1,4 +1,4 @@
-ifeq ($(CONFIG_HTTP_CLIENT),y)
+#ifeq ($(CONFIG_HTTP_CLIENT),y)
 	CSRCS += http_list.c http_random.c
 	CSRCS += http_event.c http_general.c http_interceptor.c http_message_buffer.c http_request.c http_response.c http_url_parser.c http_utils.c http_wq.c httpesclient.c
 	CSRCS += http_parser.c
@@ -8,4 +8,4 @@ ifeq ($(CONFIG_HTTP_CLIENT),y)
 	VPATH += :http_client/common http_client/httpclient http_client/network http_client/platform/FreeRTOS http_client/libhttp
 
 	INCPATHS += http_client/common http_client/httpclient http_client/network http_client/platform/FreeRTOS http_client/libhttp http_client/test
-endif
+#endif

@@ -2,9 +2,9 @@ ifeq ($(CONFIG_OTA),y)
     CSRCS += ota.c
     VPATH += :ota
 
-ifeq ($(CONFIG_HTTP_CLIENT),y)
+#ifeq ($(CONFIG_HTTP_CLIENT),y)
     CSRCS += http_ota.c
-endif
+#endif
 
 ifeq ($(CONFIG_OTA_LOCAL),y)
 	CSRCS += local_ota.c
