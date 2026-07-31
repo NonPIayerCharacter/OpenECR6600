@@ -24,6 +24,9 @@ SECTIONS
   .text : 
     {
 	KEEP(*(.vector_init ));
+	/* Sleep resume and SPI flash restoration use these routines before
+	 * XIP is available. */
+	*libboard.a:chip_clk_ctrl.o(.text .text.*)
 	*libpsm.a:(.text .text.*)
 
 	TEXT_BEGIN_DRV = .;
