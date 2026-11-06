@@ -23,15 +23,12 @@
 #include <ctype.h>
 #include <string.h>
 #include <limits.h>
-#ifndef CONFIG_ECR6600
-#include <assert.h>
-#else
+#undef assert
 #include "oshal.h"
 #define assert(x) if (!(x)) \
     { \
         os_printf(LM_OS, LL_ERR, "http error %s, %d \r\n", __func__, __LINE__);  \
     }
-#endif
 
 static uint32_t max_header_size = HTTP_MAX_HEADER_SIZE;
 

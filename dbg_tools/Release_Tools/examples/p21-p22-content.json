@@ -1,0 +1,197 @@
+{
+  "previousSha": "0996e836d99fa1137d2ff6df54c387ffadf1c98b",
+  "targetSha": "33f65587c1ddd6e7fc0cf3a734f5a7b36b8b47e9",
+  "product": "ECW6700 SDK",
+  "releaseDate": "",
+  "scope": "ECW6630、ECW6700",
+  "summary": "本版本相对 P21 包含 AT/网络行为修复、Wi-Fi 内存与吞吐配置调整、BLE 配置修复、构建及产品适配变更。客户可见范围需结合最终交付的 design、固件包和测试报告确认。",
+  "upgrade": "- 本版涉及 DNS 默认值、SYSSTORE 持久化和 CIPTCPOPT 恢复行为，兼容性影响尚待确认（`ECW6700-1460`、`ECW6700-1432`、`ECW6700-1465`）。\n- 发布前核对各 design 的配置差异；若涉及配置迁移，补充迁移步骤后再发布。",
+  "knownIssues": "- ECW6630、ECW6700F、qzt、shangsong 或 lmac_test 变化是否纳入客户交付范围，仍待确认（`ECW6630-2434`、`ECW6700-1470`、`ECW6700-1407`、`ECW6700-1472`、`ECW6700-342`）。\n- 已知问题清单待补充，当前不能声明“无已知问题”。",
+  "validation": "- 本评审稿尚未核对 P22 测试报告，上述候选变更不代表已验证通过。\n- 待补充板型、design、配置、固件文件名及 SHA-256，并关联匹配的测试报告、升级/回退说明和问题单状态。\n- 新增功能验证：待确认 ECW6700F high/mid/low 配置目标在适用 design 下可选择、构建并正常运行，补充新能力及适用条件验证记录。\n- 功能优化验证：待在相同芯片、design 和测试条件下对比基线版本的 Wi-Fi 内存占用与吞吐，补充 DNS 命令及默认值和兼容性说明、iperf UDP 断开场景测试及已有功能回归结果。\n- 问题修复复测：待按原问题触发条件复测，补充 AT 回归日志、断连/重连测试、双边沿测试矩阵、BLE 配对/鉴权回归及连接关闭压力测试。\n- 各客户条目分别记录验证结果；同一事项拆出的新增和优化条目独立确认，逐项证据对应关系保留在内部覆盖核对记录中。\n- 发布前补齐待确认信息，核对本版本关联事项及内部覆盖记录，并记录确认人和日期。",
+  "artifacts": "待补充 SDK/固件文件、版本和实际 SHA-256。",
+  "rollback": "待确认允许回退的版本、配置兼容限制和操作步骤。",
+  "entries": [
+    {
+      "id": "RN1",
+      "category": "features",
+      "text": "新增 ECW6700F high/mid/low 吞吐配置目标；适用 design 待确认",
+      "issues": [
+        "ECW6700-1475"
+      ],
+      "commits": [
+        "ccc26c9dce0fd879482a6bd98d0a423202f4d6ef"
+      ],
+      "validation": "未验证；按方案 9.3 第 8 节补齐本条对应测试依据。"
+    },
+    {
+      "id": "RN2",
+      "category": "improvements",
+      "text": "调整 Wi-Fi TX/RX 与 lwIP 热代码的 RAM 优化机制；适用芯片和 design 待确认",
+      "issues": [
+        "ECW6700-1475"
+      ],
+      "commits": [
+        "ccc26c9dce0fd879482a6bd98d0a423202f4d6ef"
+      ],
+      "validation": "未验证；按方案 9.3 第 8 节补齐本条对应测试依据。"
+    },
+    {
+      "id": "RN3",
+      "category": "improvements",
+      "text": "优化 AT 命令的 DNS 服务器配置及默认 DNS 设置",
+      "issues": [
+        "ECW6700-1460"
+      ],
+      "commits": [
+        "7b09a25531f35a8bcd350f73c2d46d104e3dc2a8"
+      ],
+      "validation": "未验证；按方案 9.3 第 8 节补齐本条对应测试依据。"
+    },
+    {
+      "id": "RN4",
+      "category": "improvements",
+      "text": "在 iperf UDP 断开场景使用控制链路 keep-alive",
+      "issues": [
+        "ECW6700-868"
+      ],
+      "commits": [
+        "040f3b8b9904b35b0a5313cc490b492877ad7a62"
+      ],
+      "validation": "未验证；按方案 9.3 第 8 节补齐本条对应测试依据。"
+    },
+    {
+      "id": "RN5",
+      "category": "fixes",
+      "text": "修复使用 `CIPCLOSE=5` 时重复上报 `0,CLOSED` 的问题",
+      "issues": [
+        "ECW6700-1434"
+      ],
+      "commits": [
+        "97a5fec675f1a5517cdea116e2d0dbb21f29533c"
+      ],
+      "validation": "未验证；按方案 9.3 第 8 节补齐本条对应测试依据。"
+    },
+    {
+      "id": "RN6",
+      "category": "fixes",
+      "text": "修复 `CIPTCPOPT` 默认值及网络配置恢复时序",
+      "issues": [
+        "ECW6700-1465"
+      ],
+      "commits": [
+        "b9f343326d48c8920fc606f0ab2184f090c64d9a"
+      ],
+      "validation": "未验证；按方案 9.3 第 8 节补齐本条对应测试依据。"
+    },
+    {
+      "id": "RN7",
+      "category": "fixes",
+      "text": "修复 `AT+SLEEPWKCFG` 查询时将双边沿误报为上升沿的问题，并检查底层配置返回值",
+      "issues": [
+        "ECW6700-1457"
+      ],
+      "commits": [
+        "e10f720894c5d762da6590c452b380dace3d86f9"
+      ],
+      "validation": "未验证；按方案 9.3 第 8 节补齐本条对应测试依据。"
+    },
+    {
+      "id": "RN8",
+      "category": "fixes",
+      "text": "修复 BLE 设置静态密钥错误",
+      "issues": [
+        "ECW6700-1427"
+      ],
+      "commits": [
+        "d952ec8ae37048180fb29abc519f97b075c70ce6"
+      ],
+      "validation": "未验证；按方案 9.3 第 8 节补齐本条对应测试依据。"
+    },
+    {
+      "id": "RN9",
+      "category": "fixes",
+      "text": "在关闭 socket 后 `select` 返回 `EBADF` 时重建 fd 集合",
+      "issues": [
+        "ECW6700-1430"
+      ],
+      "commits": [
+        "5c3b166944c1ed5b79bc51e4715b62173bc02200"
+      ],
+      "validation": "未验证；按方案 9.3 第 8 节补齐本条对应测试依据。"
+    },
+    {
+      "id": "RN10",
+      "category": "adaptations",
+      "text": "将 `lmactest` 调整为 noRom 构建；仅在该目标属于客户交付物时保留",
+      "issues": [
+        "ECW6700-342"
+      ],
+      "commits": [
+        "b2d371a9e7875d63710862a3751bd5573b6fe2e4"
+      ],
+      "validation": "未验证；按方案 9.3 第 8 节补齐本条对应测试依据。"
+    },
+    {
+      "id": "RN11",
+      "category": "adaptations",
+      "text": "同步 shangsong API、宏和 ECW6700 构建脚本；适用 design 和交付范围待确认",
+      "issues": [
+        "ECW6700-1472"
+      ],
+      "commits": [
+        "33f65587c1ddd6e7fc0cf3a734f5a7b36b8b47e9",
+        "48b8aa2cc42e2cf6f5682fdb0cab97b5dd5a10a2",
+        "7544c6a5be9e378ed483d1e6d905a5b6d6768c8b"
+      ],
+      "validation": "未验证；按方案 9.3 第 8 节补齐本条对应测试依据。"
+    },
+    {
+      "id": "RN12",
+      "category": "improvements",
+      "text": "将 `ble_wifi_dbg.o` 迁入 IRAM，释放 ITCM 空间",
+      "issues": [
+        "ECW6630-2434"
+      ],
+      "commits": [
+        "b824bb8bf9f925ce572fb6d17f437b6435125b5b"
+      ],
+      "validation": "未验证；待核对 ECW6630 链接布局及对应功能回归。"
+    },
+    {
+      "id": "RN13",
+      "category": "fixes",
+      "text": "I2C 初始化相关变更，原提交仅描述初始化失败及功能未合入，具体修复内容待确认",
+      "issues": [
+        "ECW6700-1470"
+      ],
+      "commits": [
+        "e6e075d6c51316b3a1dbed5ee8ac1a79d57feb14"
+      ],
+      "validation": "依据 Jira 缺陷类型归入修复候选；发布前核实实际变更并重写描述，不能据问题标题认定已修复。"
+    },
+    {
+      "id": "RN14",
+      "category": "improvements",
+      "text": "同步 qzt 代码，具体行为及客户适用范围待确认",
+      "issues": [
+        "ECW6700-1407"
+      ],
+      "commits": [
+        "3b0e61224ae6305ff98b8b29dbe59cc6608ae3e4"
+      ],
+      "validation": "依据 Jira 改进类型归类；未验证，待补充同步范围、具体客户变化及回归依据。"
+    },
+    {
+      "id": "RN15",
+      "category": "fixes",
+      "text": "AT 初始化时显式开启 `SYSSTORE` 配置保存",
+      "issues": [
+        "ECW6700-1432"
+      ],
+      "commits": [
+        "dde19b6f2b9c1a2420fde5a56ec3f5884080372b"
+      ],
+      "validation": "依据 Jira 缺陷类型归类；未验证，待复测配置保存、重启恢复及恢复出厂场景。"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+ifeq ($(CONFIG_CPP),y)
+CSRCS += chip_atomic.c chip_cxx_crtbegin.c chip_cxx_crtend.c
+VPATH += :ecr6600/common/cpp
+endif

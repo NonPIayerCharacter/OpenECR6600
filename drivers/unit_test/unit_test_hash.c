@@ -88,7 +88,7 @@ static const unsigned char utest_sha512_sum_3[] =
 
 
 
-static int utest_hash_sha256(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_hash_sha256( int argc, char *argv[])
 {
 	unsigned char output[HASH_512_SUM_LEN];   ///< Array of output data
 	unsigned int data_len1, data_len2, data_len3;
@@ -135,7 +135,7 @@ static int utest_hash_sha256(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_hash, sha256, utest_hash_sha256, "unit test hash sha256", "ut_hash sha256");
 
 
-static int utest_hash_sha512(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_hash_sha512( int argc, char *argv[])
 {
 	unsigned char output[HASH_512_SUM_LEN];   ///< Array of output data
 	unsigned int data_len1, data_len2, data_len3;
@@ -376,7 +376,7 @@ void cli_hexdump(const void * addr, unsigned int size)
 	}
 }
 
-static int utest_sha256(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_sha256( int argc, char *argv[])
 {
 	unsigned int i;
 	unsigned char hash[32];
@@ -545,7 +545,7 @@ tests512[] =
 extern int drv_sha512_vector(unsigned int num_elem, const unsigned char * addr[], const size_t * plength, unsigned char * output);
 extern int sha512_vector(size_t num_elem, const unsigned char *addr[], const size_t *len,  unsigned char *mac);
 
-static int utest_sha512(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_sha512( int argc, char *argv[])
 {
 	unsigned int i;
 	unsigned char hash[64];
@@ -664,7 +664,7 @@ static const unsigned char utest_hash_sha256_sum[] =
 	0x53, 0xb9, 0xfb, 0x0d, 0xfc, 0x43, 0xde, 0x64
 };
 
-static int utest_hash_sha256_64mul(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_hash_sha256_64mul( int argc, char *argv[])
 {
 	unsigned int data_len;
 	unsigned char output[HASH_256_SUM_LEN];
@@ -707,7 +707,7 @@ static const unsigned char utest_hash_sha512_sum[] =
 	0x8a, 0x04, 0xc3, 0xd7, 0xc3, 0x45, 0xf2, 0x4f
 };
 
-static int utest_hash_sha512_128mul(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_hash_sha512_128mul( int argc, char *argv[])
 {
 	unsigned int data_len;
 	unsigned char output[HASH_512_SUM_LEN];

@@ -154,8 +154,8 @@ typedef  volatile struct _T_DMA_REG_MAP
 									|CHN_CTRL_DST_ADDR_CTRL(CHN_ADDR_FIX)	\
 									|CHN_CTRL_SRC_ADDR_CTRL(CHN_ADDR_INC)	\
 									|CHN_CTRL_DST_MODE(CHN_SRC_MODE_HANDSHAKE) \
-									|CHN_CTRL_DST_WIDTH(CHN_WIDTH_WORLD)	\
-									|CHN_CTRL_SRC_WIDTH(CHN_WIDTH_WORLD)	\
+									|CHN_CTRL_DST_WIDTH(CHN_WIDTH_HALF_WORLD)	\
+									|CHN_CTRL_SRC_WIDTH(CHN_WIDTH_HALF_WORLD)	\
 									|CHN_CTRL_SRC_BURST_SIZE(CHN_BURST_SIZE_1_TRANS)	\
 									|CHN_CTRL_PRIORITY(CHN_PRIORITY_LOW)
 									
@@ -167,8 +167,8 @@ typedef  volatile struct _T_DMA_REG_MAP
 									|CHN_CTRL_DST_ADDR_CTRL(CHN_ADDR_INC)	\
 									|CHN_CTRL_SRC_ADDR_CTRL(CHN_ADDR_FIX)	\
 									|CHN_CTRL_SRC_MODE(CHN_SRC_MODE_HANDSHAKE) \
-									|CHN_CTRL_DST_WIDTH(CHN_WIDTH_HALF_WORLD)	\
-									|CHN_CTRL_SRC_WIDTH(CHN_WIDTH_HALF_WORLD)	\
+									|CHN_CTRL_DST_WIDTH(CHN_WIDTH_WORLD)	\
+									|CHN_CTRL_SRC_WIDTH(CHN_WIDTH_WORLD)	\
 									|CHN_CTRL_SRC_BURST_SIZE(CHN_BURST_SIZE_1_TRANS)	\
 									|CHN_CTRL_PRIORITY(CHN_PRIORITY_LOW)
 
@@ -484,6 +484,7 @@ unsigned int drv_dma_looplist_config(int chn_num, unsigned int src_addr, unsigne
 void drv_dma_start(int num)
 {
 	T_DRV_DMA_DEV * p_dma_dev = &dma_dev;
+	p_dma_dev->reg_base->IntStatus = (1 << (num+16)) | (1 << (num+8)) | (1 << (num+0));
 	p_dma_dev->reg_base->Ch[num].ChCtrl = 
 		p_dma_dev->p_chn[num].dma_chn_lldes.dma_ctrl_cfg;
 
@@ -521,7 +522,7 @@ void  drv_dma_ch_release(int chn)
 	unsigned long flags;
 	T_DRV_DMA_DEV * p_dma_dev = &dma_dev;
 
-	if (p_dma_dev->init == 0)
+	if (p_dma_dev->init == 0 || chn < 0 || chn >= DRV_DMA_CH_NUM)
 	{
 		return;
 	}
@@ -530,6 +531,13 @@ void  drv_dma_ch_release(int chn)
 	if ((p_dma_dev->alloc_flag & (1<<chn)))
 	{
 		p_dma_dev->reg_base->Ch[chn].ChCtrl = 0;
+		/* Detach the owner before it can free its callback data.  A pending
+		 * DMA IRQ must never call back into a released device. */
+		p_dma_dev->p_chn[chn].dma_callback.callback = NULL;
+		p_dma_dev->p_chn[chn].dma_callback.data = NULL;
+		/* IntStatus is W1C: clear only this channel's TC/abort/error bits. */
+		p_dma_dev->reg_base->IntStatus =
+			(1U << (chn + 16)) | (1U << (chn + 8)) | (1U << chn);
 		p_dma_dev->alloc_flag = p_dma_dev->alloc_flag & (~(1<<chn));
 		p_dma_dev->p_chn[chn].dma_chn_lldes.count = 0;
 	}
@@ -569,6 +577,21 @@ int  drv_dma_ch_alloc(void)
 	}
 
 	return -1;
+}
+
+int drv_dma_close(void)
+{
+	T_DRV_DMA_DEV * p_dma_dev = &dma_dev;
+
+	if (p_dma_dev)
+	{
+		memset(&dma_dev, 0 ,sizeof(dma_dev));
+		return -1;
+	}
+	arch_irq_mask(VECTOR_NUM_DMA);
+	arch_irq_clean(VECTOR_NUM_DMA);
+	arch_irq_register(VECTOR_NUM_DMA, 0);
+	return 0;	
 }
 
 

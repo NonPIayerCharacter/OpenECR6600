@@ -56,7 +56,7 @@ struct iperf_time;
 #define DEFAULT_SCTP_BLKSIZE (64 * 1024)
 #else /* FIXME: enlarge FreeRTOS heap? */
 #define DEFAULT_UDP_BLKSIZE (4 * 1024) /* default is dynamically set, else this */
-#define DEFAULT_TCP_BLKSIZE (1 * 1024)  /* default read/write block size */
+#define DEFAULT_TCP_BLKSIZE (3 * 1460) /* 1*1024 default read/write block size */
 #define DEFAULT_SCTP_BLKSIZE (4 * 1024)
 #endif
 

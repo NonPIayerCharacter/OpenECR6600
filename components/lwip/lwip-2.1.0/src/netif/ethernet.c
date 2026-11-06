@@ -60,8 +60,6 @@
 #include LWIP_HOOK_FILENAME
 #endif
 
-//#include "system_debug.h"  // liuyong
-
 const struct eth_addr ethbroadcast = {{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}};
 const struct eth_addr ethzero = {{0, 0, 0, 0, 0, 0}};
 
@@ -97,13 +95,6 @@ ethernet_input(struct pbuf *p, struct netif *netif)
     MIB2_STATS_NETIF_INC(netif, ifinerrors);
     goto free_and_return;
   }
-  
-#if 0
-{
-    debug_rx_tx_info_t info = {0, netif->num};
-    lwip_dump_pbuf(p, &info);
-}
-#endif
 
   if (p->if_idx == NETIF_NO_INDEX) {
     p->if_idx = netif_get_index(netif);

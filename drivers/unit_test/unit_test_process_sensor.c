@@ -6,7 +6,7 @@
 
 extern void drv_process_sensor_get(unsigned int DelayTimeUs,unsigned short int *pProcesscnt);
 
-static int utest_process_sensor_out(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_process_sensor_out( int argc, char *argv[])
 {
     unsigned int  times = (int)strtoul(argv[1], NULL, 0);
     unsigned short int pro[3]= {0};

@@ -2,7 +2,6 @@ menu "Build Setup"
 source "arch/Kconfig"
 endmenu # Build Setup
 
-
 menu "Chip Features"
 source "Boards/Kconfig"
 endmenu
@@ -15,22 +14,17 @@ menu "Device Drivers"
 source "drivers/Kconfig"
 endmenu
 
-
 menu "Components Features"
 source "components/Kconfig"
 endmenu
 
-
-
 source "PS/Kconfig"
-
-
 
 menu "Application Configuration"
 source "apps/Kconfig"
 endmenu
-	
-menu "ref design specific Configuration"
+
+menu "Design Configuration"
 source "$BOARD_DIR/Kconfig"
 endmenu
 

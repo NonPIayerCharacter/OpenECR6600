@@ -38,6 +38,7 @@ BEACON_REC_STATUS psm_wifi_beacon_status_op(bool isSet, BEACON_REC_STATUS value)
 void psm_update_beacon_cnt();
 void psm_clear_beacon_lost_cnt();
 void psm_send_ap_pwr();
-unsigned int psm_deep_sleeptime_op(bool isSet, unsigned int value);
+unsigned long   long  psm_deep_sleeptime_op(bool isSet, unsigned long long value);
+bool psm_wifi_mdmsleep_depend_on_listenintv_op(bool isSet, bool value);
 
 #endif

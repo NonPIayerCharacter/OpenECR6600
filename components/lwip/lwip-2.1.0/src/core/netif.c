@@ -1842,10 +1842,11 @@ void dump_netif(struct netif *netif)
     os_printf(LM_APP, LL_INFO, "----------------------------\n");
 }
 
+#if LWIP_DNS
 void dump_dns(void)
 {
     extern const ip_addr_t* dns_getserver(u8_t numdns);
-	
+
 	#if LWIP_IPV4 && LWIP_IPV6
     u32_t dns1 = ntohl(ip4_addr_get_u32(&dns_getserver(0)->u_addr.ip4));
     u32_t dns2 = ntohl(ip4_addr_get_u32(&dns_getserver(1)->u_addr.ip4));
@@ -1869,14 +1870,16 @@ void dump_dns(void)
 	os_printf(LM_APP, LL_INFO, "  6dns3:[%s]\n", ip6addr_ntoa(v6dns3));
 #endif
 }
-
+#endif
 
 void show_netif_status(void)
 {
   struct netif *netif = netif_list;
 
   os_printf(LM_APP, LL_INFO, "\n");
+  #if LWIP_DNS
   dump_dns();
+  #endif
   /* loop through netifs */
   while (netif != NULL) {
     dump_netif(netif);

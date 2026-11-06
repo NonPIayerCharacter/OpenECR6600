@@ -23,6 +23,7 @@
 #include "gpio.h"
 #include "efuse.h"
 #include "oshal.h"
+#include "chip_pinmux.h"
 
 
 typedef  struct _T_GPIO_REG_MAP
@@ -184,9 +185,10 @@ int drv_gpio_dir_get(int gpio_num)
 /**    @brief       Read GPIO level value.
  *     @details     Read GPIO_ Num corresponding to the voltage value and return.
  *     @param[in]   gpio_num--The GPIO number you want to operate on. 
+ *     @param[in]   val--The level of gpio_num .you want to get. 
  *     @return      0/1--ok; other--error.
  */
-int drv_gpio_read(int gpio_num)
+int drv_gpio_read(int gpio_num, unsigned int *val)
 {
 	T_DRV_GPIO_DEV * p_gpio_dev = gpio_dev;
 	T_GPIO_REG_MAP * p_gpio_reg = p_gpio_dev->gpio_reg_base;
@@ -200,21 +202,21 @@ int drv_gpio_read(int gpio_num)
 	{
 		return GPIO_RET_PARAMETER_ERROR;
 	}
-	unsigned int val, gpio_dir = p_gpio_reg->ChannelDir;
+	unsigned int gpio_dir = p_gpio_reg->ChannelDir;
 
 	gpio_dir = (gpio_dir >> gpio_num) & 0x01 ;
 	
 	if(gpio_dir == DRV_GPIO_ARG_DIR_IN)
 	{
-		val = p_gpio_reg->DataIn;
+		*val = p_gpio_reg->DataIn;
 	}
 	else
 	{
-		val = p_gpio_reg->DataOut;
+		*val = p_gpio_reg->DataOut;
 	}
-	val = (val >> gpio_num) & 0x01 ;
+	*val = (*val >> gpio_num) & 0x01 ;
 	
-	return val;
+	return GPIO_RET_SUCCESS;
 }
 
 
@@ -528,4 +530,41 @@ int drv_gpio_ioctrl(int gpio_num, int event, int arg)
 	system_irq_restore(irq_flag);
 	return GPIO_RET_SUCCESS;
 }
+
+ unsigned int set_gpio_function(unsigned int gpio_num)
+ {
+	 unsigned int reg,offset;
+	 unsigned int bit = 7;
+ 
+	 //must set first 
+	 if((gpio_num >= 0) && (gpio_num <= 7))
+	 {
+		 reg = CHIP_SMU_PD_PIN_MUX_0;
+	 }
+	 else if((gpio_num >= 8) && (gpio_num <= 15))
+	 {
+		 reg = CHIP_SMU_PD_PIN_MUX_1;
+	 }
+	 else if((gpio_num >= 16) && (gpio_num <= 23) && (gpio_num != 19))
+	 {
+		 reg = CHIP_SMU_PD_PIN_MUX_2;
+		 if(gpio_num == 18)
+		 {
+			 bit = 3;
+		 }
+	 }
+	 else if((gpio_num >= 24) && (gpio_num <= 25))
+	 {
+		 reg = CHIP_SMU_PD_PIN_MUX_3;
+	 }
+	 else
+	 {
+		 os_printf(LM_CMD,LL_INFO,"this num = [%d] no GPIO function! \n",gpio_num);
+		 return GPIO_RET_ERROR;
+	 }
+	 
+	 offset = ((gpio_num % 8) * 4);
+	 PIN_MUX_SET(reg, bit,offset,1);
+	 return GPIO_RET_SUCCESS;
+ }
 

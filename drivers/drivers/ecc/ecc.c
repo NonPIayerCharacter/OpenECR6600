@@ -405,7 +405,7 @@ int drv_ecc256_point_mult(unsigned int *p_result_x, unsigned int *p_result_y,
 		drv_ecc_init = 1;
 	}
 
-	drv_ecc256_set_para_mon();
+	ECC_RET_CHK(drv_ecc256_cal_pre_mon());
 
 	for (i = 0; i < ECC_INTS; i++)
 	{

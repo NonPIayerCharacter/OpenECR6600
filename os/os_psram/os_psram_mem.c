@@ -245,7 +245,7 @@ void os_psram_mem_write(char *psramptr, char *bufptr, unsigned int len)
 #if 0
 #include "cli.h"
 
-static int psram_data_test_cmd(cmd_tbl_t *t, int argc, char *argv[])
+static int psram_data_test_cmd( int argc, char *argv[])
 {
     int index, j;
     unsigned int buff[1024] = {0};

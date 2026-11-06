@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #include "os.h"
+#include "system_wifi.h"
 
 #define sc_info(...) os_printf(LM_WIFI, LL_INFO, __VA_ARGS__)
 #define sc_debug(...) os_printf(LM_WIFI, LL_DBG, __VA_ARGS__)
@@ -28,6 +29,7 @@ typedef enum {
     SC_STATUS_CONTINUE = 0,    /**< device is receiving packet and decoding it */
     SC_STATUS_LOCK_CHANNEL,    /**< Find the target channel */
     SC_STATUS_GOT_SSID_PSWD,   /**< Got SSID and password of target AP */
+    SC_STATUS_GOT_IP,
     SC_STATUS_TIMEOUT,         /**< smartconfig process timeout,when got in this status,smartconfig process should be restarted */
     SC_STATUS_STOP,            /**< smartconfig process stoped */
 } smartconfig_status_t;
@@ -93,7 +95,9 @@ int smartconfig_stop(void);
   */
 int smartconfig_set_timeout(uint8_t time_s);
 void sc_callback(smartconfig_status_t status, void *pdata);
-
+void smartconfig_set_authmode_floor(wifi_auth_mode_e authmode_floor);
+wifi_auth_mode_e smartconfig_get_authmode_floor(void);
+int smartconfig_is_already_started();
 #ifdef __cplusplus
 }
 #endif

@@ -1,0 +1,38 @@
+ifeq ($(CONFIG_CI1302),y)
+VOICE_CHIP_CI1302_DIR := voice_chip/chips/ci1302
+VOICE_CHIP_CI1302_LIB := libpscomponents_voicechip_ci1302.a
+
+INCPATHS += $(TOPDIR)/include/components/voice_chip
+INCPATHS += $(TOPDIR)/components/$(VOICE_CHIP_CI1302_DIR)
+INCPATHS += $(TOPDIR)/components/$(VOICE_CHIP_CI1302_DIR)/protocol
+INCPATHS += $(TOPDIR)/components/$(VOICE_CHIP_CI1302_DIR)/porting
+INCPATHS += $(TOPDIR)/components/$(VOICE_CHIP_CI1302_DIR)/audio_adapt
+
+VOICE_CHIP_CI1302_CSRCS := \
+	$(VOICE_CHIP_CI1302_DIR)/ci1302.c \
+	$(VOICE_CHIP_CI1302_DIR)/protocol/ci1302_protocol.c \
+	$(VOICE_CHIP_CI1302_DIR)/porting/ci1302_uart.c \
+	$(VOICE_CHIP_CI1302_DIR)/audio_adapt/ci1302_audio.c \
+	$(VOICE_CHIP_CI1302_DIR)/voice_ci1302_service.c
+
+ifeq ($(CONFIG_CI1302_CLI),y)
+VOICE_CHIP_CI1302_CSRCS += \
+	$(VOICE_CHIP_CI1302_DIR)/cli/ci1302_cli.c \
+	$(VOICE_CHIP_CI1302_DIR)/ci1302_sample_pcm.c
+endif
+
+VOICE_CHIP_CI1302_COBJS := \
+	$(addprefix $(OUTPUTDIR_OBJS)/,$(VOICE_CHIP_CI1302_CSRCS:.c=.o))
+DEPS += $(addprefix $(OUTPUTDIR_DEPS)/,$(VOICE_CHIP_CI1302_CSRCS:.c=.deps))
+
+all: $(OUTPUTDIR_LIB)/$(VOICE_CHIP_CI1302_LIB)
+
+$(OUTPUTDIR_LIB)/$(VOICE_CHIP_CI1302_LIB): $(VOICE_CHIP_CI1302_COBJS)
+	$(Q) -mkdir -p $(dir $@)
+	$(Q) -rm -f $@
+	$(call ARCHIVE, $@, $(VOICE_CHIP_CI1302_COBJS))
+
+$(VOICE_CHIP_CI1302_COBJS): $(OUTPUTDIR_OBJS)/%.o: %.c
+	$(Q) -mkdir -p $(dir $@)
+	$(call COMPILE, $<, $@)
+endif

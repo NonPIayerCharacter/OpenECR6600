@@ -1,11 +1,11 @@
 menuconfig HTTPSERVER
 	bool "HTTP Server Support"
-	depends on CMD_HTTPSERVER
+	## depends on CMD_HTTPSERVER
 	default n
 	if HTTPSERVER
 		config HTTPD_MAX_REQ_HDR_LEN
 			int "Max HTTP Request Header Length"
-			default 512
+			default 1024
 			help
 				This sets the maximum supported size of headers section in HTTP request packet to be processed by the
 				server

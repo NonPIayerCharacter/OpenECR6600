@@ -455,10 +455,10 @@ no_wps:
 	else
 		bss->max_num_sta = wpa_s->conf->max_num_sta;
 
-	/*if (wpa_s->conf->ap_vendor_elements) {
+	if (wpa_s->conf->ap_vendor_elements) {
 		bss->vendor_elements =
 			wpabuf_dup(wpa_s->conf->ap_vendor_elements);
-	}*/
+	}
 
 	return 0;
 }
@@ -658,11 +658,12 @@ int wpa_supplicant_create_ap(struct wpa_supplicant *wpa_s,
 
 	//wpa_drv_get_ext_capa(wpa_s, WPA_IF_AP_BSS);
 
+    #ifdef CONFIG_WIFI_STA_SURPORT
 	if (wpa_drv_associate(wpa_s, &params) < 0) {
 		wpa_msg(wpa_s, MSG_INFO, "Failed to start AP functionality");
 		return -1;
 	}
-
+    #endif
 	wpa_s->ap_iface = hapd_iface = hostapd_alloc_iface();
 	if (hapd_iface == NULL)
 		return -1;
@@ -695,7 +696,12 @@ int wpa_supplicant_create_ap(struct wpa_supplicant *wpa_s,
 	ieee80211_freq_to_chan(ssid->frequency,
 			       &conf->channel);
 
-	if (wpa_supplicant_conf_ap(wpa_s, ssid, conf)) {
+    if (wpa_s->hw.modes != NULL) {
+        free_hw_features(wpa_s);
+    }
+    wpa_s->hw.modes = wpa_drv_get_hw_feature_data(wpa_s, &wpa_s->hw.num_modes, &wpa_s->hw.flags);
+
+    if (wpa_supplicant_conf_ap(wpa_s, ssid, conf)) {
 		wpa_printf_error(MSG_ERROR, "Failed to create AP configuration");
 		wpa_supplicant_ap_deinit(wpa_s);
 		return -1;
@@ -871,7 +877,6 @@ void wpa_supplicant_ap_rx_eapol(struct wpa_supplicant *wpa_s,
 
 
 #ifdef CONFIG_WPS
-
 int wpa_supplicant_ap_wps_pbc(struct wpa_supplicant *wpa_s, const u8 *bssid,
 			      const u8 *p2p_dev_addr)
 {
@@ -1125,7 +1130,7 @@ int ap_ctrl_iface_sta_first(struct wpa_supplicant *wpa_s,
 int ap_ctrl_iface_sta(struct wpa_supplicant *wpa_s, const char *txtaddr,
 		      char *buf, size_t buflen)
 {
-	struct hostapd_data *hapd;
+	struct hostapd_data __attribute__((unused)) *hapd = NULL;
 
 	if (wpa_s->ap_iface)
 		hapd = wpa_s->ap_iface->bss[0];
@@ -1133,7 +1138,11 @@ int ap_ctrl_iface_sta(struct wpa_supplicant *wpa_s, const char *txtaddr,
 	//	hapd = wpa_s->ifmsh->bss[0];
 	else
 		return -1;
+	#ifndef CONFIG_CUSTOM_LXW
 	return hostapd_ctrl_iface_sta(hapd, txtaddr, buf, buflen);
+	#else
+	return -1;
+	#endif
 }
 
 
@@ -1190,7 +1199,7 @@ int ap_ctrl_iface_wpa_get_status(struct wpa_supplicant *wpa_s, char *buf,
 			  "pairwise_cipher=%s\n"
 			  "group_cipher=%s\n"
 			  "key_mgmt=%s\n",
-			  wpa_cipher_txt(conf->rsn_pairwise),
+			  wpa_cipher_txt(conf->rsn_pairwise ? conf->rsn_pairwise : conf->wpa_pairwise),
 			  wpa_cipher_txt(conf->wpa_group),
 			  wpa_key_mgmt_txt(conf->wpa_key_mgmt,
 					   conf->wpa));
@@ -1413,3 +1422,34 @@ void ap_periodic(struct wpa_supplicant *wpa_s)
 	if (wpa_s->ap_iface)
 		hostapd_periodic_iface(wpa_s->ap_iface);
 }
+
+int wpas_ap_update_beacon(struct wpa_supplicant *wpa_s)
+{
+	struct hostapd_data *hapd;
+
+	if (!wpa_s->ap_iface)
+		return -1;
+	hapd = wpa_s->ap_iface->bss[0];
+#if 0
+	wpabuf_free(hapd->conf->assocresp_elements);
+	hapd->conf->assocresp_elements = NULL;
+	if (wpa_s->conf->ap_assocresp_elements) {
+		hapd->conf->assocresp_elements =
+			wpabuf_dup(wpa_s->conf->ap_assocresp_elements);
+	}
+#endif
+	wpabuf_free(hapd->conf->vendor_elements);
+	hapd->conf->vendor_elements = NULL;
+	if (wpa_s->conf->ap_vendor_elements) {
+		hapd->conf->vendor_elements =
+			wpabuf_dup(wpa_s->conf->ap_vendor_elements);
+	}
+    wpa_printf(MSG_DEBUG, "update_beacon:%d %d", wpa_s->conf->beacon_int, hapd->iconf->beacon_int);
+
+    if(wpa_s->conf->beacon_int) {
+        hapd->iconf->beacon_int = wpa_s->conf->beacon_int;
+    }
+
+	return ieee802_11_set_beacon(hapd);
+}
+

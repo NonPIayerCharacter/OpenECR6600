@@ -47,6 +47,3 @@ config CPU_DCACHE_ENABLE
 	bool 
 	default y
 
-config CALIBRATION_FREE
-	bool "tx calibration free"
-	default n

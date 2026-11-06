@@ -10,7 +10,7 @@
 
 #include "common.h"
 #include "../../wpa_supplicant/wpa_supplicant_i.h"
-#include "config.h"
+//#include "config.h"
 #include "../../wpa_supplicant/wpas_pmk.h"
 #include "system_wifi_def.h"
 

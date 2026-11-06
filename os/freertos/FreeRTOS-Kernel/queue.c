@@ -1,5 +1,5 @@
 /*
- * FreeRTOS Kernel V10.4.1
+ * FreeRTOS Kernel V10.4.3
  * Copyright (C) 2020 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -396,6 +396,9 @@ BaseType_t xQueueGenericReset( QueueHandle_t xQueue,
 
         /* Check for multiplication overflow. */
         configASSERT( ( uxItemSize == 0 ) || ( uxQueueLength == ( xQueueSizeInBytes / uxItemSize ) ) );
+
+        /* Check for addition overflow. */
+        configASSERT( ( sizeof( Queue_t ) + xQueueSizeInBytes ) >  xQueueSizeInBytes );
 
         /* Allocate the queue and storage area.  Justification for MISRA
          * deviation as follows:  pvPortMalloc() always ensures returned memory
@@ -3011,3 +3014,36 @@ BaseType_t xQueueIsQueueFullFromISR( const QueueHandle_t xQueue )
     }
 
 #endif /* configUSE_QUEUE_SETS */
+
+
+
+/**************************************************************************************
+* XIP IN FLASH
+**************************************************************************************/
+BaseType_t xQueueGenericReset( QueueHandle_t xQueue,
+                                BaseType_t xNewQueue ) __attribute__((section(".xip")));
+#if ( configSUPPORT_STATIC_ALLOCATION == 1 )
+QueueHandle_t xQueueGenericCreateStatic( const UBaseType_t uxQueueLength,
+                                const UBaseType_t uxItemSize,
+                                uint8_t * pucQueueStorage,
+                                StaticQueue_t * pxStaticQueue,
+                                const uint8_t ucQueueType ) __attribute__((section(".xip")));
+#endif 
+#if ( configSUPPORT_DYNAMIC_ALLOCATION == 1 )
+QueueHandle_t xQueueGenericCreate( const UBaseType_t uxQueueLength,
+                                   const UBaseType_t uxItemSize,
+                                   const uint8_t ucQueueType ) __attribute__((section(".xip")));
+#endif
+#if ( ( configUSE_COUNTING_SEMAPHORES == 1 ) && ( configSUPPORT_DYNAMIC_ALLOCATION == 1 ) )
+QueueHandle_t xQueueCreateCountingSemaphore( const UBaseType_t uxMaxCount,
+                                 const UBaseType_t uxInitialCount ) __attribute__((section(".xip")));
+#endif
+#if ( ( configUSE_MUTEXES == 1 ) && ( configSUPPORT_STATIC_ALLOCATION == 1 ) )
+QueueHandle_t xQueueCreateMutexStatic( const uint8_t ucQueueType,
+                               StaticQueue_t * pxStaticQueue ) __attribute__((section(".xip")));
+#endif
+#if ( ( configUSE_MUTEXES == 1 ) && ( configSUPPORT_DYNAMIC_ALLOCATION == 1 ) )
+QueueHandle_t xQueueCreateMutex( const uint8_t ucQueueType ) __attribute__((section(".xip")));
+#endif
+void vQueueDelete( QueueHandle_t xQueue ) __attribute__((section(".xip")));
+

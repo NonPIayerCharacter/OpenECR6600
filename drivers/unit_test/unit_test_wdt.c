@@ -36,7 +36,7 @@ void utest_wdt_feed_task(void *arg)
 	}
 }
 
-static int utest_wdt_init(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_wdt_init( int argc, char *argv[])
 {
 	unsigned int time; 
 	unsigned int effective_time;
@@ -65,7 +65,7 @@ static int utest_wdt_init(cmd_tbl_t *t, int argc, char *argv[])
 
 CLI_SUBCMD(ut_wdt, init, utest_wdt_init, "unit test wdt init", "ut_wdt init [time] [effective_time]");
 
-static int utest_wdt_start(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_wdt_start( int argc, char *argv[])
 {
 	if (hal_wdt_start() == 0)
 	{
@@ -82,7 +82,7 @@ static int utest_wdt_start(cmd_tbl_t *t, int argc, char *argv[])
 
 CLI_SUBCMD(ut_wdt, start, utest_wdt_start, "unit test wdt start", "ut_wdt start");
 
-static int utest_wdt_feed(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_wdt_feed( int argc, char *argv[])
 {
 	utest_wdt_task_handle = os_task_create( "wdt-feed-task", 3, 1024, (task_entry_t)utest_wdt_feed_task, NULL);
 	if (utest_wdt_task_handle != 0)
@@ -94,7 +94,7 @@ static int utest_wdt_feed(cmd_tbl_t *t, int argc, char *argv[])
 
 CLI_SUBCMD(ut_wdt, feed, utest_wdt_feed, "unit test wdt feed", "ut_wdt feed");
 
-static int utest_wdt_stop(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_wdt_stop( int argc, char *argv[])
 {
 	if (hal_wdt_stop() == 0)
 	{

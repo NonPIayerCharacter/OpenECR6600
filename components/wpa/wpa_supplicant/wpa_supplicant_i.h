@@ -273,7 +273,8 @@ typedef struct {
     u8 passive;
     u32 scan_time; /*scan time per channel.*/
     int freq;
-}wpa_manual_scan_cfg_t;
+    int glance;
+} wpa_manual_scan_cfg_t;
 /**
  * struct wpa_supplicant - Internal data for wpa_supplicant interface
  *
@@ -287,7 +288,7 @@ struct wpa_supplicant {
 	struct wpa_radio *radio; /* shared radio context */
 	struct dl_list radio_list; /* list head: struct wpa_radio::ifaces */
 	struct wpa_supplicant *parent;
-	//struct wpa_supplicant *p2pdev;
+	struct wpa_supplicant *p2pdev;
 	struct wpa_supplicant *next;
 	struct l2_packet_data *l2;
 	//struct l2_packet_data *l2_br;
@@ -310,14 +311,14 @@ struct wpa_supplicant {
 	const void *binder_object_key;
 #endif /* CONFIG_CTRL_IFACE_BINDER */
 
-
+	char *confname;
 	struct wpa_config *conf;
 	int countermeasures;
 	struct os_reltime last_michael_mic_error;
 	u8 bssid[ETH_ALEN];
 	u8 pending_bssid[ETH_ALEN]; /* If wpa_state == WPA_ASSOCIATING, this
 				     * field contains the target BSSID. */
-	//int reassociate; /* reassociation requested */
+	int reassociate; /* reassociation requested */
 	//unsigned int reassoc_same_bss:1; /* reassociating to the same BSS */
 	//unsigned int reassoc_same_ess:1; /* reassociating to the same ESS */
 	int disconnected; /* all connections disabled; i.e., do no reassociate
@@ -382,6 +383,7 @@ struct wpa_supplicant {
 	//int interface_removed; /* whether the network interface has been
 	//			* removed */
 	struct wpa_sm *wpa;
+	struct eapol_sm *eapol;
 
 	struct ctrl_iface_priv *ctrl_iface;
 
@@ -398,11 +400,11 @@ struct wpa_supplicant {
 	//char imsi[20];
 	//int mnc_len;
 
-	//unsigned char last_eapol_src[ETH_ALEN];
+	unsigned char last_eapol_src[ETH_ALEN];
 
 	unsigned int keys_cleared; /* bitfield of key indexes that the driver is
 				    * known not to be configured with a key */
-
+	struct wpa_blacklist *blacklist;
 	/**
 	 * extra_blacklist_count - Sum of blacklist counts after last connection
 	 *
@@ -413,7 +415,7 @@ struct wpa_supplicant {
 	 * whenever no other not-blacklisted BSS candidates are available. This
 	 * gets cleared whenever a connection has been established successfully.
 	 */
-	//int extra_blacklist_count;
+	int extra_blacklist_count;
 
 	/**
 	 * scan_req - Type of the scan request
@@ -449,7 +451,7 @@ struct wpa_supplicant {
 	//struct os_reltime scan_trigger_time, scan_start_time;
 	/* Minimum freshness requirement for connection purposes */
 	struct os_reltime scan_min_time;
-	//int scan_runs; /* number of scan runs since WPS was started */
+	int scan_runs; /* number of scan runs since WPS was started */
 	//int *next_scan_freqs;
 	//int *manual_scan_freqs;
 	//int *manual_sched_scan_freqs;
@@ -500,12 +502,12 @@ struct wpa_supplicant {
 	int pending_mic_error_pairwise;
 	int mic_errors_seen; /* Michael MIC errors with the current PTK */
 
-	//struct wps_context *wps;
-	//int wps_success; /* WPS success event received */
+	struct wps_context *wps;
+	int wps_success; /* WPS success event received */
 	//struct wps_er *wps_er;
-	//unsigned int wps_run;
-	//struct os_reltime wps_pin_start_time;
-	//int blacklist_cleared;
+	unsigned int wps_run;
+	struct os_reltime wps_pin_start_time;
+	int blacklist_cleared;
 
 	struct wpabuf *pending_eapol_rx;
 	struct os_reltime pending_eapol_rx_time;
@@ -719,14 +721,14 @@ struct wpa_supplicant {
 
 	struct wpa_ssid *connect_without_scan;
 
-	//struct wps_ap_info *wps_ap;
-	//size_t num_wps_ap;
-	//int wps_ap_iter;
+	struct wps_ap_info *wps_ap;
+	size_t num_wps_ap;
+	int wps_ap_iter;
 
-	//int after_wps;
-	//int known_wps_freq;
-	//unsigned int wps_freq;
-	//int wps_fragment_size;
+	int after_wps;
+	int known_wps_freq;
+	unsigned int wps_freq;
+	int wps_fragment_size;
 	//int auto_reconnect_disabled;
 
 	 /* Channel preferences for AP/P2P GO use */
@@ -864,6 +866,7 @@ struct wpa_supplicant {
 	 */
 	//struct wpabuf *lci;
 	//struct os_reltime lci_time;
+	struct os_reltime scanning_time;
 };
 
 
@@ -1089,5 +1092,8 @@ struct wpa_ssid * wpa_scan_res_match(struct wpa_supplicant *wpa_s,
 				     int i, struct wpa_bss *bss,
 				     struct wpa_ssid *group,
 				     int only_first_ssid);
+
+void wpas_clear_temp_disabled(struct wpa_supplicant *wpa_s,
+			      struct wpa_ssid *ssid, int clear_failures);
 
 #endif /* WPA_SUPPLICANT_I_H */

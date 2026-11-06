@@ -28,6 +28,7 @@ endif
 WPA_SUPP_CSRCS += config.c
 WPA_SUPP_CSRCS += notify.c
 WPA_SUPP_CSRCS += bss.c
+WPA_SUPP_CSRCS += eap_register.c
 WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/utils/common.c
 WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/utils/wpa_debug.c
 WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/utils/wpabuf.c
@@ -234,7 +235,7 @@ endif
 ifndef CONFIG_NO_WPA
 WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/rsn_supp/wpa.c
 #WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/rsn_supp/preauth.c
-#WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/rsn_supp/pmksa_cache.c
+WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/rsn_supp/pmksa_cache.c
 #WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/rsn_supp/peerkey.c
 WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/rsn_supp/wpa_ie.c
 WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/common/wpa_common.c
@@ -744,14 +745,14 @@ endif
 
 ifdef CONFIG_IEEE8021X_EAPOL
 ## IEEE 802.1X/EAPOL state machines (e.g., for RADIUS authentication)
-#CFLAGS += -DIEEE8021X_EAPOL
-#WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/eapol_supp/eapol_supp_sm.c
-#WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/eap_peer/eap.c $(WPA_SUPP_ROOT)/src/eap_peer/eap_methods.c
-#NEED_EAP_COMMON=y
-#ifdef CONFIG_DYNAMIC_EAP_METHODS
-#CFLAGS += -DCONFIG_DYNAMIC_EAP_METHODS
-#LIBS += -ldl -rdynamic
-#endif
+CFLAGS += -DIEEE8021X_EAPOL
+WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/eapol_supp/eapol_supp_sm.c
+WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/eap_peer/eap.c $(WPA_SUPP_ROOT)/src/eap_peer/eap_methods.c
+NEED_EAP_COMMON=y
+ifdef CONFIG_DYNAMIC_EAP_METHODS
+CFLAGS += -DCONFIG_DYNAMIC_EAP_METHODS
+LIBS += -ldl -rdynamic
+endif
 endif
 
 ifdef CONFIG_MACSEC
@@ -1020,7 +1021,7 @@ endif
 ifdef NEED_MODEXP
 WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/crypto/crypto_internal-modexp.c
 #WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/tls/bignum.c
-WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/crypto/crypto_mbedtls-bignum.c
+#WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/crypto/crypto_mbedtls-bignum.c
 endif
 ifeq ($(CONFIG_CRYPTO), libtomcrypt)
 WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/crypto/crypto_libtomcrypt.c
@@ -1089,7 +1090,7 @@ endif
 endif
 
 ifndef TLS_FUNCS
-#WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/crypto/tls_none.c
+WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/crypto/tls_none.c
 ifeq ($(CONFIG_TLS), internal)
 CONFIG_INTERNAL_AES=y
 CONFIG_INTERNAL_SHA1=y
@@ -1231,11 +1232,11 @@ SHA256WPA_SUPP_CSRCS = # none by default
 ifdef NEED_SHA256
 CFLAGS += -DCONFIG_SHA256
 ifneq ($(CONFIG_TLS), openssl)
-SHA256WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/crypto/sha256.c
+#SHA256WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/crypto/sha256.c
 endif
-SHA256WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/crypto/sha256-prf.c
+#SHA256WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/crypto/sha256-prf.c
 ifdef CONFIG_INTERNAL_SHA256
-SHA256WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/crypto/sha256-internal.c
+#SHA256WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/crypto/sha256-internal.c
 endif
 ifdef CONFIG_INTERNAL_SHA384
 CFLAGS += -DCONFIG_INTERNAL_SHA384
@@ -1414,7 +1415,7 @@ CFLAGS += -DCONFIG_NO_LINUX_PACKET_SOCKET_WAR
 endif
 
 ifdef NEED_BASE64
-WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/utils/base64.c
+#WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/utils/base64.c
 endif
 
 ifdef NEED_SME
@@ -1426,7 +1427,7 @@ WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/common/ieee802_11_common.c
 WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/common/hw_features_common.c
 
 ifdef NEED_EAP_COMMON
-#WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/eap_common/eap_common.c
+WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/eap_common/eap_common.c
 endif
 
 ifndef CONFIG_MAIN
@@ -1539,7 +1540,7 @@ endif
 WPA_SUPP_CSRCS += $(WPA_SUPP_ROOT)/src/drivers/driver_common.c
 WPA_SUPP_CSRCS_priv += $(WPA_SUPP_ROOT)/src/drivers/driver_common.c
 
-WPA_SUPP_CSRCS += wpa_supplicant.c events.c wpas_glue.c scan.c
+WPA_SUPP_CSRCS += wpa_supplicant.c events.c wpas_glue.c scan.c blacklist.c
 WPA_SUPP_CSRCS_t := $(WPA_SUPP_CSRCS) $(WPA_SUPP_CSRCS_l2) eapol_test.c
 WPA_SUPP_CSRCS_t += $(WPA_SUPP_ROOT)/src/radius/radius_client.c
 WPA_SUPP_CSRCS_t += $(WPA_SUPP_ROOT)/src/radius/radius.c

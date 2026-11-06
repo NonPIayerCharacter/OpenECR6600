@@ -10,8 +10,14 @@
 
 #include "FreeRTOS.h"
 
+#ifndef PLATFORM_TIMER_MAX_TIMEOUT_MS
+#define PLATFORM_TIMER_MAX_TIMEOUT_MS    (30000U)
+#endif
+
 typedef struct platform_timer {
-    uint32_t time;
+    TickType_t ticks_to_wait;
+    TickType_t time_on_entering;
+    BaseType_t overflow_count;
 } platform_timer_t;
 
 void platform_timer_init(platform_timer_t* timer);

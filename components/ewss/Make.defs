@@ -1,0 +1,5 @@
+ifeq ($(CONFIG_EWSS),y)
+	CSRCS += ewss.c
+	VPATH += :ewss
+	INCPATHS += ewss
+endif

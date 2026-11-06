@@ -28,11 +28,111 @@ static os_sem_handle_t spi_rx_process;
 
 #define SPI1_WORK_CLK_AHB_CLK 0x88
 #define SPI_WAIT_FOREVER 0xffffffff
+#define SPI_MASTER_HW_MAX_TRANSFER 512U
+#define SPI_MASTER_DMA_WAIT_MS 2000U
+#define SPI_MASTER_BUSY_WAIT_NUM 100000U
+#define SPI_MASTER_FIFO_RESET_WAIT_NUM 100000U
+#define SPI_MASTER_DMA_CH_INVALID 0xffffffffU
+#define SPI_RET_OK 0
+#define SPI_RET_INVAL -1
+#define SPI_RET_HW_ERROR -2
+#define SPI_RET_TIMEOUT -3
 #define min(x, y)               (((x) < (y))? (x) : (y))	
 #define SPI_MASTER_BUF_SIZE	1024
 static unsigned char dma_spi_src[SPI_MASTER_BUF_SIZE] __attribute__((section(".dma.data"),aligned(4)));
 static unsigned char dma_spi_dst[SPI_MASTER_BUF_SIZE] __attribute__((section(".dma.data"),aligned(4)));
 
+static int spi_master_dma_ch_valid(unsigned int ch)
+{
+	return ch != SPI_MASTER_DMA_CH_INVALID;
+}
+
+static void spi_master_dump_regs(const char *stage, int ret, unsigned int len)
+{
+	spi_reg *p_spi_reg = (spi_reg *)MEM_BASE_SPI1;
+
+	os_printf(LM_OS, LL_ERR,
+		"spi_master_fail stage=%s ret=%d len=%u status=0x%08x ctrl=0x%08x trans=0x%08x intr=0x%08x\n",
+		stage, ret, len, p_spi_reg->status, p_spi_reg->ctrl, p_spi_reg->transCtrl, p_spi_reg->intrSt);
+}
+
+static int spi_master_wait_bus_idle(spi_reg *p_spi_reg)
+{
+	unsigned int i;
+
+	for (i = 0; i < SPI_MASTER_BUSY_WAIT_NUM; i++)
+	{
+		if ((p_spi_reg->status & SPI_STATUS_BUSY) == 0)
+		{
+			return SPI_RET_OK;
+		}
+	}
+
+	return SPI_RET_TIMEOUT;
+}
+
+static int spi_master_wait_tx_ready(spi_reg *p_spi_reg)
+{
+	unsigned int i;
+
+	for (i = 0; i < SPI_MASTER_BUSY_WAIT_NUM; i++)
+	{
+		if ((p_spi_reg->status & SPI_STATUS_TXFULL) == 0)
+		{
+			return SPI_RET_OK;
+		}
+	}
+
+	return SPI_RET_TIMEOUT;
+}
+
+static void spi_master_disable_dma_request(spi_reg *p_spi_reg)
+{
+	p_spi_reg->intrEn = 0;
+	p_spi_reg->ctrl &= ~(SPI_CONTROL_TXDMA_EN | SPI_CONTROL_RXDMA_EN);
+}
+
+static void spi_master_drain_sem(os_sem_handle_t sem)
+{
+	if (sem == NULL)
+	{
+		return;
+	}
+
+	while (os_sem_wait(sem, 0) == 0)
+	{
+	}
+}
+
+static void spi_master_prepare_dma_src(const unsigned char *bufptr, unsigned int len)
+{
+	unsigned int pad_len;
+
+	if (len == 0U)
+	{
+		return;
+	}
+
+	memcpy(dma_spi_src, bufptr, len);
+	pad_len = (4U - (len & 0x3U)) & 0x3U;
+	if (pad_len != 0U)
+	{
+		memset(dma_spi_src + len, 0, pad_len);
+	}
+}
+
+static void spi_master_release_dma_ch(unsigned int *ch)
+{
+	if (ch == NULL || !spi_master_dma_ch_valid(*ch))
+	{
+		return;
+	}
+
+	drv_dma_stop(*ch);
+	drv_dma_status_clean(*ch);
+	drv_dma_ch_release(*ch);
+	*ch = SPI_MASTER_DMA_CH_INVALID;
+}
 
 /**
 @brief   Judge the bus status and wait for the bus idle status
@@ -41,10 +141,13 @@ static unsigned char dma_spi_dst[SPI_MASTER_BUF_SIZE] __attribute__((section(".d
 int spi_master_bus_ready()
 {
 	spi_reg * p_spi_reg = (spi_reg * )MEM_BASE_SPI1;
-	unsigned int spi_status;
-	do {
-		spi_status = p_spi_reg->status;
-	} while(spi_status & SPI_STATUS_BUSY);
+	int ret = spi_master_wait_bus_idle(p_spi_reg);
+
+	if (ret != SPI_RET_OK)
+	{
+		spi_master_dump_regs("bus_ready_timeout", ret, 0);
+		return ret;
+	}
 
 	return 0;
 }
@@ -58,16 +161,24 @@ int spi_clear_fifo()
 {
 	spi_reg * p_spi_reg = (spi_reg * )MEM_BASE_SPI1;
 	unsigned int i;
+	unsigned int status;
+	unsigned int ctrl;
 	p_spi_reg->ctrl = (p_spi_reg->ctrl) |(SPI_CONTROL_RXFIFORST|SPI_CONTROL_TXFIFORST);
 
-	for(i = 0; i < 1000; i++)
+	for(i = 0; i < SPI_MASTER_FIFO_RESET_WAIT_NUM; i++)
 	{	
-		if((p_spi_reg->ctrl) & (SPI_CONTROL_RXFIFORST|SPI_CONTROL_TXFIFORST))
+		ctrl = p_spi_reg->ctrl;
+		status = p_spi_reg->status;
+		if (((ctrl & (SPI_CONTROL_RXFIFORST|SPI_CONTROL_TXFIFORST)) == 0)
+			&& ((status & SPI_STATUS_BUSY) == 0)
+			&& ((status & SPI_STATUS_RXNUM) == 0)
+			&& ((status & SPI_STATUS_TXNUM) == 0))
 		{
-			return 0;
+			return SPI_RET_OK;
 		}
 	}
-	return 1;
+
+	return SPI_RET_HW_ERROR;
 }
 
 /**
@@ -107,6 +218,13 @@ void drv_spi_rx_dma_isr(void *data)
 */
 int spi_init_cfg(spi_interface_config_t *spi_master_dev)
 {
+	int ret = SPI_INIT_SUCCESS;
+	int dma_ch;
+
+	if (spi_master_dev == NULL)
+	{
+		return SPI_RET_INVAL;
+	}
 
 	spi_master =  *spi_master_dev;
 	spi_reg * p_spi_reg = (spi_reg * )MEM_BASE_SPI1;
@@ -125,11 +243,23 @@ int spi_init_cfg(spi_interface_config_t *spi_master_dev)
 
 	spi_tx_process = os_sem_create(1, 0);
 	spi_rx_process = os_sem_create(1, 0);
+	if (spi_tx_process == NULL || spi_rx_process == NULL)
+	{
+		ret = SPI_RET_HW_ERROR;
+		goto init_fail;
+	}
 	
 	/* dma enable*/
 	if(spi_master_dev->spi_dma_enable == 1)
 	{
 		p_spi_dev_dma = os_zalloc(sizeof(spi_buff_dev_dma));	
+		if (p_spi_dev_dma == NULL)
+		{
+			ret = SPI_TX_RET_ENODMA;
+			goto init_fail;
+		}
+		p_spi_dev_dma->spi_tx_dma_ch = SPI_MASTER_DMA_CH_INVALID;
+		p_spi_dev_dma->spi_rx_dma_ch = SPI_MASTER_DMA_CH_INVALID;
 		p_spi_dev_dma->buffer_tx_length = SPI_TX_BUF_SIZE;
 		p_spi_dev_dma->buffer_rx_length = SPI_RX_BUF_SIZE;
 		p_spi_dev_dma->spi_tx_buf_head = 0;
@@ -144,31 +274,40 @@ int spi_init_cfg(spi_interface_config_t *spi_master_dev)
 		value = p_spi_reg ->transFmt |BIT(7);
 		p_spi_reg ->transFmt = value ;
 		
-		p_spi_dev_dma->spi_tx_dma_ch = drv_dma_ch_alloc();
-		if (p_spi_dev_dma->spi_tx_dma_ch < 0)
+		dma_ch = drv_dma_ch_alloc();
+		if (dma_ch < 0)
 		{
-			return SPI_TX_RET_ENODMA;
+			ret = SPI_TX_RET_ENODMA;
+			goto init_fail;
 		}
+		p_spi_dev_dma->spi_tx_dma_ch = (unsigned int)dma_ch;
 		drv_dma_isr_register(p_spi_dev_dma->spi_tx_dma_ch, drv_spi_tx_dma_isr, NULL);
 		
-		p_spi_dev_dma->spi_rx_dma_ch = drv_dma_ch_alloc();
-		if (p_spi_dev_dma->spi_rx_dma_ch < 0)
+		dma_ch = drv_dma_ch_alloc();
+		if (dma_ch < 0)
 		{
-			return SPI_RX_RET_ENODMA;
+			ret = SPI_RX_RET_ENODMA;
+			goto init_fail;
 		}
+		p_spi_dev_dma->spi_rx_dma_ch = (unsigned int)dma_ch;
 
 		drv_dma_isr_register(p_spi_dev_dma->spi_rx_dma_ch, drv_spi_rx_dma_isr, NULL);
 	}	
 	else
 	{
 		p_spi_dev =  os_zalloc(sizeof(spi_buff_dev));
+		if (p_spi_dev == NULL)
+		{
+			ret = SPI_RET_HW_ERROR;
+			goto init_fail;
+		}
 		memset(p_spi_dev->spi_tx_buf , 0 ,SPI_TX_BUF_SIZE);
 		memset(p_spi_dev->spi_rx_buf , 0 ,SPI_RX_BUF_SIZE);
 		p_spi_dev->spi_tx_buf_head = 0;
 		p_spi_dev->spi_tx_buf_tail = 0;
 		p_spi_dev->spi_rx_buf_head = 0;
 		p_spi_dev->spi_rx_buf_tail = 0;
-		p_spi_dev_dma->regbase = MEM_BASE_SPI1;
+		p_spi_dev->regbase = MEM_BASE_SPI1;
 	}
 	
 	/* cfg spi master mode*/ 
@@ -247,50 +386,181 @@ int spi_init_cfg(spi_interface_config_t *spi_master_dev)
 	p_spi_reg ->timing = value |(spi_master_dev->master_clk & 0xFF);
 
 	return SPI_INIT_SUCCESS;
+
+init_fail:
+	if (p_spi_dev_dma != NULL)
+	{
+		spi_master_release_dma_ch(&p_spi_dev_dma->spi_tx_dma_ch);
+		spi_master_release_dma_ch(&p_spi_dev_dma->spi_rx_dma_ch);
+		os_free(p_spi_dev_dma);
+		p_spi_dev_dma = NULL;
+	}
+
+	if (p_spi_dev != NULL)
+	{
+		os_free(p_spi_dev);
+		p_spi_dev = NULL;
+	}
+
+	if (spi_tx_process != NULL)
+	{
+		os_sem_destroy(spi_tx_process);
+		spi_tx_process = NULL;
+	}
+
+	if (spi_rx_process != NULL)
+	{
+		os_sem_destroy(spi_rx_process);
+		spi_rx_process = NULL;
+	}
+
+	chip_clk_disable(CLK_SPI1_APB);
+	chip_clk_disable(CLK_SPI1_SEL);
+	return ret;
+}
+
+int drv_spi_master_close()
+{
+	spi_reg * p_spi_reg = (spi_reg * )MEM_BASE_SPI1;
+
+	spi_master_disable_dma_request(p_spi_reg);
+
+//	if(spi_master.spi_dma_enable == 1)
+//	{
+//		drv_dma_close();
+//	}
+
+	if(p_spi_dev_dma)
+	{
+		spi_master_release_dma_ch(&p_spi_dev_dma->spi_tx_dma_ch);
+		spi_master_release_dma_ch(&p_spi_dev_dma->spi_rx_dma_ch);
+		os_free(p_spi_dev_dma);
+	    p_spi_dev_dma = NULL;
+	}
+
+	if(spi_tx_process)
+	{
+	    os_sem_destroy(spi_tx_process);
+		spi_tx_process = NULL;
+	}
+	
+	if(spi_rx_process)
+	{
+	    os_sem_destroy(spi_rx_process);
+		spi_rx_process = NULL;
+	}
+	
+	if(p_spi_dev)
+	{
+		os_free(p_spi_dev);
+	    p_spi_dev = NULL;
+	}
+
+	chip_clk_disable(CLK_SPI1_APB);
+	chip_clk_disable(CLK_SPI1_SEL);
+	return 0;
+}
+
+
+int spi_config_at(spi_interface_config_t *spi_master_dev)
+{
+	unsigned int value;
+	spi_reg * p_spi_reg = (spi_reg * )MEM_BASE_SPI1;
+	
+	/*addr length*/
+	if((spi_master.addr_pha_enable & BIT(29)) && (spi_master_dev->addr_len))
+	{
+		value = p_spi_reg ->transFmt;
+		value = (value & (~SPI_FORMAT_ADDRLEN_FOUR_BYTE)) | ((spi_master_dev->addr_len-1) << 16);
+		p_spi_reg ->transFmt = value;
+	}
+	
+	/*addr enable*/
+	spi_master.addr_pha_enable    = spi_master_dev->addr_pha_enable;
+	
+	/*cmd enable & trans mode*/
+	spi_master.cmd_write = spi_master_dev->cmd_write;
+	spi_master.cmd_read = spi_master_dev->cmd_read;
+
+	return SPI_INIT_SUCCESS;
 }
 
 /**
 @brief  SPI host transfer function.
-@param[in]  *bufptr:Transmitted data
+@param[in]  *bufptr:Transmitted data, can be NULL only when length is 0.
 @param[in]  trans_desc :Transmission parameter pointer structure,It contains the length of the data to be transmitted, address and command.
-@return	   -2--clear fifo is not comoletion, 
+@return	   -3--spi or dma wait timeout,
+		   -2--clear fifo or hardware state is not comoletion,
 		   -1-- transmittend data length is not between 0 and 512,
 		    0--spi transfer process comoletion.
 */
 int spi_master_write(unsigned char *bufptr,spi_transaction_t* trans_desc )
 {
-	if((trans_desc->length) >512 || (trans_desc->length) <0 )
-	{
-		os_printf(LM_OS, LL_INFO, "Tansfer length Error\n");
-		return -1;
-	}
-	unsigned long flags = system_irq_save();	
 	spi_reg * p_spi_reg = (spi_reg * )MEM_BASE_SPI1;
-	unsigned int spi_dma_enable = spi_master.spi_dma_enable;
+	unsigned int spi_dma_enable;
+	unsigned int tx_len;
 	unsigned int left,data;
 	unsigned int i = 0;
+	unsigned long flags;
+	int ret;
+
+	if (trans_desc == NULL)
+	{
+		return SPI_RET_INVAL;
+	}
+
+	tx_len = trans_desc->length;
+	if (tx_len != 0U && bufptr == NULL)
+	{
+		return SPI_RET_INVAL;
+	}
+
+	if(tx_len > SPI_MASTER_HW_MAX_TRANSFER)
+	{
+		os_printf(LM_OS, LL_INFO, "Tansfer length Error\n");
+		return SPI_RET_INVAL;
+	}
+
+	spi_dma_enable = spi_master.spi_dma_enable;
 	if(spi_dma_enable == 0)
 	{
-		memcpy(p_spi_dev->spi_tx_buf, bufptr, trans_desc->length);
-		spi_master_bus_ready();
-		//clear rx & tx fifo
-		if(spi_clear_fifo()) 
+		if (p_spi_dev == NULL)
+		{
+			return SPI_RET_HW_ERROR;
+		}
+
+		if (tx_len != 0U)
+		{
+			memcpy(p_spi_dev->spi_tx_buf, bufptr, tx_len);
+		}
+		flags = system_irq_save();
+		spi_master_disable_dma_request(p_spi_reg);
+		ret = spi_master_wait_bus_idle(p_spi_reg);
+		if (ret != SPI_RET_OK)
 		{
 			system_irq_restore(flags);
-			return -2;
+			spi_master_dump_regs("cpu_wait_busy_before", ret, tx_len);
+			return ret;
+		}
+		ret = spi_clear_fifo();
+		if(ret != SPI_RET_OK) 
+		{
+			system_irq_restore(flags);
+			spi_master_dump_regs("cpu_clear_fifo", ret, tx_len);
+			return SPI_RET_HW_ERROR;
 		}
 		if(spi_master.addr_pha_enable & BIT(29))
 		{
 			p_spi_reg->addr = trans_desc->addr;
 		}
 		
-		if(trans_desc->length == 0)
+		if(tx_len == 0)
 		{
 			p_spi_reg->transCtrl = spi_master.addr_pha_enable | spi_master.dummy_bit | spi_master.cmd_write;
 		}
 		else
 		{
-			p_spi_reg->transCtrl = spi_master.addr_pha_enable | spi_master.dummy_bit | spi_master.cmd_write | SPI_TRANSCTRL_WCNT((trans_desc->length)-1);
+			p_spi_reg->transCtrl = spi_master.addr_pha_enable | spi_master.dummy_bit | spi_master.cmd_write | SPI_TRANSCTRL_WCNT(tx_len - 1);
 		}
 		
 		p_spi_reg->cmd =  trans_desc->cmmand;
@@ -304,42 +574,127 @@ int spi_master_write(unsigned char *bufptr,spi_transaction_t* trans_desc )
 				data |= p_spi_dev->spi_tx_buf[p_spi_dev->spi_tx_buf_head] << (i * 8);	
 				p_spi_dev->spi_tx_buf_head++;
 			}
-			SPI_WAIT_TX_READY(p_spi_reg->status); 	
+			ret = spi_master_wait_tx_ready(p_spi_reg);
+			if (ret != SPI_RET_OK)
+			{
+				p_spi_dev->spi_tx_buf_head = 0;
+				system_irq_restore(flags);
+				spi_master_dump_regs("cpu_wait_tx_ready", ret, tx_len);
+				return ret;
+			}
 			p_spi_reg->data = data;
 			trans_desc->length -=left;	
 		}
 		p_spi_dev->spi_tx_buf_head = 0;
+		ret = spi_master_wait_bus_idle(p_spi_reg);
 		system_irq_restore(flags);
+		if (ret != SPI_RET_OK)
+		{
+			spi_master_dump_regs("cpu_wait_busy_after", ret, tx_len);
+			return ret;
+		}
 	}
 	else
 	{
+		T_DMA_CFG_INFO dma_cfg_info;
+
+		if (p_spi_dev_dma == NULL || spi_tx_process == NULL
+			|| !spi_master_dma_ch_valid(p_spi_dev_dma->spi_tx_dma_ch)
+			|| tx_len > SPI_MASTER_BUF_SIZE)
+		{
+			return SPI_RET_HW_ERROR;
+		}
+
+		spi_master_prepare_dma_src(bufptr, tx_len);
+		spi_master_drain_sem(spi_tx_process);
+		flags = system_irq_save();
+		spi_master_disable_dma_request(p_spi_reg);
+		ret = spi_master_wait_bus_idle(p_spi_reg);
+		if (ret != SPI_RET_OK)
+		{
+			system_irq_restore(flags);
+			spi_master_dump_regs("dma_wait_busy_before", ret, tx_len);
+			return ret;
+		}
+		ret = spi_clear_fifo();
+		if(ret != SPI_RET_OK) 
+		{
+			system_irq_restore(flags);
+			spi_master_dump_regs("dma_clear_fifo", ret, tx_len);
+			return SPI_RET_HW_ERROR;
+		}
 		if(spi_master.addr_pha_enable & BIT(29))
 		{
 			p_spi_reg->addr = trans_desc->addr;
 		}
-		memcpy(dma_spi_src, bufptr, (trans_desc->length));
-		T_DMA_CFG_INFO dma_cfg_info;
-		dma_cfg_info.dst = (unsigned int)&(p_spi_reg->data);
-		dma_cfg_info.src = (unsigned int)dma_spi_src;
-		dma_cfg_info.len = (trans_desc->length);
-		dma_cfg_info.mode = DMA_CHN_SPI_TX;
-		drv_dma_cfg(p_spi_dev_dma->spi_tx_dma_ch, &dma_cfg_info);
-		
-		if(trans_desc->length == 0)
+		if (tx_len != 0)
+		{
+			dma_cfg_info.dst = (unsigned int)&(p_spi_reg->data);
+			dma_cfg_info.src = (unsigned int)dma_spi_src;
+			dma_cfg_info.len = tx_len;
+			dma_cfg_info.mode = DMA_CHN_SPI_TX;
+			drv_dma_stop(p_spi_dev_dma->spi_tx_dma_ch);
+			drv_dma_status_clean(p_spi_dev_dma->spi_tx_dma_ch);
+			ret = drv_dma_cfg(p_spi_dev_dma->spi_tx_dma_ch, &dma_cfg_info);
+			if (ret != SPI_RET_OK)
+			{
+				spi_master_disable_dma_request(p_spi_reg);
+				system_irq_restore(flags);
+				spi_master_dump_regs("dma_cfg", SPI_RET_HW_ERROR, tx_len);
+				return SPI_RET_HW_ERROR;
+			}
+
+			p_spi_reg->ctrl |= (SPI_CONTROL_TXDMA_EN | SPI_CONTROL_RXDMA_EN | SPI_CONTROL_TXTHRES(1));
+			drv_dma_start(p_spi_dev_dma->spi_tx_dma_ch);
+		}
+		if(tx_len == 0)
 		{
 			p_spi_reg->transCtrl = spi_master.addr_pha_enable |spi_master.dummy_bit | spi_master.cmd_write ;
 		}
 		else
 		{
-			p_spi_reg->transCtrl = spi_master.addr_pha_enable |spi_master.dummy_bit | spi_master.cmd_write | SPI_TRANSCTRL_WCNT((trans_desc->length)-1);
+			p_spi_reg->transCtrl = spi_master.addr_pha_enable |spi_master.dummy_bit | spi_master.cmd_write | SPI_TRANSCTRL_WCNT(tx_len - 1);
 		}
 		p_spi_reg->cmd = trans_desc->cmmand;
-		drv_dma_start(p_spi_dev_dma->spi_tx_dma_ch);
 		system_irq_restore(flags);
-		os_sem_wait(spi_tx_process, SPI_WAIT_FOREVER);
+		if (tx_len != 0)
+		{
+			ret = os_sem_wait(spi_tx_process, SPI_MASTER_DMA_WAIT_MS);
+			flags = system_irq_save();
+			drv_dma_stop(p_spi_dev_dma->spi_tx_dma_ch);
+			drv_dma_status_clean(p_spi_dev_dma->spi_tx_dma_ch);
+			spi_master_disable_dma_request(p_spi_reg);
+			if (ret != SPI_RET_OK)
+			{
+				spi_clear_fifo();
+				system_irq_restore(flags);
+				spi_master_dump_regs("dma_wait_sem", SPI_RET_TIMEOUT, tx_len);
+				return SPI_RET_TIMEOUT;
+			}
+			ret = spi_master_wait_bus_idle(p_spi_reg);
+			if (ret != SPI_RET_OK)
+			{
+				spi_clear_fifo();
+				system_irq_restore(flags);
+				spi_master_dump_regs("dma_wait_busy_after", ret, tx_len);
+				return ret;
+			}
+			system_irq_restore(flags);
+		}
+		else
+		{
+			flags = system_irq_save();
+			spi_master_disable_dma_request(p_spi_reg);
+			ret = spi_master_wait_bus_idle(p_spi_reg);
+			system_irq_restore(flags);
+			if (ret != SPI_RET_OK)
+			{
+				spi_master_dump_regs("dma_zero_wait_busy_after", ret, tx_len);
+				return ret;
+			}
+		}
 	} 
-	system_irq_restore(flags);
-	return 0;
+	return SPI_RET_OK;
 }
 
 /**
@@ -360,6 +715,7 @@ int spi_master_read_buffer( spi_transaction_t* trans_desc )
 	unsigned int spi_dma_enable = spi_master.spi_dma_enable;
 	spi_master_bus_ready();
 	//clear rx & tx fifo
+	spi_master_disable_dma_request(p_spi_reg);
 	if(spi_clear_fifo()) 
 		return -2;
 	unsigned long flags = system_irq_save();
@@ -410,8 +766,14 @@ int spi_master_read_buffer( spi_transaction_t* trans_desc )
 		dma_cfg_info.mode = DMA_CHN_SPI_RX;	
 
 		spi_clear_fifo();
+		drv_dma_stop(p_spi_dev_dma->spi_rx_dma_ch);
+		drv_dma_status_clean(p_spi_dev_dma->spi_rx_dma_ch);
 		drv_dma_cfg(p_spi_dev_dma->spi_rx_dma_ch, &dma_cfg_info);
-		drv_dma_start(p_spi_dev_dma->spi_rx_dma_ch);
+		if (trans_desc->length != 0)
+		{
+			p_spi_reg->ctrl |= (SPI_CONTROL_RXDMA_EN | SPI_CONTROL_TXDMA_EN | SPI_CONTROL_TXTHRES(1));
+			drv_dma_start(p_spi_dev_dma->spi_rx_dma_ch);
+		}
 		
 		if(trans_desc->length == 0)
 		{
@@ -423,7 +785,15 @@ int spi_master_read_buffer( spi_transaction_t* trans_desc )
 		}
 		p_spi_reg->cmd = trans_desc->cmmand;
 		system_irq_restore(flags);
-		os_sem_wait(spi_rx_process, SPI_WAIT_FOREVER);
+		if (trans_desc->length != 0)
+		{
+			os_sem_wait(spi_rx_process, SPI_WAIT_FOREVER);
+		}
+		flags = system_irq_save();
+		drv_dma_stop(p_spi_dev_dma->spi_rx_dma_ch);
+		drv_dma_status_clean(p_spi_dev_dma->spi_rx_dma_ch);
+		spi_master_disable_dma_request(p_spi_reg);
+		system_irq_restore(flags);
 	}
 	return 0;
 }

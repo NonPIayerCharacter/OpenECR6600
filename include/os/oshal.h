@@ -77,6 +77,7 @@ typedef void * os_mutex_handle_t;
 os_mutex_handle_t os_mutex_create();
 int os_mutex_lock(os_mutex_handle_t mutex, size_t timeout_ms);
 int os_mutex_unlock(os_mutex_handle_t mutex);
+int os_mutex_holder(os_mutex_handle_t mutex);
 int os_mutex_destroy(os_mutex_handle_t mutex);
 
 
@@ -87,8 +88,9 @@ int os_mutex_destroy(os_mutex_handle_t mutex);
 typedef void * os_queue_handle_t;
 os_queue_handle_t os_queue_create(const char *name, size_t item_num, size_t item_size, size_t dummy);
 int os_queue_send(os_queue_handle_t queue, char *msg, size_t msglen, size_t timeout_ms);
+int os_queue_send_to_front(os_queue_handle_t queue, char *msg, size_t msglen, size_t timeout_ms);
 int os_queue_receive(os_queue_handle_t queue, char *msg, size_t msglen, size_t timeout_ms);
-int os_queue_destory(os_queue_handle_t queue);
+int os_queue_destroy(os_queue_handle_t queue);
 
 
 
@@ -118,6 +120,7 @@ typedef void * os_timer_handle_t;
 os_timer_handle_t os_timer_create(const char *name, size_t period_ms, size_t is_autoreload, void (*timeout_func)(os_timer_handle_t timer), void *arg);
 void * os_timer_get_arg(os_timer_handle_t timer);
 int os_timer_start(os_timer_handle_t timer);
+int os_timer_reset(os_timer_handle_t timer);
 int os_timer_delete(os_timer_handle_t timer);
 int os_timer_stop(os_timer_handle_t timer);
 int os_timer_changeperiod(os_timer_handle_t timer, size_t period_ms);
@@ -222,7 +225,9 @@ void os_vprintf(enum log_mod mod, enum log_level level, const char *f, va_list a
 **************************************************************************************/
 unsigned long os_random(void);
 
+void abort(void);
 
+void _exit(int status);
 
 #ifdef __cplusplus
 }

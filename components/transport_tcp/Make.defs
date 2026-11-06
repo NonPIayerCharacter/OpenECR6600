@@ -1,0 +1,13 @@
+
+ifeq ($(CONFIG_TRANSPORT_TCP),y)
+	CSRCS += transport_ssl.c\
+			transport_ws.c\
+			transport_tcp.c\
+			transport.c
+	VPATH += :transport_tcp
+	INCPATHS += $(TOPDIR)/components/lwip/lwip-2.1.0/src/include/lwip
+	INCPATHS += $(TOPDIR)/include/components/transport_tcp/
+	INCPATHS += $(TOPDIR)/components/mbedtls/mbedtls/include/mbedtls
+	INCPATHS += $(TOPDIR)/components/mbedtls/port/include/mbedtls
+	INCPATHS += $(TOPDIR)/include/components/trs-tls
+endif

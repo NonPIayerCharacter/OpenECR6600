@@ -1,5 +1,5 @@
 /*
- * FreeRTOS Kernel V10.4.1
+ * FreeRTOS Kernel V10.4.3
  * Copyright (C) 2020 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -200,7 +200,8 @@ void * pvPortMalloc( size_t xWantedSize )
         {
             /* The wanted size is increased so it can contain a BlockLink_t
              * structure in addition to the requested amount of bytes. */
-            if( xWantedSize > 0 )
+            if( ( xWantedSize > 0 ) &&
+                ( ( xWantedSize + xHeapStructSize + heapBOUNDARYSIZE ) > xWantedSize ) ) /* Overflow check */
             {
                 xWantedSize += xHeapStructSize;
 				xWantedSize += heapBOUNDARYSIZE;
@@ -209,8 +210,16 @@ void * pvPortMalloc( size_t xWantedSize )
                  * of bytes. */
                 if( ( xWantedSize & portBYTE_ALIGNMENT_MASK ) != 0x00 )
                 {
-                    /* Byte alignment required. */
-                    xWantedSize += ( portBYTE_ALIGNMENT - ( xWantedSize & portBYTE_ALIGNMENT_MASK ) );
+                    /* Byte alignment required. Check for overflow */
+                    if( ( xWantedSize + ( portBYTE_ALIGNMENT - ( xWantedSize & portBYTE_ALIGNMENT_MASK ) ) ) >
+                         xWantedSize )
+                    {
+                        xWantedSize += ( portBYTE_ALIGNMENT - ( xWantedSize & portBYTE_ALIGNMENT_MASK ) );
+                    }
+                    else
+                    {
+                        xWantedSize = 0;
+                    }
                 }
                 else
                 {
@@ -219,7 +228,7 @@ void * pvPortMalloc( size_t xWantedSize )
             }
             else
             {
-                mtCOVERAGE_TEST_MARKER();
+                xWantedSize = 0;
             }
 
             if( ( xWantedSize > 0 ) && ( xWantedSize <= xFreeBytesRemaining ) )
@@ -942,4 +951,13 @@ void vHeapCheckInTaskSwitch()
 }
 
 
+/**************************************************************************************
+* XIP IN FLASH
+**************************************************************************************/
+size_t xPortGetFreeHeapSize( void )  __attribute__((section(".xip")));
+size_t xPortGetMinimumEverFreeHeapSize( void )  __attribute__((section(".xip")));
+#if defined(CONFIG_HEAP_DEBUG)
+void vTaskHeapStats(char* pcTaskName)  __attribute__((section(".xip")));
+#endif
+void vPortDefineHeapRegions( const HeapRegion_t * const pxHeapRegions ) __attribute__((section(".xip")));
 

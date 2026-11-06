@@ -139,6 +139,7 @@ unsigned int p_efuse_ctrl = 0;
 int flash_init_ret = 0;
 unsigned int Flash_ID = 0;
 unsigned int Flash_FT = 1;
+int boya_Flash_FT = 0;
 
 
 static T_SPI_FLASH_DEV flash_dev;
@@ -546,6 +547,10 @@ unsigned int spiFlash_cmd_rdSR_2(void)
 void spiFlash_cmd_wrSR_1(int data)
 {
 	spiFlash_format_wr(SPIFLASH_CMD_WRSR_1, data, 2);
+}
+void spiFlash_cmd_wrSR_0(int data)
+{
+	spiFlash_format_wr(SPIFLASH_CMD_WRSR_1, data, 1);
 }
 
 void spiFlash_cmd_otpmode_wrSR_1(int data)
@@ -1009,10 +1014,22 @@ int drv_spiflash_erase(unsigned int addr,  unsigned int len)
 	for (i=0; i<eraseSectorCnt; i++)
 	{
 		irq_flag = system_irq_save_tick_compensation();
-		
+
 		#ifdef CONFIG_FLASH_TH
-			// memroy protect adjust 
+			// memroy protect adjust
 			spiflash_TH_wr_protect( addr);
+		#endif
+		#ifdef CONFIG_FLASH_GD
+			// memroy protect adjust
+			spiflash_GD_wr_protect( addr);
+		#endif
+		#ifdef CONFIG_FLASH_BOYA
+			// memroy protect adjust 
+			spiflash_BOYA_wr_protect( addr);
+		#endif
+		#ifdef CONFIG_FLASH_ZB
+			// memory protect adjust
+			spiflash_ZB_wr_protect( addr);
 		#endif
 		for (j = 0; j<SPIFLASH_TIMEOUT_COUNT; j++)
 		{
@@ -1037,6 +1054,19 @@ int drv_spiflash_erase(unsigned int addr,  unsigned int len)
 				// memroy protect all
 				spiflash_TH_wr_protect( 0x00);
 			#endif
+			#ifdef CONFIG_FLASH_GD
+				// memroy protect all
+				spiflash_GD_wr_protect( 0x021C);
+			#endif
+			
+			#ifdef CONFIG_FLASH_BOYA
+				// memroy protect adjust 
+				spiflash_BOYA_wr_protect( 0x021C);
+			#endif
+			#ifdef CONFIG_FLASH_ZB
+				// memory protect all
+				spiflash_ZB_wr_protect( 0x021c);
+			#endif
 			system_irq_restore_tick_compensation(irq_flag);
 			#ifdef CONFIG_PSM_SURPORT
 				psm_set_device_status(PSM_DEVICE_SPI_FLASH,PSM_DEVICE_STATUS_IDLE);
@@ -1058,6 +1088,18 @@ int drv_spiflash_erase(unsigned int addr,  unsigned int len)
 		#ifdef CONFIG_FLASH_TH
 			// memroy protect all
 			spiflash_TH_wr_protect( 0x00);
+		#endif
+		#ifdef CONFIG_FLASH_GD
+			// memroy protect all
+			spiflash_GD_wr_protect( 0x021C);
+		#endif
+		#ifdef CONFIG_FLASH_BOYA
+			// memroy protect adjust 
+			spiflash_BOYA_wr_protect( 0x021C);
+		#endif
+		#ifdef CONFIG_FLASH_ZB
+			// memory protect all
+			spiflash_ZB_wr_protect( 0x021c);
 		#endif
 
 		system_irq_restore_tick_compensation(irq_flag);
@@ -1290,10 +1332,24 @@ int drv_spiflash_write(unsigned int addr, const unsigned char * buf, unsigned in
 		unsigned int j, data = 0, irq_flag;
 
 		irq_flag = system_irq_save_tick_compensation();
-		
+
+		#ifdef CONFIG_FLASH_ZB
+			// memory protect adjust
+			spiflash_ZB_wr_protect( addr);
+		#endif
 		#ifdef CONFIG_FLASH_TH
-			// memroy protect adjust 
+			// memroy protect adjust
 			spiflash_TH_wr_protect( addr);
+		#endif
+		
+		#ifdef CONFIG_FLASH_GD
+			// memroy protect adjust
+			spiflash_GD_wr_protect( addr);
+		#endif
+		
+		#ifdef CONFIG_FLASH_BOYA
+			// memroy protect adjust 
+			spiflash_BOYA_wr_protect( addr);
 		#endif
 		unsigned int enc_en = READ_REG(CHIP_SMU_PD_APB_ENCRY_EN);
 		if((addr < start_addr) || (addr > end_addr) ) 
@@ -1320,18 +1376,33 @@ int drv_spiflash_write(unsigned int addr, const unsigned char * buf, unsigned in
 		
 		if((data & SPIFLASH_STATUS_WEL) == 0 && ((flash_dev.flash_param.flash_id != EN25QH32B) && (flash_dev.flash_param.flash_id != EN25Q16B) && (flash_dev.flash_param.flash_id != EN25Q32C) ))
 		{
-		
+
 			#ifdef CONFIG_FLASH_TH
 				// memroy protect all
 				spiflash_TH_wr_protect( 0x00);
 			#endif
+
+			#ifdef CONFIG_FLASH_ZB
+				// memory protect all
+				spiflash_ZB_wr_protect( 0x021c);
+			#endif
+			
+			#ifdef CONFIG_FLASH_GD
+				// memroy protect all
+				spiflash_GD_wr_protect( 0x021C);
+			#endif
+			
+			#ifdef CONFIG_FLASH_BOYA
+				// memroy protect adjust 
+				spiflash_BOYA_wr_protect( 0x021C);
+			#endif
 			WRITE_REG(CHIP_SMU_PD_APB_ENCRY_EN, enc_en);
 			system_irq_restore_tick_compensation(irq_flag);
-			
+
 			#ifdef CONFIG_PSM_SURPORT
 				psm_set_device_status(PSM_DEVICE_SPI_FLASH,PSM_DEVICE_STATUS_IDLE);
 			#endif
-			
+
 			return FLASH_RET_WREN_NOT_SET;
 		}
 		
@@ -1358,6 +1429,22 @@ int drv_spiflash_write(unsigned int addr, const unsigned char * buf, unsigned in
 				// memroy protect all
 				spiflash_TH_wr_protect( 0x00);
 			#endif
+
+			#ifdef CONFIG_FLASH_ZB
+				// memory protect all
+				spiflash_ZB_wr_protect( 0x021c);
+			#endif
+			
+			#ifdef CONFIG_FLASH_GD
+				// memroy protect all
+				spiflash_GD_wr_protect( 0x021C);
+			#endif
+			
+			#ifdef CONFIG_FLASH_BOYA
+				// memroy protect adjust 
+				spiflash_BOYA_wr_protect( 0x021C);
+			#endif
+			
 			WRITE_REG(CHIP_SMU_PD_APB_ENCRY_EN, enc_en);
 			system_irq_restore_tick_compensation(irq_flag);
 			
@@ -1367,10 +1454,24 @@ int drv_spiflash_write(unsigned int addr, const unsigned char * buf, unsigned in
 			
 			return FLASH_RET_WIP_NOT_SET;
 		}
-		
+
+		#ifdef CONFIG_FLASH_ZB
+			// memory protect all
+			spiflash_ZB_wr_protect( 0x021c);
+		#endif
 		#ifdef CONFIG_FLASH_TH
 			// memroy protect all
 			spiflash_TH_wr_protect( 0x00);
+		#endif
+		
+		#ifdef CONFIG_FLASH_GD
+			// memroy protect all
+			spiflash_GD_wr_protect( 0x021C);
+		#endif
+		
+		#ifdef CONFIG_FLASH_BOYA
+			// memroy protect adjust 
+			spiflash_BOYA_wr_protect( 0x021C);
 		#endif
 		WRITE_REG(CHIP_SMU_PD_APB_ENCRY_EN, enc_en);
 		system_irq_restore_tick_compensation(irq_flag);
@@ -1426,6 +1527,33 @@ int drv_spiFlash_init(void)
 			spiFlash_cmd_wrSR_1(PROTECT_ALL);
 		}
 	#endif
+#ifdef CONFIG_OPEN_BOYA_FT
+	boya_Flash_FT = spiFlash_BOYA_FT();
+#endif
+
+	
+	#ifdef CONFIG_FLASH_BOYA
+		// memroy protect adjust 
+		if ( (Flash_ID & 0xFFFFFF) == 0x164068 )
+		{
+			spiFlash_cmd_wrSR_1(0x021c);
+		}
+	#endif
+	
+	#ifdef CONFIG_FLASH_GD
+		if ((Flash_ID & 0xFFFFFF) == 0x1640C8)
+		{
+			spiflash_GD_wr_status(0x021c);
+		}
+	#endif
+	
+	#ifdef CONFIG_FLASH_ZB
+		if ( ((Flash_ID & 0xFFFFFF)	== 0x14605E ) || ((Flash_ID & 0xFFFFFF)	== 0x15605E ) || ((Flash_ID & 0xFFFFFF)	== 0x15405E ) || ((Flash_ID & 0xFFFFFF)	== 0x16405E ))
+		{
+			spiFlash_cmd_wrSR_0(0x1C);
+			spiFlash_cmd_wrSR_2(0x02);
+		}
+	#endif
 	return spiFlash_probe(p_flash_dev);
 }
 
@@ -1467,7 +1595,7 @@ int spiflash_read_DMA(unsigned int addr, unsigned char * buf, unsigned int len)
 	irq_flag = system_irq_save_tick_compensation();	
 	volatile unsigned int status = READ_REG(DMAC_INTR_STS);
 
-	dma_cfg_info.dst = (unsigned int)buf;//Êý×éµØÖ·
+	dma_cfg_info.dst = (unsigned int)buf;//数组地址
 	dma_cfg_info.src = spiFlash_api_get_dma_addr();  //spi reg :2C 
 	dma_cfg_info.len = len; //256byte
 	dma_cfg_info.mode = DMA_CHN_SPI_FLASH_RX;//8
@@ -1509,7 +1637,7 @@ int spiflash_write_DMA(unsigned int addr, const unsigned char * buf, unsigned in
     spi_flash_priv_t *pread = &g_flash_priv;
 
 	dma_cfg_info.dst = spiFlash_api_get_dma_addr();  //spi reg :2C 
-	dma_cfg_info.src = (unsigned int)buf;//Êý×éµØÖ·
+	dma_cfg_info.src = (unsigned int)buf;//数组地址
 	dma_cfg_info.len = len; //256byte
 	dma_cfg_info.mode = DMA_CHN_SPI_FLASH_TX;//7
 
@@ -1748,6 +1876,7 @@ void  __attribute__((no_ex9, used))drv_spiflash_restore(void)
 
 	spiFlash_clk_cfg();					/* cfg spi clk */
 	spiFlash_xip_read_cfg();			/* cfg xip read-mem-cmd */
+	spiFlash_RDP();
 	spiFlash_QE_cfg_restore(&flash_dev);
 	
 	#ifdef CONFIG_FLASH_TH

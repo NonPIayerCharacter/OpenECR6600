@@ -15,7 +15,6 @@
  * @par History 2:
  */
 
-
 /*--------------------------------------------------------------------------
 *												Include files
 --------------------------------------------------------------------------*/
@@ -30,7 +29,7 @@
 * 	                                           	Local Macros
 --------------------------------------------------------------------------*/
 /** Description of the macro */
-#define  MAC_LEN    (6)
+#define MAC_LEN (6)
 /*--------------------------------------------------------------------------
 * 	                                           	Local Types
 --------------------------------------------------------------------------*/
@@ -42,7 +41,9 @@
 /*--------------------------------------------------------------------------
 * 	                                           	Local Constants
 --------------------------------------------------------------------------*/
-
+static unsigned char sys_mac[MAC_LEN];
+static unsigned char readmac_flag = 0;
+static int g_primary_if = 0;
 /*--------------------------------------------------------------------------
 * 	                                           	Local Function Prototypes
 --------------------------------------------------------------------------*/
@@ -63,12 +64,10 @@
 /*--------------------------------------------------------------------------
 * 	                                          	Function Definitions
 --------------------------------------------------------------------------*/
-static unsigned char sys_mac[MAC_LEN];
-unsigned char readmac_flag = 0;
 
 int hal_system_set_mac(MAC_SAVE_LACATION type, char *mac)
-{	
-    unsigned char mac_to_otp[6] = {0};    
+{
+    unsigned char mac_to_otp[6] = {0};
     int ret = -1;
     int i = 0;
     
@@ -80,7 +79,9 @@ int hal_system_set_mac(MAC_SAVE_LACATION type, char *mac)
 
 	if (type == MAC_SAVE_TO_AMT)
 	{
+	    #if defined (CONFIG_NV)
 		ret = amt_set_env_blob(STA_MAC, mac, strlen(mac));
+		#endif
 	}
 	else if(type == MAC_SAVE_TO_OTP)
 	{
@@ -104,36 +105,46 @@ int hal_system_set_mac(MAC_SAVE_LACATION type, char *mac)
     {
         for (i = 0; i < MAC_LEN ; i++)
         {
-            sys_mac[i] = hex2num(mac[i*3]) * 0x10 + hex2num(mac[i*3+1]);
-        }        
+            mac_to_otp[i] = hex2num(mac[i * 3]) * 0x10 + hex2num(mac[i * 3 + 1]);
+        }
+        ret = hal_flash_otp_write(MAC_ADDR_IN_OTP, (unsigned char *)mac_to_otp, 6);
+    }
+    else if (type == MAC_SAVE_TO_EFUSE)
+    {
+        // not support
+        os_printf(LM_APP, LL_INFO, "not support now!\n");
+    }
+    else
+    {
+        os_printf(LM_APP, LL_INFO, "parameter error!\n");
+    }
+
+    if (ret == 0)
+    {
+        for (i = 0; i < MAC_LEN; i++)
+        {
+            sys_mac[i] = hex2num(mac[i * 3]) * 0x10 + hex2num(mac[i * 3 + 1]);
+        }
         readmac_flag = 1;
     }
-	return ret;
+    return ret;
 }
-#if CONFIG_APP_AT_COMMAND
-extern uint8_t g_temporary_mac[MAC_LEN];
-extern uint8_t g_temporary_mac_flag;
-#endif
-int hal_system_get_sta_mac(unsigned char *mac)
-{	
-	int ret = -1;
-	//1:amt
-	int i = 0;
-	char tmp_mac[18] = {0};
 
-#if CONFIG_APP_AT_COMMAND
-    if (g_temporary_mac_flag) {
-        memcpy(mac, g_temporary_mac, MAC_LEN);
-        return MAC_LEN;
-    }
-#endif
+int hal_system_get_mac(unsigned char *mac)
+{
+    int ret = -1;
+    // 1:amt
+    int i = 0;
+    char tmp_mac[18] = {0};
 
     if(readmac_flag == 1)
     {
          memcpy(mac, sys_mac, MAC_LEN);
          return MAC_LEN;
     }
-	ret = amt_get_env_blob(STA_MAC, tmp_mac, 18, NULL); 
+    #if defined (CONFIG_NV)
+	ret = amt_get_env_blob(STA_MAC, tmp_mac, 18, NULL);
+	#endif
 	if (ret > 0)
 	{
 		for (i = 0; i < MAC_LEN; i++)
@@ -145,119 +156,128 @@ int hal_system_get_sta_mac(unsigned char *mac)
 			os_printf(LM_APP, LL_INFO, "mac in amt\n");
             memcpy(sys_mac, mac, MAC_LEN);
             readmac_flag = 1;
-			return MAC_LEN;
-		}
-		else
-		{
-			ret = -1;
-		}
-	}
-	//2:otp
-	memset(mac,0,MAC_LEN);
-	ret = hal_flash_otp_read(MAC_ADDR_IN_OTP,(unsigned char *)mac,MAC_LEN);	
-	if((!ret) && (!(mac[0] & 0x1)))
-	{
-		os_printf(LM_APP, LL_INFO, "mac in otp\n");
+            return MAC_LEN;
+        }
+        else
+        {
+            ret = -1;
+        }
+    }
+    // 2:otp
+    memset(mac, 0, MAC_LEN);
+    ret = hal_flash_otp_read(MAC_ADDR_IN_OTP, (unsigned char *)mac, MAC_LEN);
+    if ((!ret) && (!(mac[0] & 0x1)))
+    {
+        os_printf(LM_APP, LL_INFO, "mac in otp\n");
         memcpy(sys_mac, mac, MAC_LEN);
         readmac_flag = 1;
 
-		return MAC_LEN;
-	}
-	else
-	{
-		ret = -1;
-	}
-	//3:efuse
-	//not support now
-	
-	//4:default
-	memset(mac,0,MAC_LEN);
-	memset(tmp_mac,0,18);
-	#ifdef MAC_ADDR_STANDALONE
-	//00:06:06:00:00:00
-	memcpy(tmp_mac, (const char*)MAC_ADDR_STANDALONE, 18);
-	for (i = 0; i < MAC_LEN; i++)
-	{
-		mac[i] = hex2num(tmp_mac[i * 3]) * 0x10 + hex2num(tmp_mac[i * 3 + 1]);
-	}
-	ret = MAC_LEN;
+        return MAC_LEN;
+    }
+    else
+    {
+        ret = -1;
+    }
+    // 3:efuse
+    // not support now
+
+    // 4:default
+    memset(mac, 0, MAC_LEN);
+    memset(tmp_mac, 0, 18);
+#ifdef MAC_ADDR_STANDALONE
+    // 00:06:06:00:00:00
+    memcpy(tmp_mac, (const char *)MAC_ADDR_STANDALONE, 18);
+    for (i = 0; i < MAC_LEN; i++)
+    {
+        mac[i] = hex2num(tmp_mac[i * 3]) * 0x10 + hex2num(tmp_mac[i * 3 + 1]);
+    }
+    ret = MAC_LEN;
     memcpy(sys_mac, mac, MAC_LEN);
     readmac_flag = 1;
-	os_printf(LM_APP, LL_INFO, "defalut mac\n");
-	#endif
-	
-	return ret;
+    os_printf(LM_APP, LL_INFO, "defalut mac\n");
+#endif
+
+    return ret;
 }
-#if 0
+
+void hal_system_compute_secondary_mac(unsigned char *mac)
+{
+    if (mac[0] & 0x02)
+    {
+        mac[0] = ((mac[0] >> 2) ^ (0x01)) << 2;
+        mac[0] |= 0x02;
+    }
+    else
+    {
+        mac[0] |= 0x02;
+    }
+}
+
+int hal_system_get_sta_mac(unsigned char *mac)
+{
+    int ret = -1;
+
+    if (hal_system_get_primary_if() == 0)
+    {
+        ret = hal_system_get_mac(mac);
+    }
+    else
+    {
+        ret = hal_system_get_mac(mac);
+        if (ret != MAC_LEN)
+        {
+            return ret;
+        }
+        else
+        {
+            hal_system_compute_secondary_mac(mac);
+        }
+    }
+    return ret;
+}
 
 int hal_system_get_ap_mac(unsigned char *mac)
 {
-	int ret = -1;
-	ret = hal_system_get_sta_mac(mac);
-	if (ret != MAC_LEN)
-	{
-		return ret;
-	}
-	else
-	{
-		mac[5] ^=  0x01;
-	}	
-	return ret;
-}
-#endif
-extern int custom_rule;
-int hal_system_get_ap_mac(unsigned char *mac)
-{
-	int ret = -1;
-	ret = hal_system_get_sta_mac(mac);
-	if (ret != MAC_LEN)
-	{
-		return ret;
-	}
-	else
-	{
-	  if (custom_rule == 0)
-     	mac[5] ^= 0x01;
-   	  else
+    int ret = -1;
+
+    if (hal_system_get_primary_if() == 1)
+    {
+        ret = hal_system_get_mac(mac);
+    }
+    else
+    {
+        ret = hal_system_get_mac(mac);
+        if (ret != MAC_LEN)
         {
-                if(mac[0] & 0x02)
-                {
-                  mac[0] = ((mac[0] >> 2) ^ (0x01))<< 2;
-                  mac[0] |= 0x02;
-                }
-           		else
-                {
-                  
-                  mac[0] |= 0x02;
-                }
-            
+            return ret;
         }
-	}	
-	return ret;
+        else
+        {
+            hal_system_compute_secondary_mac(mac);
+        }
+    }
+    return ret;
 }
 
 int hal_system_get_ble_mac(unsigned char *mac)
 {
-	int ret = -1;
-	ret = hal_system_get_sta_mac(mac);
-	if (ret != MAC_LEN)
-	{
-		return ret;
-	}
-	else
-	{
-		//ble mac = sta mac
-		
-	}	
-	return ret;
+    int ret = -1;
+    ret = hal_system_get_sta_mac(mac);
+    if (ret != MAC_LEN)
+    {
+        return ret;
+    }
+    else
+    {
+        // ble mac = sta mac
+    }
+    return ret;
 }
-
-
 
 int hal_system_get_config(const char *key, void *buff, unsigned int buff_len)
 {	
 	int ret = -1;
-	
+#if defined (CONFIG_NV)
 	if(memcmp(key,"amt",3) == 0)
 	{
 		ret = amt_get_env_blob(key + 3, buff, buff_len, NULL);
@@ -285,7 +305,7 @@ int hal_system_get_config(const char *key, void *buff, unsigned int buff_len)
 		ret = 0;
 		os_printf(LM_APP, LL_INFO, "efu\n");
 	}
-	
+#endif
 	return ret;
 }
 
@@ -295,11 +315,15 @@ int hal_system_set_config(const char *key, void *buff, unsigned int buff_len)
 	
 	if(memcmp(key,"amt",3) == 0)
 	{
+	    #if defined (CONFIG_NV)
 		ret = amt_set_env_blob(key + 3, buff, buff_len);
+		#endif
 	}
 	else if(memcmp(key,"mac",3) == 0)
 	{
-		ret = amt_set_env_blob(key, buff, buff_len);		
+	    #if defined (CONFIG_NV)
+		ret = amt_set_env_blob(key, buff, buff_len);
+		#endif
 		if (ret <= 0 && buff_len >= 18)
 		{
 			#ifdef MAC_ADDR_STANDALONE
@@ -310,11 +334,15 @@ int hal_system_set_config(const char *key, void *buff, unsigned int buff_len)
 	}
 	else if(memcmp(key,"dev",3) == 0)
 	{
+	    #if defined (CONFIG_NV)
 		ret = develop_set_env_blob(key + 3, buff, buff_len);
+		#endif
 	}
 	else if(memcmp(key,"cus",3) == 0)
 	{
+	    #if defined (CONFIG_NV)
 		ret = customer_set_env_blob(key + 3, buff, buff_len);
+		#endif
 	}
 	else if(memcmp(key,"otp",3) == 0)
 	{
@@ -334,7 +362,7 @@ int hal_system_set_config(const char *key, void *buff, unsigned int buff_len)
 int hal_system_del_config(const char *key)
 {	
 	int ret = -1;
-	
+#if defined (CONFIG_NV)
 	if(memcmp(key,"amt",3) == 0)
 	{
 		ret = amt_del_env(key + 3);
@@ -362,8 +390,48 @@ int hal_system_del_config(const char *key)
 		ret = 0;
 		os_printf(LM_APP, LL_INFO, "efu\n");
 	}
-	
+#endif
 	return ret;
 }
 
+int hal_system_get_primary_if()
+{
+    int interface;
+    int ret;
 
+    ret = hal_system_get_config(AMT_NV_MAC_PRIMARY_IF, &interface, sizeof(interface));
+    if ((0 == ret) || (0xffffffff == ret))
+    {
+        return g_primary_if;
+    }
+    else
+    {
+        g_primary_if = interface;
+        return interface;
+    }
+}
+
+void hal_system_set_primary_if(int interface)
+{
+    int ret;
+    int stored_interface;
+
+    g_primary_if = !!interface;
+    if (g_primary_if == 0)
+    {
+        ret = hal_system_get_config(AMT_NV_MAC_PRIMARY_IF, &stored_interface, sizeof(stored_interface));
+        if ((0 != ret) && (0xffffffff != ret))
+            hal_system_del_config(AMT_NV_MAC_PRIMARY_IF);
+    }
+    else if (g_primary_if == 1)
+    {
+        ret = hal_system_get_config(AMT_NV_MAC_PRIMARY_IF, &stored_interface, sizeof(stored_interface));
+        if ((0 != ret) && (0xffffffff != ret))
+        {
+            if (stored_interface != g_primary_if)
+            {
+                hal_system_set_config(AMT_NV_MAC_PRIMARY_IF, &g_primary_if, sizeof(g_primary_if));
+            }
+        }
+    }
+}

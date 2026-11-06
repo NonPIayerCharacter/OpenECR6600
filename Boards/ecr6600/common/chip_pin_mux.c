@@ -1,7 +1,7 @@
 
 #include "chip_pinmux.h"
 #include "oshal.h"
-
+#include "gpio.h"
 
 int chip_uart0_pinmux_cfg(int rx_num, int tx_num, int flow_ctrl_en)
 {
@@ -49,6 +49,9 @@ void chip_uart1_pinmux_cfg(int flow_ctrl_en)
 	PIN_FUNC_SET(IO_MUX_GPIO1, FUNC_GPIO1_UART1_RXD);
 	PIN_FUNC_SET(IO_MUX_GPIO2, FUNC_GPIO2_UART1_TXD);
 	
+	drv_gpio_ioctrl(1, DRV_GPIO_CTRL_PULL_TYPE, DRV_GPIO_ARG_PULL_UP);
+	drv_gpio_ioctrl(2, DRV_GPIO_CTRL_PULL_TYPE, DRV_GPIO_ARG_PULL_UP);
+
 	if (flow_ctrl_en)
 	{
 		PIN_FUNC_SET(IO_MUX_GPIO24, FUNC_GPIO24_UART1_CTS);
@@ -60,13 +63,18 @@ void chip_uart1_pinmux_cfg(int flow_ctrl_en)
 int chip_uart2_pinmux_cfg(int tx_num)
 {
 	PIN_FUNC_SET(IO_MUX_GPIO17, FUNC_GPIO17_UART2_RXD);
+	
+	drv_gpio_ioctrl(17, DRV_GPIO_CTRL_PULL_TYPE, DRV_GPIO_ARG_PULL_UP);
 	if (tx_num == UART2_TX_USED_GPIO0)
 	{
 		PIN_FUNC_SET(IO_MUX_GPIO0, FUNC_GPIO0_UART2_TXD);
+		
+		drv_gpio_ioctrl(0, DRV_GPIO_CTRL_PULL_TYPE, DRV_GPIO_ARG_PULL_UP);
 	}
 	else if (tx_num == UART2_TX_USED_GPIO13)
 	{
 		PIN_FUNC_SET(IO_MUX_GPIO13, FUNC_GPIO13_UART2_TXD);
+		drv_gpio_ioctrl(13, DRV_GPIO_CTRL_PULL_TYPE, DRV_GPIO_ARG_PULL_UP);
 	}
 	else
 	{
@@ -307,6 +315,120 @@ void chip_io_mode_pinmux_cfg(int io_num,int mode)
 			while(1);
 	}
 }
+
+int chip_io_mode_pinmux_get (int io_num)
+{
+	int ret;
+
+	switch (io_num)
+	{
+		case 0:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO0);
+			break;
+
+		case 1:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO1);
+			break;
+
+		case 2:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO2);
+			break;
+
+		case 3:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO3);
+			break;
+
+		case 4:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO4);
+			break;
+
+		case 5:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO5);
+			break;
+		
+		case 6:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO6);
+			break;
+
+		case 7:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO7);
+			break;
+
+		case 8:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO8);
+			break;
+		
+		case 9:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO9);
+			break;
+
+		case 10:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO10);
+			break;
+
+		case 11:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO11);
+			break;
+		
+		case 12:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO12);
+			break;
+
+		case 13:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO13);
+			break;
+
+		case 14:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO14);
+			break;
+
+		case 15:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO15);
+			break;
+
+		case 16:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO16);
+			break;
+
+		case 17:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO17);
+			break;
+
+		case 18:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO18);
+			break;
+		
+		case 20:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO20);
+			break;	
+
+		case 21:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO21);
+			break;
+
+		case 22:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO22);
+			break;
+
+		case 23:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO23);
+			break;
+
+		case 24:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO24);
+			break;
+
+		case 25:
+			ret = PIN_FUNC_GET(IO_MUX_GPIO25);
+			break;
+
+		default:
+			ret = -1;
+	}
+
+	return ret;
+}
+
 
 
 

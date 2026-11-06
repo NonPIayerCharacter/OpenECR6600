@@ -28,7 +28,9 @@ int http_url_parsing(http_connect_params_t *connect_params, const char *url)
 
     len = strlen(url);
 
-    http_utils_assign_string(&connect_params->http_url, url, len);
+    if (http_utils_assign_string(&connect_params->http_url, url, len) == NULL) {
+        RETURN_ERROR(HTTP_MEM_NOT_ENOUGH_ERROR);
+    }
 
     if (0 != http_parser_parse_url_long(url, len, 0, &u)) {
         HTTP_LOG_D("error parse url : %s", url);
@@ -52,7 +54,7 @@ int http_url_parsing(http_connect_params_t *connect_params, const char *url)
                 memcpy(port, DEFAULT_HTTPS_PORT, sizeof(DEFAULT_HTTPS_PORT));
                 connect_params->http_port = port;
             } else {
-                connect_params->http_port = DEFAULT_HTTPS_PORT;
+                RETURN_ERROR(HTTP_MEM_NOT_ENOUGH_ERROR);
             }
         } else if(http_utils_ignore_case_match(connect_params->http_scheme, "http") == 0) {
             char *port = NULL;
@@ -62,7 +64,7 @@ int http_url_parsing(http_connect_params_t *connect_params, const char *url)
                 memcpy(port, DEFAULT_HTTP_PORT, sizeof(DEFAULT_HTTP_PORT));
                 connect_params->http_port = port;
             } else {
-                connect_params->http_port = DEFAULT_HTTP_PORT;
+                RETURN_ERROR(HTTP_MEM_NOT_ENOUGH_ERROR);
             }
         }
     }
@@ -127,8 +129,3 @@ int http_url_parsing(http_connect_params_t *connect_params, const char *url)
 
     RETURN_ERROR(HTTP_SUCCESS_ERROR);
 }
-
-
-
-
-

@@ -56,6 +56,7 @@ int hal_rtc_utctime_to_date(int utc_time, DATE_RTC * date);
 int hal_rtc_date_to_utctime(DATE_RTC date, int * utc_time);
 
 int hal_rtc_init();
+void hal_rtc_restore(void);
 
 #endif /*HAL_RTC_H*/
 

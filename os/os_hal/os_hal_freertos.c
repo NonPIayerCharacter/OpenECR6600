@@ -190,6 +190,40 @@ os_mutex_handle_t os_mutex_create()
 
 int os_mutex_lock(os_mutex_handle_t mutex, size_t timeout_ms)
 {
+#ifdef CONFIG_YIYUAN_CLOUD
+    int ret;
+
+    if (arch_irq_context())
+    {
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+        ret = xSemaphoreTakeFromISR((QueueHandle_t)mutex, &xHigherPriorityTaskWoken);
+        if (xHigherPriorityTaskWoken == pdTRUE)
+        {
+            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+        }
+    }
+    else
+    {
+        TickType_t xTicksToWait = portMAX_DELAY;
+
+        if (timeout_ms < WAIT_FOREVER)
+        {
+            xTicksToWait = ms_to_tick(timeout_ms);
+        }
+
+        ret = xQueueTakeMutexRecursive((QueueHandle_t)mutex, xTicksToWait);
+    }
+
+    if (pdPASS == ret)
+    {
+        return 0;
+    }
+    else
+    {
+        return -1;
+    }
+#else
     TickType_t xTicksToWait = portMAX_DELAY;
     int        ret;
 
@@ -207,6 +241,7 @@ int os_mutex_lock(os_mutex_handle_t mutex, size_t timeout_ms)
     {
         return(-1);
     }
+#endif
 }
 
 int os_mutex_unlock(os_mutex_handle_t mutex)
@@ -219,6 +254,23 @@ int os_mutex_unlock(os_mutex_handle_t mutex)
     }
     else
     {
+        return(-1);
+    }
+}
+
+int os_mutex_holder(os_mutex_handle_t mutex)
+{
+    TaskHandle_t holder = NULL;
+
+    if (arch_irq_context()) {
+        holder = xQueueGetMutexHolder((QueueHandle_t)mutex);
+    } else {
+        holder = xQueueGetMutexHolderFromISR((QueueHandle_t)mutex);
+    }
+
+    if (holder != NULL) {
+        return(0);
+    } else {
         return(-1);
     }
 }
@@ -280,6 +332,47 @@ int os_queue_send(os_queue_handle_t queue, char *msg, size_t msglen, size_t time
     }
 }
 
+int os_queue_send_to_front(os_queue_handle_t queue, char *msg, size_t msglen, size_t timeout_ms)
+{
+    TickType_t xTicksToWait             = portMAX_DELAY;
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    int        ret;
+    //ESWIN ADD for debug get Queue Spaces Available status by taodong
+    int        queueSpaceStatus;
+
+    //ESWIN END
+
+    if (arch_irq_context())
+    {
+        ret = xQueueSendToFrontFromISR((QueueHandle_t)queue, msg, &xHigherPriorityTaskWoken);
+        if (xHigherPriorityTaskWoken == pdTRUE)
+        {
+            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+        }
+    }
+    else
+    {
+        if (timeout_ms < WAIT_FOREVER)
+        {
+            xTicksToWait = ms_to_tick(timeout_ms);
+        }
+        ret = xQueueSendToFront((QueueHandle_t)queue, msg, xTicksToWait);
+    }
+
+    if (pdPASS == ret)
+    {
+        return(0);
+    }
+    else
+    {
+        //ESWIN ADD for get Queue Spaces Available status when send return error by taodong
+        queueSpaceStatus = xQueueGetSpaceStatus((QueueHandle_t)queue);
+        os_printf(LM_OS, LL_INFO, "queue Space status = %d \n", queueSpaceStatus);
+        //ESWIN END
+        return(-1);
+    }
+}
+
 int os_queue_receive(os_queue_handle_t queue, char *msg, size_t msglen, size_t timeout_ms)
 {
     TickType_t xTicksToWait             = portMAX_DELAY;
@@ -312,7 +405,7 @@ int os_queue_receive(os_queue_handle_t queue, char *msg, size_t msglen, size_t t
     }
 }
 
-int os_queue_destory(os_queue_handle_t queue)
+int os_queue_destroy(os_queue_handle_t queue)
 {
     vQueueDelete((QueueHandle_t)queue);
     return(0);
@@ -475,6 +568,34 @@ int os_timer_delete(os_timer_handle_t timer)
     }
 }
 
+int os_timer_reset(os_timer_handle_t timer)
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    int        ret                      = 0;
+
+    if (arch_irq_context())
+    {
+        ret = xTimerResetFromISR((TimerHandle_t)timer, &xHigherPriorityTaskWoken);
+        if (xHigherPriorityTaskWoken == pdTRUE)
+        {
+            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+        }
+    }
+    else
+    {
+        ret = xTimerReset((TimerHandle_t)timer, portMAX_DELAY);
+    }
+
+    if (pdPASS == ret)
+    {
+        return(0);
+    }
+    else
+    {
+        return(-1);
+    }
+}
+
 int os_timer_stop(os_timer_handle_t timer)
 {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
@@ -551,7 +672,7 @@ int os_msleep(size_t ms)
 long long os_time_get(void)
 {
     int unit = 1000 / configTICK_RATE_HZ;
-    int ret  = 0;
+    long long ret  = 0;
 
     if (arch_irq_context())
     {
@@ -906,4 +1027,14 @@ unsigned long os_random(void)
     return(drv_trng_get());
 }
 #endif
+
+void abort(void)
+{
+   system_assert(0);
+}
+
+void _exit(int status)
+{
+   system_assert(0);
+}
 

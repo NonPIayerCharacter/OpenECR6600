@@ -20,7 +20,7 @@
  
 #define I2C_Speed_100K     				100000
 #define I2C_Speed_400K     				400000
-#define I2C_Speed_1M     				1024000
+#define I2C_Speed_1M     				1000000
 #define I2C_Disable                   0x00
 #define I2C_Enable                    0x01
 

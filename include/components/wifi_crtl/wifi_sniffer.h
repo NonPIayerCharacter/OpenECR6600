@@ -246,11 +246,15 @@ typedef struct {
     };
 } __attribute__((packed)) wifi_pkt_rx_ctrl_t;
 
+/// FCS error bit mask for statinfo field
+#define RX_HD_FCSERR 0x0100
+
 /** @brief Payload passed to 'buf' parameter of promiscuous mode RX callback.
  */
 typedef struct {
     wifi_pkt_rx_ctrl_t rx_ctrl; /**< metadata header */
     uint8_t *payload;       /**< Data or management payload */
+    uint8_t fcs_ok;         /**< FCS check status: 1=OK, 0=FAIL */
 } wifi_promiscuous_pkt_t;
 
 /**
@@ -273,7 +277,8 @@ typedef enum {
 #define WIFI_PROMIS_FILTER_MASK_DATA        (1<<2)        /**< filter the packets with type of WIFI_PKT_DATA */
 #define WIFI_PROMIS_FILTER_MASK_DATA_MPDU   (1<<3)        /**< filter the MPDU which is a kind of WIFI_PKT_DATA */
 #define WIFI_PROMIS_FILTER_MASK_DATA_AMPDU  (1<<4)        /**< Todo: filter the AMPDU which is a kind of WIFI_PKT_DATA */
-
+#define WIFI_PROMIS_FILTER_MASK_BEACON_PROBE_RESP  (1<<5)
+#define WIFI_PROMIS_FILTER_MASK_FCS_ERR     (1<<6)        /**< filter FCS error packets */
 /** @brief Mask for filtering different packet types in promiscuous mode. */
 typedef struct {
     uint32_t filter_mask; /**< OR of one or more filter values WIFI_PROMIS_FILTER_* */
@@ -355,6 +360,52 @@ int wifi_set_promiscuous_filter(wifi_promiscuous_filter_t *filter);
   */
 int wifi_get_promiscuous_filter(wifi_promiscuous_filter_t *filter);
 
+/**
+  * @brief FCS error frame callback function type
+  *
+  * This callback is invoked from LMAC layer when FCS error frames are received.
+  *
+  * @param rx_head  Pointer to RX header descriptor (for RSSI extraction)
+  *
+  * @return 0 on success, -1 on error
+  */
+typedef int (* wifi_fcs_error_cb_t)(void *rx_head);
+
+/**
+  * @brief Register FCS error frame callback
+  *
+  * Register a callback function to be called when FCS error frames are received.
+  * This allows custom processing of FCS error frames in LMAC layer.
+  *
+  * @param cb  Callback function, or NULL to unregister
+  *
+  * @return 0 on success
+  */
+int wifi_set_fcs_error_cb(wifi_fcs_error_cb_t cb);
+
+/**
+  * @brief FCS error frame handler (called from LMAC layer)
+  *
+  * This function is called from rxl layer when FCS error frames are received.
+  * It will invoke the registered callback if one exists.
+  *
+  * @param rx_head  Pointer to RX header descriptor
+  *
+  * @return 0 on success
+  */
+int wifi_fcs_error_handler(void* rx_head);
+
+/**
+  * @brief Process FCS error frame for promiscuous mode statistics
+  *
+  * This function is called from LMAC layer to process FCS error frames
+  * that are filtered out before reaching the normal promiscuous callback.
+  *
+  * @param rx_head  Pointer to RX header descriptor (for RSSI extraction)
+  *
+  * @return 0 on success
+  */
+int process_fcs_error_frame(void* rx_head);
 
 #ifdef __cplusplus
 }

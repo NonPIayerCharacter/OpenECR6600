@@ -1,0 +1,6 @@
+
+menuconfig WEB_SOCKET_CLIENT
+	bool "Web Socket Client Component Support"
+	select TRANSPORT_TCP
+	select URLPARSER
+	default n

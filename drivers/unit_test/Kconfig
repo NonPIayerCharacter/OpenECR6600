@@ -68,6 +68,11 @@ if DRV_UNIT_TEST
 	config DRV_UNIT_TEST_SPI
         bool "driver_spi unit test"
         default n
+
+    config DRV_UNIT_TEST_LCD
+        bool "driver_lcd unit test"
+        depends on LCD && CLI
+        default n
 		
 	config DRV_UNIT_TEST_PROCESS_SENSOR
         bool "driver_process_sensor unit test"

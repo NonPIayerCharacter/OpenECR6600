@@ -185,8 +185,9 @@ void sys_sem_free(sys_sem_t *sem)
 void sys_sem_signal(sys_sem_t *sem)
 {
 	LWIP_ASSERT( "sys_sem_signal: sem != SYS_SEM_NULL", (SemaphoreHandle_t)sem != SYS_SEM_NULL );
-	if (errQUEUE_FULL == xSemaphoreGive( *sem )) {
-    	os_printf(LM_APP, LL_INFO, "----queue full! %p\n", sem);
+    while (errQUEUE_FULL == xSemaphoreGive( *sem )) {
+        os_printf(LM_APP, LL_DBG, "----queue full! %p\n", sem);
+        os_msleep(1);
     }
 }
 

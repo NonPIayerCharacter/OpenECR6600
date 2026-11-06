@@ -18,7 +18,7 @@
 #include "oshal.h"
 #include "cli.h"
 #include "flash_internal.h"
-
+#include "pit.h"
 
 #ifdef CONFIG_FLASH_BOYA
 
@@ -26,7 +26,27 @@
 
 /* BOYA */
 #define BY25Q32CS			0x164068
+#define BY25Q16ES			0x154068
+/* memory protect */
+#define PROTECT_ED_0x400000			0x021C			//all
+#define PROTECT_ED_0x3FF000			0x4244			//1023/1024
+#define PROTECT_ED_0x3FE000			0x4248			//511/512
+#define PROTECT_ED_0x3FC000			0x424C			//255/256
+#define PROTECT_ED_0x3F8000			0x4250			//127/128
+#define PROTECT_ED_0x3F0000			0x4204			//63/64
+#define PROTECT_ED_0x3E0000			0x4208			//31/32
+#define PROTECT_ED_0x3C0000			0x420C			//15/16
+#define PROTECT_ED_0x380000			0x4210			//7/8
+#define PROTECT_ED_0x300000			0x4214			//3/4
+#define PROTECT_ED_0x200000			0x0238			//1/2
+#define PROTECT_ED_0x100000			0x0234			//1/4
+#define PROTECT_ED_0x80000			0x0230			//1/8
+#define PROTECT_ED_0x40000			0x022C			//1/16
+#define PROTECT_ED_0x00				0x0200			//NULL
 
+
+#define BOYA_BP_BIT					0x427C
+#define BOYA_BP_MASK				0xBD83
 
 static const T_SPI_FLASH_PARAM boya_flash_params[] = 
 {
@@ -36,6 +56,16 @@ static const T_SPI_FLASH_PARAM boya_flash_params[] =
 		.flash_name = "BY25Q32CS",
 		.flash_otp_star_addr  = FLASH_OTP_START_ADDR_0x1000,
 		.flash_otp_block_size = FLASH_OTP_BLOCK_SIZE_256_BYTE,
+		.flash_otp_block_num  = FLASH_OTP_BLOCK_NUM_3,
+		.flash_otp_block_interval = FLASH_OTP_BLOCK_INTERNAL_4096_BYTE,
+	},
+
+	{
+		.flash_id = BY25Q16ES,
+		.flash_size = FLASH_SIZE_2_MB,
+		.flash_name = "BY25Q16ES",
+		.flash_otp_star_addr  = FLASH_OTP_START_ADDR_0x1000,
+		.flash_otp_block_size = FLASH_OTP_BLOCK_SIZE_1024_BYTE,
 		.flash_otp_block_num  = FLASH_OTP_BLOCK_NUM_3,
 		.flash_otp_block_interval = FLASH_OTP_BLOCK_INTERNAL_4096_BYTE,
 	},
@@ -50,6 +80,16 @@ static int spiFlash_BOYA_check_addr(unsigned int flash_id, int addr, int length)
 		if(!((addr>=0x001000 && addr<=0x0010FF && ((addr + length - 1) <= 0x0010FF))
 			||(addr>=0x002000 && addr<=0x0020FF && ((addr + length - 1) <= 0x0020FF))
 			||(addr>=0x003000 && addr<=0x0030FF && ((addr + length - 1) <= 0x0030FF))))
+		{
+			//cli_printf("addr or length error\n");
+			return FLASH_RET_PARAMETER_ERROR;
+		}
+	}
+	else if(flash_id == BY25Q16ES)
+	{
+		if(!((addr>=0x001000 && addr<=0x0013FF && ((addr + length - 1) <= 0x0013FF))
+			||(addr>=0x002000 && addr<=0x0023FF && ((addr + length - 1) <= 0x0023FF))
+			||(addr>=0x003000 && addr<=0x0033FF && ((addr + length - 1) <= 0x0033FF))))
 		{
 			//cli_printf("addr or length error\n");
 			return FLASH_RET_PARAMETER_ERROR;
@@ -192,7 +232,7 @@ int spiFlash_BOYA_OTP_Lock(struct _T_SPI_FLASH_DEV *  p_flash_dev, int LB)
 
 	data = (data & 0xFF)<<8;
 
-	if(flash_id == BY25Q32CS )//BY25Q32CS
+	if((flash_id == BY25Q32CS) || (flash_id == BY25Q16ES)  )//BY25Q32CS BY25Q16ES
 	{		
 	    data = data>>8;
 		switch (LB)
@@ -241,6 +281,14 @@ int spiFlash_BOYA_OTP_Se(struct _T_SPI_FLASH_DEV *  p_flash_dev, unsigned int ad
 	if(flash_id == BY25Q32CS)
 	{
 		if(!((addr>=0x001000 && addr<=0x0010FF)||(addr>=0x002000 && addr<=0x0020FF)||(addr>=0x003000 && addr<=0x0030FF)))
+		{
+			//cli_printf("addr or length error\n");
+			return FLASH_RET_PARAMETER_ERROR;
+		}
+	}
+	else if(flash_id == BY25Q16ES)
+	{
+		if(!((addr>=0x001000 && addr<=0x0013FF)||(addr>=0x002000 && addr<=0x0023FF)||(addr>=0x003000 && addr<=0x0033FF)))
 		{
 			//cli_printf("addr or length error\n");
 			return FLASH_RET_PARAMETER_ERROR;
@@ -414,8 +462,101 @@ int spiFlash_BOYA_OTP_Write(struct _T_SPI_FLASH_DEV *  p_flash_dev, unsigned int
 	return FLASH_RET_SUCCESS;	
 }
 
-
-
+int  spiflash_BOYA_wr_protect(unsigned int addr)
+{
+	unsigned int protect_value = 0;
+	unsigned int rdsr = 0;
+	if ( (Flash_ID & 0xFFFFFF)  == BY25Q32CS )
+	{
+		if(addr == 0x021C)
+		{
+			//os_printf(LM_CMD,LL_INFO,"PROTECT_ED_ALL\n ");
+			protect_value = PROTECT_ED_0x400000;
+		}
+		else if((addr >= 0x3FF000))
+		{
+			//os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x3FF000\n ");
+			protect_value = PROTECT_ED_0x3FF000;
+		}
+		else if((addr >= 0x3FE000))
+		{
+			//os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x3FE000\n ");
+			protect_value = PROTECT_ED_0x3FE000;
+		}
+		else if(addr >= 0x3FC000)
+		{
+			//os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x3FC000\n ");
+			protect_value = PROTECT_ED_0x3FC000;
+		}
+		else if(addr >= 0x3F8000)
+		{
+			//os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x3F8000\n ");
+			protect_value = PROTECT_ED_0x3F8000;
+		}
+		else if(addr >= 0x3F0000)
+		{
+			//os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x3F0000\n ");
+			protect_value = PROTECT_ED_0x3F0000;
+		}
+		else if(addr >= 0x3E0000)
+		{
+			//os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x3E0000\n ");
+			protect_value = PROTECT_ED_0x3E0000;
+		}
+		else if(addr >= 0x3C0000)
+		{
+			//os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x3C0000\n ");
+			protect_value = PROTECT_ED_0x3C0000;
+		}
+		else if(addr >= 0x380000)
+		{
+			//os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x380000\n ");
+			protect_value = PROTECT_ED_0x380000;
+		}
+		else if(addr >= 0x300000)
+		{
+			//os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x300000\n ");
+			protect_value = PROTECT_ED_0x300000;
+		}
+		else if(addr >= 0x200000)
+		{
+			//os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x200000\n ");
+			protect_value = PROTECT_ED_0x200000;
+		}
+		else if(addr >= 0x100000)
+		{
+			//os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x100000\n ");
+			protect_value = PROTECT_ED_0x100000;
+		}
+		else if(addr >= 0x80000)
+		{
+			//os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x80000\n ");
+			protect_value = PROTECT_ED_0x80000;
+		}
+		else if(addr >= 0x40000)
+		{
+			//os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x40000\n ");
+			protect_value = PROTECT_ED_0x40000;
+		}
+		else
+		{
+			//os_printf(LM_CMD,LL_INFO,"222PPROTECT_ED_0x00\n ");
+			protect_value = PROTECT_ED_0x00;
+		}
+		
+		spiFlash_format_wr_vol(SPIFLASH_CMD_WRSR_1, protect_value , 2);
+		
+		//spiFlash_format_wr(SPIFLASH_CMD_WRSR_1, protect_value , 2);
+		//os_printf(LM_CMD,LL_INFO,"protect_value = 0x%x\n ",protect_value);
+    	rdsr = (spiFlash_cmd_rdSR_1() & 0xff )| ((spiFlash_cmd_rdSR_2() & 0xff) << 8);
+    	if((rdsr & BOYA_BP_BIT)   != protect_value )
+    	{
+    		os_printf(LM_CMD,LL_INFO,"error:flash protect_value = 0x%x,rdsr = 0x%x\n ",protect_value, rdsr);
+    		system_assert(0);
+    	}
+	}
+	return protect_value;
+}
 
 
 int spiFlash_BOYA_probe(T_SPI_FLASH_DEV *p_flash_dev)
@@ -453,7 +594,57 @@ int spiFlash_BOYA_probe(T_SPI_FLASH_DEV *p_flash_dev)
 	return FLASH_RET_SUCCESS;
 }
 
+#define CNT_NUM 3
+unsigned int flash_crc[CNT_NUM] = {0};
+unsigned int offset[CNT_NUM] = {4096,8192,0x10000};
+unsigned char*  check_buff;
 
+unsigned int i,cnt;
+
+int spiFlash_BOYA_FT(void)
+{
+	check_buff = (unsigned char *)os_zalloc(64*1024);		
+	if (!check_buff)
+	{
+		return FLASH_RET_MALLOC_ERROR;
+	}
+	
+	if(Flash_ID == 0x164068)
+	{		
+		unsigned irq_flag = system_irq_save_tick_compensation();
+		//start_time = drv_pit_get_tick();
+		for(i=0;i<CNT_NUM;i++)
+		{
+			flash_crc[i] = 0;
+			cnt = 0;
+
+			while(cnt < (0x400000/offset[i]))
+			{
+				memcpy(check_buff,(char *)(0x800000 +  (cnt *offset[i])), offset[i]);
+				flash_crc[i] = ef_calc_crc32(flash_crc[i], check_buff, offset[i]);
+				cnt++;
+			}
+		}
+		//end_time = drv_pit_get_tick();
+		system_irq_restore_tick_compensation(irq_flag);
+		//os_printf(LM_CMD,LL_ERR,"boya ft :%d us\r\n", (unsigned int)((end_time  - start_time) / 40));
+		if((flash_crc[0] != flash_crc[1])  || (flash_crc[0] != flash_crc[2]))
+		{
+			//os_printf(LM_CMD,LL_ERR,"flash_crc[0]=0x%08x [1]=0x%08x [2]=0x%08x \r\n", flash_crc[0], flash_crc[1], flash_crc[2]);
+			if(check_buff != NULL)
+			{
+				os_free(check_buff);
+			}
+			return (FLASH_RET_CRC_ERROR);
+		}
+	}
+	
+	if(check_buff != NULL)
+	{
+		os_free(check_buff);
+	}
+	return FLASH_RET_SUCCESS;
+}
 #endif//end CONFIG_FLASH_BOYA
 
 

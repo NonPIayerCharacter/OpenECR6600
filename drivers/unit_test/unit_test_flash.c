@@ -93,7 +93,7 @@ void xip_stress_test(void)
 	}
 }
 
-static int stress_tet(cmd_tbl_t *t, int argc, char *argv[])
+static int stress_tet(int argc, char *argv[])
 {
 	xip_stress_test();
 	return CMD_RET_SUCCESS;
@@ -102,7 +102,7 @@ static int stress_tet(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_flash, stress, stress_tet, "unit test flash erase", "ut_flash erase [address] [length]");
 #endif
 
-static int utest_flash_status(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_flash_status(int argc, char *argv[])
 {
 	os_printf(LM_CMD,LL_ERR,"SR1 =  0x%x\n", spiFlash_cmd_rdSR_1() & 0xffff);
 	os_printf(LM_CMD,LL_ERR,"SR2 =  0x%x\n", spiFlash_cmd_rdSR_2() & 0xffff);
@@ -112,7 +112,38 @@ static int utest_flash_status(cmd_tbl_t *t, int argc, char *argv[])
 }
 CLI_SUBCMD(ut_flash, status, utest_flash_status, "unit test flash status", "ut_flash status");
 
-static int utest_flash_erase(cmd_tbl_t *t, int argc, char *argv[])
+
+static int utest_flash_status_wr1(int argc, char *argv[])
+{
+	unsigned int stadata = 0;
+	if (argc == 2)
+	{
+		stadata = (int)strtoul(argv[1], NULL, 0);
+	}
+	os_printf(LM_CMD,LL_ERR,"stadata =  0x%x\n",stadata);
+	
+	spiFlash_cmd_wrSR_0(stadata);
+	return CMD_RET_SUCCESS;
+	
+}
+CLI_SUBCMD(ut_flash, wr1, utest_flash_status_wr1, "unit test flash status", "ut_flash status");
+
+static int utest_flash_status_wr2(int argc, char *argv[])
+{
+	unsigned int stadata = 0;
+	if (argc == 2)
+	{
+		stadata = (int)strtoul(argv[1], NULL, 0);
+	}
+	os_printf(LM_CMD,LL_ERR,"stadata =  0x%x\n",stadata);
+	
+	spiFlash_cmd_wrSR_2(stadata);
+	return CMD_RET_SUCCESS;
+	
+}
+CLI_SUBCMD(ut_flash, wr2, utest_flash_status_wr2, "unit test flash status", "ut_flash status");
+
+static int utest_flash_erase(int argc, char *argv[])
 {
 	int ret = 0;
 	unsigned int addr;
@@ -144,7 +175,7 @@ static int utest_flash_erase(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_flash, erase, utest_flash_erase, "unit test flash erase", "ut_flash erase [address] [length]");
 
 
-static int utest_flash_write(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_flash_write(int argc, char *argv[])
 {
 	int i, ret = 0;
 	unsigned int addr;
@@ -204,7 +235,7 @@ CLI_SUBCMD(ut_flash, write, utest_flash_write, "unit test flash write", "ut_flas
 
 #ifdef CONFIG_FLASH_TH
 
-static int utest_flash_pro(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_flash_pro(int argc, char *argv[])
 {
 	unsigned int addr;
 
@@ -218,14 +249,43 @@ static int utest_flash_pro(cmd_tbl_t *t, int argc, char *argv[])
 		return CMD_RET_FAILURE;
 	}
 	
-	spiflash_TH_wr_protect( addr);
+	extern unsigned int spiflash_ZB_wr_protect(unsigned int addr);
+	
+	spiflash_ZB_wr_protect( addr);
+	
+	#ifdef CONFIG_FLASH_TH
+	if ((Flash_ID & 0xFF) == 0xEB)
+	{
+		spiflash_TH_wr_protect( addr);
+		return CMD_RET_SUCCESS;
+	}
+	#endif
+	
+	#ifdef CONFIG_FLASH_GD
+	if ((Flash_ID & 0xFFFFFF) == 0x1640C8)
+	{
+		spiflash_GD_wr_protect( addr);
+		return CMD_RET_SUCCESS;
+	}
+	#endif
+	
+	#ifdef CONFIG_FLASH_BOYA
+	if ((Flash_ID & 0xFFFFFF) == 0x164068)
+	{
+		spiflash_BOYA_wr_protect( addr);
+		return CMD_RET_SUCCESS;
+	}
+	#endif
+	
+	os_printf(LM_CMD,LL_ERR,"flash protect is unsupported, Flash_ID = 0x%x\n", Flash_ID);
+	//spiflash_TH_wr_protect( addr);
 	return CMD_RET_SUCCESS;
 
 }
 CLI_SUBCMD(ut_flash, pro, utest_flash_pro, "unit test flash pro", "ut_flash pro [address] [length]");
 
 #endif
-static int utest_flash_read(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_flash_read(int argc, char *argv[])
 {
 	unsigned int addr;
 	unsigned int length;
@@ -283,7 +343,7 @@ static int utest_flash_read(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_flash, read, utest_flash_read, "unit test flash read", "ut_flash read [address] [length]");
 
 #ifdef CONFIG_FLASH_TH
-	static int utest_flash_FT(cmd_tbl_t *t, int argc, char *argv[])
+	static int utest_flash_FT(int argc, char *argv[])
 	{
 		int ret;
 		ret = spiflash_TH_FT();
@@ -293,7 +353,7 @@ CLI_SUBCMD(ut_flash, read, utest_flash_read, "unit test flash read", "ut_flash r
 	}
 	CLI_SUBCMD(ut_flash, ft, utest_flash_FT, "unit test flash FT", "ut_flash FT");
 #endif
-static int utest_flash_cs_stress(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_flash_cs_stress(int argc, char *argv[])
 {
 
 	unsigned int i,j = 0,ret;
@@ -339,7 +399,7 @@ CLI_SUBCMD(ut_flash, cs_stress, utest_flash_cs_stress, "unit test flash FT", "ut
 #if 0
 unsigned char sf_Test_[F_SIZE]  __attribute__((section(".dma.data")));
 
-static int utest_flash_read_dma(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_flash_read_dma(int argc, char *argv[])
 {
 	unsigned int addr;
 	unsigned int length;
@@ -398,7 +458,7 @@ static int utest_flash_read_dma(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_flash, read_dma, utest_flash_read_dma, "unit test flash read", "ut_flash read [address] [length]");
 
 
-static int utest_flash_write_dma(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_flash_write_dma(int argc, char *argv[])
 {
 	int i, ret = 0;
 	unsigned int addr;
@@ -458,7 +518,7 @@ CLI_SUBCMD(ut_flash, write_dma, utest_flash_write_dma, "unit test flash write", 
 #endif
 
 
-static int utest_flash_otp_read(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_flash_otp_read(int argc, char *argv[])
 {
 	unsigned int addr;
 	unsigned int length;
@@ -523,7 +583,7 @@ static int utest_flash_otp_read(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_flash, otpread, utest_flash_otp_read, "unit test flash otpread", "ut_flash otpread [address] [length]");
 
 
-static int utest_flash_otp_write(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_flash_otp_write(int argc, char *argv[])
 {
  	unsigned int addr;
 	unsigned int length;
@@ -596,7 +656,7 @@ static int utest_flash_otp_write(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_flash, otpwrite, utest_flash_otp_write, "unit test flash otpwrite", "ut_flash otpwrite [address] [length]([value])");
 
 #if 1
-static int utest_flash_otp_erase(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_flash_otp_erase(int argc, char *argv[])
 {
 	unsigned int i = 0;
 	//unsigned int length = F_SIZE;
@@ -638,7 +698,7 @@ CLI_SUBCMD(ut_flash, otperase, utest_flash_otp_erase, "unit test flash otperase"
 #endif
 
 
-static int utest_flash_otp_read_aes(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_flash_otp_read_aes(int argc, char *argv[])
 {
 	unsigned int addr;
 	unsigned int length;
@@ -699,7 +759,7 @@ static int utest_flash_otp_read_aes(cmd_tbl_t *t, int argc, char *argv[])
 }
 CLI_SUBCMD(ut_flash, otpread_aes, utest_flash_otp_read_aes, "unit test flash otpread_aes", "ut_flash otpread_aes [address] [length]");
 
-static int utest_flash_otp_write_aes(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_flash_otp_write_aes(int argc, char *argv[])
 {
  	unsigned int addr;
 	unsigned int length;
@@ -756,6 +816,55 @@ static int utest_flash_otp_write_aes(cmd_tbl_t *t, int argc, char *argv[])
 }
 CLI_SUBCMD(ut_flash, otpwrite_aes, utest_flash_otp_write_aes, "unit test flash otpwrite_aes", "ut_flash otpwrite_aes [address] [length]([value])");
 
+static int cmd_random_flash_write(int argc, char *argv[])
+{
+    unsigned int data;
+    int i;
+    
+    if (argc >= 2)
+    {
+        unsigned int addr = strtoul(argv[1], NULL, 0);
+        unsigned int size = strtoul(argv[2], NULL, 0);
+        unsigned int random_addr = (addr+os_random()%size)&0xFFFFFFFC;
+    
+        // 读取当前地址数据
+        drv_spiflash_read(random_addr, (unsigned char*)&data, 4);
+        os_printf(LM_OS, LL_INFO, "read[0x%x] 0x%x\n", random_addr, data);
+        
+        // 查找第一个为1的bit并将其清零
+        for (i = 0; i < 32; i++) {
+            if (data & (1U << i)) {
+                data &= ~(1U << i);
+                break;
+            }
+        }
+        if (i == 32) {
+            os_printf(LM_OS, LL_ERR, "No bit to clear\n");
+            return CMD_RET_FAILURE;
+        }
+        else
+        {
+            os_printf(LM_OS, LL_INFO, "Clear bit %d, data = 0x%x\n", i, data);
+        }
+    
+        os_printf(LM_OS, LL_INFO, "write[0x%x] 0x%x\n", random_addr, data); 
+        drv_spiflash_write(random_addr, (unsigned char*)&data, 4);
+        
+        // 读取当前地址数据
+        memset((void*)&data, 0, 4);
+        drv_spiflash_read(random_addr, (unsigned char*)&data, 4);
+        os_printf(LM_OS, LL_INFO, "read again[0x%x] 0x%x\n", random_addr, data);
+
+        return CMD_RET_SUCCESS;
+    }
+    else
+    {
+        os_printf(LM_OS, LL_INFO, "cmd need start addr and size\r\n");
+        return CMD_RET_FAILURE;
+    }
+}
+
+CLI_SUBCMD(ut_flash, flash_random_write, cmd_random_flash_write, "flash random write 1bit", "ut_flash flash_random_write addr size");
 
 CLI_CMD(ut_flash, NULL, "unit test flash", "test_flash");
 

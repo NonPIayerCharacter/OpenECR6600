@@ -37,3 +37,11 @@ config OTA_MODE_STRING
 	default "OTA_COMPRESSION_UPDATE" if OTA_COMPRESSION_UPDATE
 	default "OTA_DIFFERENTIAL_UPDATE" if OTA_DIFFERENTIAL_UPDATE
 	default "OTA_AB_UPDATE" if OTA_AB_UPDATE
+
+config SNIFFER
+	bool "WiFi Sniffer with RSSI Statistics"
+	default y
+	help
+	  Enable customized WiFi sniffer feature with RSSI statistics.
+	  This feature provides RSSI-based packet statistics, FCS error packet
+	  capture, and channel switching during sniffing.

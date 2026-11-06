@@ -1,4 +1,4 @@
 
-config PHREAD
-	bool 
+config PTHREAD
+	bool "Pthread Support"
 	default n

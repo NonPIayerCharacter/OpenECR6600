@@ -9,8 +9,8 @@ int hal_gpio_init()
 
 int hal_gpio_read(int gpio_num)
 {
-	int ret;
-	ret = drv_gpio_read( gpio_num );
+	unsigned int ret;
+	drv_gpio_read( gpio_num, &ret);
 	return ret;
 }
 

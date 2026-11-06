@@ -88,5 +88,27 @@ int32_t hexToDec(char *source, uint8_t len)
     return sum;
 }
 
+int32_t strToHex(char *source, uint8_t len)
+{
+    long sum = 0;
+    long t = 1;
+    int i;
 
+    for(i=len-1; i>=0; i--)
+    {
+        sum += t * hex2num(*(source + i));
+        t *= 16;
+    }
+
+	return sum;
+}
+
+char num2hex(uint8_t n)
+{
+    if(n >= 0 && n <= 9)
+        n = n + '0';
+    else if(n >= 10 && n <= 15)
+        n = n + 'A' - 10;
+    return n;
+}
 

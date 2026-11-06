@@ -5,7 +5,7 @@
 #include "cli.h"
 os_sem_handle_t spi_slave_rx_process;
 
-static int spi_init_test(cmd_tbl_t *t, int argc, char *argv[])
+static int spi_init_test( int argc, char *argv[])
 {
 	spi_interface_config_t spi_master_dev = 
 		{	
@@ -29,7 +29,7 @@ static int spi_init_test(cmd_tbl_t *t, int argc, char *argv[])
 
 CLI_CMD(spi_init, spi_init_test, "spi_init_test", "spi_init_test");
 
-static int spi_write_test(cmd_tbl_t *t, int argc, char *argv[])
+static int spi_write_test( int argc, char *argv[])
 {
 	unsigned int len;
 	len = strtoul(argv[1], NULL, 0);
@@ -52,7 +52,7 @@ static int spi_write_test(cmd_tbl_t *t, int argc, char *argv[])
 
 CLI_CMD(spi_tx, spi_write_test, "test_spi_write", "test_spi_write");
 
-static int spi_write_withaddr_test(cmd_tbl_t *t, int argc, char *argv[])
+static int spi_write_withaddr_test( int argc, char *argv[])
 {
 	spi_interface_config_t spi_master_dev = 
 	{	
@@ -91,7 +91,7 @@ static int spi_write_withaddr_test(cmd_tbl_t *t, int argc, char *argv[])
 
 CLI_CMD(spi_tx_addr, spi_write_withaddr_test, "test_spi_write", "test_spi_write");
 
-static int spi_read_test(cmd_tbl_t *t, int argc, char *argv[])
+static int spi_read_test( int argc, char *argv[])
 {
 	spi_transaction_t config;
 	config.cmmand = 0x0B;
@@ -124,7 +124,7 @@ static int spi_read_test(cmd_tbl_t *t, int argc, char *argv[])
 CLI_CMD(spi_rx, spi_read_test, "test_spi_read", "test_spi_read");
 
 
-static int spi_slave_init_test(cmd_tbl_t *t, int argc, char *argv[])
+static int spi_slave_init_test( int argc, char *argv[])
 {
 	spi_slave_interface_config_t  spi_slave_dev = 
 	{			
@@ -144,7 +144,7 @@ CLI_CMD(slave_init, spi_slave_init_test, "spi_slave_init", "spi_slave_init");
 
 
 
-static int spi_slave_write_test(cmd_tbl_t *t, int argc, char *argv[])
+static int spi_slave_write_test( int argc, char *argv[])
 {
 	unsigned char test[512]={0};
 	int i;
@@ -186,7 +186,7 @@ void spi_slave_read_task()
 }
 
 
-static int spi_slave_read_test(cmd_tbl_t *t, int argc, char *argv[])
+static int spi_slave_read_test( int argc, char *argv[])
 {
 	#if 1
 
@@ -221,7 +221,7 @@ CLI_CMD(slave_rx, spi_slave_read_test, "test_spi_slave_read", "test_spi_slave_re
 
 
 
-static int spi_test(cmd_tbl_t *t, int argc, char *argv[])
+static int spi_test( int argc, char *argv[])
 {	
 	os_printf(LM_APP, LL_INFO, "new_len =%d\n", new_len);
 	os_printf(LM_APP, LL_INFO, "remain_read =%d\n", remain_read * 4);

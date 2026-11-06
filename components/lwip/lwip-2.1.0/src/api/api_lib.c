@@ -204,7 +204,9 @@ netconn_prepare_delete(struct netconn *conn)
 #if LWIP_SO_SNDTIMEO || LWIP_SO_LINGER
   /* get the time we started, which is later compared to
      sys_now() + conn->send_timeout */
+  #if LWIP_TCP
   API_MSG_VAR_REF(msg).msg.sd.time_started = sys_now();
+  #endif
 #else /* LWIP_SO_SNDTIMEO || LWIP_SO_LINGER */
 #if LWIP_TCP
   API_MSG_VAR_REF(msg).msg.sd.polls_left =

@@ -1,0 +1,11 @@
+node_modules
+yarn.lock
+npm-debug.log
+/coverage
+
+# Only apps should have lockfiles
+npm-shrinkwrap.json
+package-lock.json
+yarn.lock
+
+.npmignore

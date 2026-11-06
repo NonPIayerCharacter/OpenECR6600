@@ -25,12 +25,13 @@ long long platform_tick_get_ms()
     return os_time_get();
 }
 
+#if 0
 void ms_to_timeval(int timeout_ms, struct timeval *tv)
 {
     tv->tv_sec = timeout_ms / 1000;
     tv->tv_usec = (timeout_ms - (tv->tv_sec * 1000)) * 1000;
 }
-
+#endif
 void *mqtt_realloc(void *ptr, size_t size)
 {
     char *ret;

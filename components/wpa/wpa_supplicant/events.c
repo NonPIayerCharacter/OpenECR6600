@@ -9,6 +9,7 @@
 #include "includes.h"
 
 #include "common.h"
+#include "eapol_supp/eapol_supp_sm.h"
 #include "rsn_supp/wpa.h"
 #include "eloop.h"
 #include "config.h"
@@ -33,7 +34,7 @@
 #include "scan.h"
 #include "offchannel.h"
 #include "wpas_pmk.h"
-
+#include "blacklist.h"
 #include "system_event.h"
 
 uint8_t g_balconn = 0;
@@ -43,7 +44,7 @@ static int wpas_select_network_from_last_scan(struct wpa_supplicant *wpa_s,
 					      int new_scan, int own_request);
 #endif /* CONFIG_NO_SCAN_PROCESSING */
 
-
+#ifdef CONFIG_WIFI_STA_SURPORT
 static int wpas_temp_disabled(struct wpa_supplicant *wpa_s,
 			      struct wpa_ssid *ssid)
 {
@@ -61,7 +62,7 @@ static int wpas_temp_disabled(struct wpa_supplicant *wpa_s,
 #endif
 	return 0;
 }
-
+#endif
 
 #ifndef CONFIG_NO_SCAN_PROCESSING
 #if 0
@@ -119,7 +120,7 @@ void wpas_network_reenabled(void *eloop_ctx, void *timeout_ctx)
 	}
 }
 
-
+#ifdef CONFIG_WIFI_STA_SURPORT
 static struct wpa_bss * wpa_supplicant_get_new_bss(
 	struct wpa_supplicant *wpa_s, const u8 *bssid)
 {
@@ -133,7 +134,6 @@ static struct wpa_bss * wpa_supplicant_get_new_bss(
 
 	return bss;
 }
-
 
 static void wpa_supplicant_update_current_bss(struct wpa_supplicant *wpa_s)
 {
@@ -149,7 +149,6 @@ static void wpa_supplicant_update_current_bss(struct wpa_supplicant *wpa_s)
 	if (bss)
 		wpa_s->current_bss = bss;
 }
-
 
 static int wpa_supplicant_select_config(struct wpa_supplicant *wpa_s)
 {
@@ -228,7 +227,7 @@ static int wpa_supplicant_select_config(struct wpa_supplicant *wpa_s)
 
 	return 0;
 }
-
+#endif
 
 void wpa_supplicant_stop_countermeasures(void *eloop_ctx, void *sock_ctx)
 {
@@ -285,6 +284,9 @@ void wpa_supplicant_mark_disassoc(struct wpa_supplicant *wpa_s)
 
 	//if (bssid_changed)
 	//	wpas_notify_bssid_changed(wpa_s);
+	eapol_sm_notify_portEnabled(wpa_s->eapol, FALSE);
+	eapol_sm_notify_portValid(wpa_s->eapol, FALSE);
+	eapol_sm_notify_config(wpa_s->eapol, NULL, NULL);
 
 	wpa_s->ap_ies_from_associnfo = 0;
 	wpa_s->current_ssid = NULL;
@@ -293,7 +295,7 @@ void wpa_supplicant_mark_disassoc(struct wpa_supplicant *wpa_s)
 	wpa_s->wnmsleep_used = 0;
 }
 
-
+#ifdef CONFIG_WIFI_STA_SURPORT
 static void wpa_find_assoc_pmkid(struct wpa_supplicant *wpa_s)
 {
 	struct wpa_ie_data ie;
@@ -309,7 +311,6 @@ static void wpa_find_assoc_pmkid(struct wpa_supplicant *wpa_s)
 	wpa_dbg(wpa_s, MSG_DEBUG, "RSN: PMKID from assoc IE %sfound from "
 		"PMKSA cache", pmksa_set == 0 ? "" : "not ");
 }
-
 
 static int wpa_supplicant_dynamic_keys(struct wpa_supplicant *wpa_s)
 {
@@ -331,6 +332,7 @@ static int wpa_supplicant_dynamic_keys(struct wpa_supplicant *wpa_s)
 
 	return 1;
 }
+#endif
 
 
 /**
@@ -489,6 +491,17 @@ static void wpa_set_wep_to_psk(struct wpa_ssid * ssid)
     }
 }
 
+static int wep_ok = 1;
+int get_wep_ok_flag()
+{
+    return wep_ok;
+}
+
+void set_wep_ok_flag(int wep_flag)
+{
+    wep_ok = wep_flag;
+}
+
 static int wpa_supplicant_ssid_bss_match(struct wpa_supplicant *wpa_s,
 					 struct wpa_ssid *ssid,
 					 struct wpa_bss *bss)
@@ -496,7 +509,6 @@ static int wpa_supplicant_ssid_bss_match(struct wpa_supplicant *wpa_s,
 	struct wpa_ie_data ie;
 	int proto_match = 0;
 	const u8 *rsn_ie, *wpa_ie;
-	int wep_ok;
 
 	/*ret = wpas_wps_ssid_bss_match(wpa_s, ssid, bss);
 	if (ret >= 0)
@@ -509,7 +521,7 @@ static int wpa_supplicant_ssid_bss_match(struct wpa_supplicant *wpa_s,
 		  ssid->wep_key_len[ssid->wep_tx_keyidx] > 0) ||
 		 (ssid->key_mgmt & WPA_KEY_MGMT_IEEE8021X_NO_WPA));
 	#else
-	wep_ok = 1;
+	wep_ok = get_wep_ok_flag();
 	#endif
 	rsn_ie = wpa_bss_get_ie(bss, WLAN_EID_RSN);
 	while ((ssid->proto & WPA_PROTO_RSN) && rsn_ie) {
@@ -558,16 +570,14 @@ static int wpa_supplicant_ssid_bss_match(struct wpa_supplicant *wpa_s,
 			break;
 		}
 #ifdef CONFIG_SAE
-		if(wpa_key_mgmt_sae(ie.key_mgmt))
-			ssid->ieee80211w = MGMT_FRAME_PROTECTION_REQUIRED;
-		else
-			ssid->ieee80211w = MGMT_FRAME_PROTECTION_DEFAULT;
+		if(wpa_key_mgmt_sae(ie.key_mgmt) && ssid->ieee80211w != MGMT_FRAME_PROTECTION_REQUIRED)
+			ssid->ieee80211w = MGMT_FRAME_PROTECTION_OPTIONAL;
 #endif
 #ifdef CONFIG_IEEE80211W
-		if((ie.capabilities & WPA_CAPABILITY_MFPC))
+		if((ie.capabilities & WPA_CAPABILITY_MFPC &&
+			wpas_get_ssid_pmf(wpa_s, ssid) !=
+		    MGMT_FRAME_PROTECTION_REQUIRED))
 			ssid->ieee80211w = MGMT_FRAME_PROTECTION_OPTIONAL;
-		else
-			ssid->ieee80211w = NO_MGMT_FRAME_PROTECTION;
 			
 		if (!(ie.capabilities & WPA_CAPABILITY_MFPC) &&
 		    wpas_get_ssid_pmf(wpa_s, ssid) ==
@@ -576,9 +586,6 @@ static int wpa_supplicant_ssid_bss_match(struct wpa_supplicant *wpa_s,
 				"frame protection");
 			break;
 		}
-
-		if((ie.capabilities & WPA_CAPABILITY_MFPR))
-			ssid->ieee80211w = MGMT_FRAME_PROTECTION_REQUIRED;
 #endif /* CONFIG_IEEE80211W */
 		if ((ie.capabilities & WPA_CAPABILITY_MFPR) &&
 		    wpas_get_ssid_pmf(wpa_s, ssid) ==
@@ -928,6 +935,9 @@ struct wpa_ssid * wpa_scan_res_match(struct wpa_supplicant *wpa_s,
 #ifdef CONFIG_MBO
 	const u8 *assoc_disallow;
 #endif /* CONFIG_MBO */
+#ifdef CONFIG_WPS
+	struct wpa_blacklist *e = NULL;
+#endif
 
 	ie = wpa_bss_get_vendor_ie(bss, WPA_IE_VENDOR_TYPE);
 	wpa_ie_len = ie ? ie[1] : 0;
@@ -1327,6 +1337,48 @@ struct wpa_bss * wpa_supplicant_pick_network(struct wpa_supplicant *wpa_s,
 }
 
 
+static void wpa_apply_temp_ctrl_scan_mode(struct wpa_supplicant *wpa_s, uint8_t *scan_time_interval)
+{
+	extern uint8_t g_max_temp;
+	extern uint8_t g_passive_scan_time;
+	extern int hal_adc_tempsensor();
+
+	// Temperature control scan mode state variables
+	static uint8_t passive_scan_count = 0;      // Passive scan counter (0-3)
+	static uint8_t in_passive_cycle = 0;        // In passive scan cycle flag (0/1)
+
+	int temp = hal_adc_tempsensor();
+
+	os_printf(LM_APP, LL_INFO, "cur temp %d\n", temp);
+
+	// Temperature control scan mode logic
+	if (temp <= g_max_temp) {
+		// Temperature normal, restore active scan and clear state
+		wpa_s->conf->passive_scan = 0;
+		passive_scan_count = 0;
+		in_passive_cycle = 0;
+		os_printf(LM_APP, LL_INFO, "Temp normal, active scan, count cleared\n");
+	} else {
+		// Temperature high (temp > g_max_temp)
+		if (in_passive_cycle && passive_scan_count >= 3) {
+			// Completed 3 passive scans, force 1 active scan
+			wpa_s->conf->passive_scan = 0;
+			*scan_time_interval = g_passive_scan_time;
+			passive_scan_count = 0;  // Reset counter for next cycle
+			// Keep in_passive_cycle = 1, will check temp again next time
+			os_printf(LM_APP, LL_INFO, "High temp, forced active scan after 3 passive, count reset\n");
+		} else {
+			// Execute passive scan
+			wpa_s->conf->passive_scan = 1;
+			*scan_time_interval = g_passive_scan_time;
+			passive_scan_count++;
+			in_passive_cycle = 1;
+			os_printf(LM_APP, LL_INFO, "High temp, passive scan %d/3\n", passive_scan_count);
+		}
+	}
+}
+
+
 static void wpa_supplicant_req_new_scan(struct wpa_supplicant *wpa_s,
 					int timeout_sec, int timeout_usec)
 {
@@ -1561,6 +1613,36 @@ static int wpa_supplicant_need_to_roam(struct wpa_supplicant *wpa_s,
 #endif /* COMPILE_WARNING_OPTIMIZE_WPA */
 
 
+static int calculate_next_scan_interval(struct wpa_supplicant *wpa_s)
+{
+	int interval = 1;
+	#ifdef CONFIG_AI_VLLM
+	struct os_reltime has_scanned_time, now;
+
+	os_get_reltime(&now);
+	os_reltime_sub(&now, &wpa_s->scanning_time, &has_scanned_time);
+
+	if (has_scanned_time.sec > 30) {
+		interval = 5;
+	}
+	#endif /* CONFIG_AI_VLLM */
+
+	return interval;
+}
+
+static void wpas_notify_wifi_event(struct wpa_supplicant *wpa_s,
+					   system_event_id_t event_id)
+{
+	system_event_t evt;
+
+	os_memset(&evt, 0, sizeof(evt));
+	evt.event_id = event_id;
+	if (wpa_s->ifname && strlen(wpa_s->ifname) == 3 /* wlX */) {
+		evt.vif = wpa_get_drv_idx_by_name(wpa_s->ifname);
+	}
+
+	sys_event_send(&evt);
+}
 /* Return != 0 if no scan results could be fetched or if scan results should not
  * be shared with other virtual interfaces. */
 static int _wpa_supplicant_event_scan_results(struct wpa_supplicant *wpa_s,
@@ -1568,6 +1650,7 @@ static int _wpa_supplicant_event_scan_results(struct wpa_supplicant *wpa_s,
 					      int own_request)
 {
 	struct wpa_scan_results *scan_res = NULL;
+	wifi_nv_info_t *wifi_nv_info = get_wifi_nv_info();
 	int ret = 0;
 	int ap = 0;
 #ifndef CONFIG_NO_RANDOM_POOL
@@ -1593,12 +1676,22 @@ static int _wpa_supplicant_event_scan_results(struct wpa_supplicant *wpa_s,
 		//	return -1;
 		wpa_dbg(wpa_s, MSG_DEBUG, "Failed to get scan results - try "
 			"scanning again");
-		wpa_supplicant_req_new_scan(wpa_s, 1, 0);
+		uint8_t scan_interval = 0;
+        
+        wpa_apply_temp_ctrl_scan_mode(wpa_s, &scan_interval);
+        if (wifi_nv_info->recon_param.passive_disconnect == true) {
+            if (wifi_nv_info->recon_param.interval_second != 0) {
+				wpa_supplicant_req_new_scan(wpa_s, scan_interval ? scan_interval : wifi_nv_info->recon_param.interval_second, 0);
+			}
+        } else {
+            wpa_supplicant_req_new_scan(wpa_s, scan_interval ? scan_interval : calculate_next_scan_interval(wpa_s), 0);
+        }
 
 		wpas_notify_scan_done(wpa_s, 1);
 
 		if(wpa_s->last_scan_req == NORMAL_SCAN_REQ) {
 			wpa_update_disconnect_reason(WLAN_REASON_AP_NOT_FOUND);
+			wpas_notify_wifi_event(wpa_s, SYSTEM_EVENT_SCAN_NOT_FOUND);
 		}
    
 		ret = -1;
@@ -1785,9 +1878,12 @@ static int wpas_select_network_from_last_scan(struct wpa_supplicant *wpa_s,
 			int timeout_usec = 0;
 #ifdef CONFIG_WPS
 			if (wpa_s->after_wps > 0 || wpas_wps_searching(wpa_s)) {
+				system_event_t evt;
 				wpa_dbg(wpa_s, MSG_DEBUG, "Use shorter wait during WPS processing");
 				timeout_sec = 0;
 				timeout_usec = 500000;
+				evt.event_id = SYSTEM_EVENT_STA_WPS_ER_NODEV;
+				sys_event_send(&evt);
 				wpa_supplicant_req_new_scan(wpa_s, timeout_sec,
 							    timeout_usec);
 				return 0;
@@ -1797,11 +1893,13 @@ static int wpas_select_network_from_last_scan(struct wpa_supplicant *wpa_s,
 			if (wpa_supplicant_req_sched_scan(wpa_s))
 #endif                
             if (new_scan) {
+                wpa_apply_temp_ctrl_scan_mode(wpa_s, (uint8_t *)&timeout_sec);
 				wpa_supplicant_req_new_scan(wpa_s, timeout_sec,
 							    timeout_usec);
             }
 			wpa_msg_ctrl(wpa_s, MSG_INFO,
 				     WPA_EVENT_NETWORK_NOT_FOUND);
+			wpas_notify_wifi_event(wpa_s, SYSTEM_EVENT_STA_SCAN_MISMATCH);
 		}
 	}
 	return 0;
@@ -1881,7 +1979,7 @@ int wpa_supplicant_fast_associate(struct wpa_supplicant *wpa_s)
 		return -1;
 
 	os_get_reltime(&now);
-	if (os_reltime_expired(&now, &wpa_s->last_scan, 5)) {
+	if (os_reltime_expired(&now, &wpa_s->last_scan, 10)) {
 		wpa_printf(MSG_DEBUG, "Fast associate: Old scan results");
 		return -1;
 	}
@@ -2050,7 +2148,7 @@ static int wpas_fst_update_mbie(struct wpa_supplicant *wpa_s,
 }
 #endif /* CONFIG_FST */
 
-
+#ifdef CONFIG_WIFI_STA_SURPORT
 static int wpa_supplicant_event_associnfo(struct wpa_supplicant *wpa_s,
 					  union wpa_event_data *data)
 {
@@ -2247,7 +2345,7 @@ static int wpa_supplicant_event_associnfo(struct wpa_supplicant *wpa_s,
 
 	return 0;
 }
-
+#endif
 
 #ifdef COMPILE_WARNING_OPTIMIZE_WPA
 static int wpa_supplicant_assoc_update_ie(struct wpa_supplicant *wpa_s)
@@ -2313,12 +2411,12 @@ static void wpas_fst_update_mb_assoc(struct wpa_supplicant *wpa_s,
 }
 #endif /* COMPILE_WARNING_OPTIMIZE_WPA */
 
-
+#ifdef CONFIG_WIFI_STA_SURPORT
 static void wpa_supplicant_event_assoc(struct wpa_supplicant *wpa_s,
 				       union wpa_event_data *data)
 {
 	u8 bssid[ETH_ALEN];
-	//int already_authorized;
+	int already_authorized;
 	//int new_bss = 0;
 
 #if 0
@@ -2378,7 +2476,12 @@ static void wpa_supplicant_event_assoc(struct wpa_supplicant *wpa_s,
 	if (wpa_s->l2)
 		l2_packet_notify_auth_start(wpa_s->l2);
 
-	//already_authorized = data && data->assoc_info.authorized;
+	already_authorized = data && data->assoc_info.authorized;
+	if (wpa_key_mgmt_wpa_psk(wpa_s->key_mgmt) ||
+	    already_authorized)
+		eapol_sm_notify_eap_success(wpa_s->eapol, FALSE);
+	/* 802.1X::portControl = Auto */
+	eapol_sm_notify_portEnabled(wpa_s->eapol, TRUE);
 
 	wpa_s->eapol_received = 0;
 	if (wpa_s->key_mgmt == WPA_KEY_MGMT_NONE ||
@@ -2403,6 +2506,26 @@ static void wpa_supplicant_event_assoc(struct wpa_supplicant *wpa_s,
 		wpa_supplicant_req_auth_timeout(wpa_s, 10, 0);
 	}
 	wpa_supplicant_cancel_scan(wpa_s);
+	
+	if ((wpa_s->drv_flags & WPA_DRIVER_FLAGS_4WAY_HANDSHAKE) &&
+	    wpa_key_mgmt_wpa_psk(wpa_s->key_mgmt)) {
+		/*
+		 * We are done; the driver will take care of RSN 4-way
+		 * handshake.
+		 */
+		wpa_supplicant_cancel_auth_timeout(wpa_s);
+		wpa_supplicant_set_state(wpa_s, WPA_COMPLETED);
+		eapol_sm_notify_portValid(wpa_s->eapol, TRUE);
+		eapol_sm_notify_eap_success(wpa_s->eapol, TRUE);
+	} else if ((wpa_s->drv_flags & WPA_DRIVER_FLAGS_4WAY_HANDSHAKE) &&
+		   wpa_key_mgmt_wpa_ieee8021x(wpa_s->key_mgmt)) {
+		/*
+		 * The driver will take care of RSN 4-way handshake, so we need
+		 * to allow EAPOL supplicant to complete its work without
+		 * waiting for WPA supplicant.
+		 */
+		eapol_sm_notify_portValid(wpa_s->eapol, TRUE);
+	} 
 
 	wpa_s->last_eapol_matches_bssid = 0;
 
@@ -2436,7 +2559,6 @@ static void wpa_supplicant_event_assoc(struct wpa_supplicant *wpa_s,
 	//wpas_wps_notify_assoc(wpa_s, bssid);
 }
 
-
 #if (defined(CONFIG_PSM_SUPER_LOWPOWER) || defined(CONFIG_FAST_CONNECT))
 static int disconnect_reason_recoverable(u16 reason_code)
 {
@@ -2445,10 +2567,15 @@ static int disconnect_reason_recoverable(u16 reason_code)
 		reason_code == WLAN_REASON_CLASS2_FRAME_FROM_NONAUTH_STA ||
 		reason_code == WLAN_REASON_CLASS3_FRAME_FROM_NONASSOC_STA ;
 #else
-	return 1;
+	if (reason_code == WLAN_REASON_CONNECTED)
+		return 0;
+	else
+		return 1;
 #endif
 }
 #endif
+#endif
+
 #ifdef COMPILE_WARNING_OPTIMIZE_WPA
 static void wpa_supplicant_event_disassoc(struct wpa_supplicant *wpa_s,
 					  u16 reason_code,
@@ -2479,7 +2606,7 @@ static void wpa_supplicant_event_disassoc(struct wpa_supplicant *wpa_s,
 }
 #endif /* COMPILE_WARNING_OPTIMIZE_WPA */
 
-
+#ifdef CONFIG_WIFI_STA_SURPORT
 static int could_be_psk_mismatch(struct wpa_supplicant *wpa_s, u16 reason_code,
 				 int locally_generated)
 {
@@ -2500,6 +2627,7 @@ static int could_be_psk_mismatch(struct wpa_supplicant *wpa_s, u16 reason_code,
 
 	return 1;
 }
+#endif
 
 static wifi_discon_reason_e disconnect_reason_code = 0;
 u16 standard_reason_code = 0;
@@ -2530,6 +2658,7 @@ void wpa_update_disconnect_reason(u16 reason)
             disconnect_reason_code = REASON_SCAN_NOT_FOUND;
             break;
         default:
+			disconnect_reason_code = REASON_UNKNOWN;
             break;
     }
 }
@@ -2537,6 +2666,14 @@ void wpa_update_disconnect_reason(u16 reason)
 wifi_discon_reason_e wpa_disconnect_reason()
 {	
     return disconnect_reason_code;
+}
+
+bool wpa_passive_disconnect(void)
+{
+    if (disconnect_reason_code == REASON_BEACON_LOST || disconnect_reason_code == REASON_AP_DISCONNECT || disconnect_reason_code == REASON_UNKNOWN) {
+        return true;
+    }
+    return false;
 }
 
 u16 wpa_get_reason_code()
@@ -2547,6 +2684,7 @@ u16 wpa_get_reason_code()
 #if (defined(CONFIG_PSM_SUPER_LOWPOWER) || defined(CONFIG_FAST_CONNECT))
 unsigned int fast_reconnect_freq = 0;
 #endif
+#ifdef CONFIG_WIFI_STA_SURPORT
 static void wpa_supplicant_event_disassoc_finish(struct wpa_supplicant *wpa_s,
 						 u16 reason_code,
 						 int locally_generated)
@@ -2631,8 +2769,17 @@ static void wpa_supplicant_event_disassoc_finish(struct wpa_supplicant *wpa_s,
 		//wpa_supplicant_cancel_sched_scan(wpa_s);
 	}
 #else
-    if (wpa_s->wpa_state >= WPA_ASSOCIATING && (wpa_s->current_ssid->mode != WPAS_MODE_AP))
-		wpa_supplicant_req_scan(wpa_s, 0, 100000);
+	wifi_nv_info_t *wifi_nv_info = get_wifi_nv_info();
+
+    if (wpa_s->wpa_state >= WPA_ASSOCIATING && (wpa_s->current_ssid->mode != WPAS_MODE_AP)) {
+        if (wifi_nv_info->recon_param.passive_disconnect) {
+			if (wifi_nv_info->recon_param.interval_second != 0) {
+				wpa_supplicant_req_scan(wpa_s, wifi_nv_info->recon_param.interval_second, 0);
+			}
+        }else {
+            wpa_supplicant_req_scan(wpa_s, 0, 100000);
+        } 
+    }
 #endif
 	bssid = wpa_s->bssid;
 	if (is_zero_ether_addr(bssid))
@@ -2650,7 +2797,8 @@ static void wpa_supplicant_event_disassoc_finish(struct wpa_supplicant *wpa_s,
 		wpa_s->disconnect_reason = -reason_code;
 	else
 		wpa_s->disconnect_reason = reason_code;
-	wpa_update_disconnect_reason(locally_generated ? reason_code | WLAN_RX_SELF_DEFINE_FLAG :  reason_code);
+	if (!wpa_s->ap_iface)
+		wpa_update_disconnect_reason(locally_generated ? reason_code | WLAN_RX_SELF_DEFINE_FLAG :  reason_code);
 	//wpas_notify_disconnect_reason(wpa_s);
 	if (wpa_supplicant_dynamic_keys(wpa_s)) {
 		wpa_dbg(wpa_s, MSG_DEBUG, "Disconnect event - remove keys");
@@ -2692,7 +2840,7 @@ static void wpa_supplicant_event_disassoc_finish(struct wpa_supplicant *wpa_s,
 	}
 #endif
 }
-
+#endif
 
 #ifdef CONFIG_DELAYED_MIC_ERROR_REPORT
 void wpa_supplicant_delayed_mic_error_report(void *eloop_ctx, void *sock_ctx)
@@ -3091,7 +3239,7 @@ static void wpa_supplicant_event_unprot_disassoc(struct wpa_supplicant *wpa_s,
 	sme_event_unprot_disconnect(wpa_s, e->sa, e->da, e->reason_code);
 }
 #endif /* CONFIG_IEEE80211W */
-
+#ifdef CONFIG_WIFI_STA_SURPORT
 static void wpas_event_disconnect(struct wpa_supplicant *wpa_s, const u8 *addr,
 				  u16 reason_code, int locally_generated,
 				  const u8 *ie, size_t ie_len, int deauth)
@@ -3226,7 +3374,7 @@ static void wpas_event_deauth(struct wpa_supplicant *wpa_s,
 	wpas_event_disconnect(wpa_s, addr, reason_code,
 			      locally_generated, ie, ie_len, 1);
 }
-
+#endif
 
 #ifdef COMPILE_WARNING_OPTIMIZE_WPA
 static const char * reg_init_str(enum reg_change_initiator init)
@@ -3306,7 +3454,8 @@ static void wpa_supplicant_update_channel_list(
 }
 #endif /* COMPILE_WARNING_OPTIMIZE_WPA */
 
-
+#ifdef CONFIG_WIFI_STA_SURPORT
+#ifdef CONFIG_IEEE80211W
 static void wpas_event_rx_mgmt_action(struct wpa_supplicant *wpa_s,
 				      const u8 *frame, size_t len, int freq,
 				      int rssi)
@@ -3422,7 +3571,8 @@ static void wpas_event_rx_mgmt_action(struct wpa_supplicant *wpa_s,
 	//if (wpa_s->ifmsh)
 	//	mesh_mpm_action_rx(wpa_s, mgmt, len);
 }
-
+#endif
+#endif
 
 #ifdef COMPILE_WARNING_OPTIMIZE_WPA
 static void wpa_supplicant_notify_avoid_freq(struct wpa_supplicant *wpa_s,
@@ -3472,6 +3622,8 @@ static void wpa_supplicant_event_assoc_auth(struct wpa_supplicant *wpa_s,
 	if (wpa_s->wpa_state == WPA_ASSOCIATED) {
 		wpa_supplicant_cancel_auth_timeout(wpa_s);
 		wpa_supplicant_set_state(wpa_s, WPA_COMPLETED);
+		eapol_sm_notify_portValid(wpa_s->eapol, TRUE);
+		eapol_sm_notify_eap_success(wpa_s->eapol, TRUE);
 	}
 	wpa_sm_set_rx_replay_ctr(wpa_s->wpa, data->assoc_info.key_replay_ctr);
 	wpa_sm_set_ptk_kck_kek(wpa_s->wpa, data->assoc_info.ptk_kck,
@@ -3519,6 +3671,7 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 #endif /* CONFIG_NO_STDOUT_DEBUG */
 
 	switch (event) {
+#ifdef CONFIG_WIFI_STA_SURPORT
 	case EVENT_AUTH:
 #ifdef CONFIG_FST
 		if (!wpas_fst_update_mbie(wpa_s, data->auth.ies,
@@ -3568,6 +3721,7 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 		wpas_event_deauth(wpa_s,
 				  data ? &data->deauth_info : NULL);
 		break;
+#endif // CONFIG_WIFI_STA_SURPORT
 	case EVENT_MICHAEL_MIC_FAILURE:
 		wpa_supplicant_event_michael_mic_failure(wpa_s, data);
 		break;
@@ -3594,8 +3748,10 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 			wpa_dbg(wpa_s, MSG_DEBUG, "Scan completed in %ld.%06ld seconds",
 				diff.sec, diff.usec);
 		}*/
+
 		if (wpa_supplicant_event_scan_results(wpa_s, data))
 			break; /* interface may have been removed */
+		
 		if (!(data && data->scan_info.external_scan))
 			wpa_s->own_scan_running = 0;
 		if (data && data->scan_info.nl_scan_event)
@@ -3637,6 +3793,8 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 		wpa_supplicant_event_ibss_rsn_start(wpa_s, data);
 		break;
 #endif /* CONFIG_IBSS_RSN */
+
+#ifdef CONFIG_WIFI_STA_SURPORT
 	case EVENT_ASSOC_REJECT:
 		wpa_scan_res_mark_fail(wpa_s);
 		if (data->assoc_reject.bssid)
@@ -3676,6 +3834,7 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 	case EVENT_ASSOC_TIMED_OUT:
         wpa_msg(wpa_s, MSG_INFO, "event %d not support!", event);
 		break;
+#endif 
 	case EVENT_TX_STATUS:
 		wpa_dbg(wpa_s, MSG_DEBUG, "EVENT_TX_STATUS dst=" MACSTR
 			" type=%d stype=%d",
@@ -3796,8 +3955,6 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 #endif /* NEED_AP_MLME */
 #endif /* CONFIG_AP */
 	case EVENT_RX_MGMT: {
-		u16 fc, stype;
-		const struct ieee80211_mgmt *mgmt;
 
 #ifdef CONFIG_TESTING_OPTIONS
 		if (wpa_s->ext_mgmt_frame_handling) {
@@ -3816,11 +3973,13 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 		}
 #endif /* CONFIG_TESTING_OPTIONS */
 
-		mgmt = (const struct ieee80211_mgmt *)
-			data->rx_mgmt.frame;
-		fc = le_to_host16(mgmt->frame_control);
+
+		
 
 #if defined(CONFIG_P2P) || defined(CONFIG_IBSS_RSN) || defined(CONFIG_SAE) || defined(CONFIG_IEEE80211W)
+		const struct ieee80211_mgmt *mgmt = (const struct ieee80211_mgmt *)data->rx_mgmt.frame;
+        u16 fc, stype __attribute__((unused));
+        fc = le_to_host16(mgmt->frame_control);
 		stype = WLAN_FC_GET_STYPE(fc);
 #endif
 
@@ -3854,7 +4013,7 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 				break;
 			}
 #endif /* CONFIG_IBSS_RSN */
-
+#ifdef CONFIG_WIFI_STA_SURPORT
 #ifdef CONFIG_IEEE80211W
 			if (stype == WLAN_FC_STYPE_ACTION) {
                 #if 1
@@ -3874,7 +4033,8 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 
 			wpa_dbg(wpa_s, MSG_DEBUG, "AP: ignore received "
 				"management frame in non-AP mode");
-#endif       
+#endif   
+
 #ifdef CONFIG_SAE
 			if (stype == WLAN_FC_STYPE_AUTH &&
 				!(wpa_s->drv_flags & WPA_DRIVER_FLAGS_SME) &&
@@ -3885,7 +4045,7 @@ void wpa_supplicant_event(void *ctx, enum wpa_event_type event,
 				break;
 			}
 #endif /* CONFIG_SAE */
-
+#endif
 			break;
 #ifdef CONFIG_AP
 		}

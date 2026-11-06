@@ -266,36 +266,64 @@ void telnet_printf_task()
 
 int telnet_vprintf(const char *f,  va_list ap)
 {
-        //unsigned long flags;
-        int len=0;
-        
-        struct rtc_time time={0};
+		//unsigned long flags;
+		int len=0;
+		int ret;
+		int remaining;
+
+		struct rtc_time time={0};
 
 		if(0==telnet_negotiate_success)
 		{
 			return -1;
 		}
 
-        //flags = system_irq_save();
-		
-        if(telnet_timeStamp)
-        {
-                telnet_timeStamp=0;
-                drv_rtc_get_time(&time);
-                len = snprintf( &tmp_log_buf[0], MAX_LOG_LEN, "[%02d:%02d:%02d.%03d]", time.hour,time.min,time.sec,time.cnt_32k/33);
-        }
-        len += vsnprintf( &tmp_log_buf[len], MAX_LOG_LEN-len, f, ap);
-        if(tmp_log_buf[len-1] == 0x0a)
-        {
-                telnet_timeStamp=1;
-        }
-		if(write_telnet_RingBuffer(&telnet_log_RingBuffer, tmp_log_buf, len) > 0)
+		//flags = system_irq_save();
+
+		if(telnet_timeStamp)
+		{
+			telnet_timeStamp=0;
+			drv_rtc_get_time(&time);
+			remaining = (int)sizeof(tmp_log_buf) - len;
+			if(remaining > 0)
+			{
+				ret = snprintf( &tmp_log_buf[len], remaining, "[%02d:%02d:%02d.%03d]", time.hour,time.min,time.sec,time.cnt_32k/33);
+				if(ret >= remaining)
+				{
+					len += remaining - 1;
+				}
+				else if(ret > 0)
+				{
+					len += ret;
+				}
+			}
+		}
+
+		remaining = (int)sizeof(tmp_log_buf) - len;
+		if(remaining > 0)
+		{
+			ret = vsnprintf( &tmp_log_buf[len], remaining, f, ap);
+			if(ret >= remaining)
+			{
+				len += remaining - 1;
+			}
+			else if(ret > 0)
+			{
+				len += ret;
+			}
+		}
+
+		if(len > 0 && tmp_log_buf[len-1] == 0x0a)
+		{
+			telnet_timeStamp=1;
+		}
+		if(len > 0 && write_telnet_RingBuffer(&telnet_log_RingBuffer, tmp_log_buf, len) > 0)
 		{
 			os_sem_post(telnet_wait_log_sem);
 		}
 
 
-        //system_irq_restore(flags); 
+		//system_irq_restore(flags);
 		return 0;
 
 
@@ -594,5 +622,3 @@ int telnet_init(void)
 		return 1;
 	}
 }
-
-

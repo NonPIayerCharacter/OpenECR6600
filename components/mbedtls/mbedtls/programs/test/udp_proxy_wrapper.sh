@@ -1,6 +1,9 @@
 #!/bin/sh
 # -*-sh-basic-offset: 4-*-
 # Usage: udp_proxy_wrapper.sh [PROXY_PARAM...] -- [SERVER_PARAM...]
+#
+# Copyright The Mbed TLS Contributors
+# SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
 
 set -u
 

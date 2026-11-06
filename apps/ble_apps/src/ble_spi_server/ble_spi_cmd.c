@@ -135,11 +135,14 @@ static void ble_spi_send_event(uint8_t type, uint8_t *data, int data_len)
     if (hdr == NULL) {
         return;
     }
+    memset(hdr, 0x00, sizeof(sizeof(struct ble_spi_hdr) + data_len));
     hdr->type = type;
     hdr->data_len = data_len;
-    memcpy(hdr->data, data, data_len);
+    if (data) {
+        memcpy(hdr->data, data, data_len);
+    }
 
-    spi_service_send_msg((unsigned char *)hdr, sizeof(struct ble_spi_hdr) + data_len);
+    spi_service_send_ble_msg((unsigned char *)hdr, sizeof(struct ble_spi_hdr) + data_len);
 
     if (hdr != NULL) {
         os_free(hdr);
@@ -159,11 +162,15 @@ static void ble_spi_gap_event_cb(ECR_BLE_GAP_PARAMS_EVT_T *p_event)
             if(BT_ERROR_NO_ERROR == p_event->result) {
                 os_printf(LM_CMD, LL_INFO, "Device connect succcess\n");
                 priv->conn_handler = p_event->conn_handle;
+                type = BLE_SPI_BUILD_TYPE(BLE_SPI_TYPE_EVENT, BLE_SPI_TYPE_EVENT_SUBTYPE_CONNECT);
+                ble_spi_send_event(type, (uint8_t *)&p_event->conn_handle, 2);
+            } else if (BT_ERROR_TIMEOUT == p_event->result){
+                os_printf(LM_CMD, LL_INFO, "Device connect timeout\n");
+                type = BLE_SPI_BUILD_TYPE(BLE_SPI_TYPE_EVENT, BLE_SPI_TYPE_EVENT_SUBTYPE_CONNECT_TIMEOUT);
+                ble_spi_send_event(type, NULL, 0);
             } else {
-                os_printf(LM_CMD, LL_INFO, "Device connect fail\n");
+                os_printf(LM_CMD, LL_INFO, "Device connect fail, reeson: 0x%x\n",p_event->result);
             }
-            type = BLE_SPI_BUILD_TYPE(BLE_SPI_TYPE_EVENT, BLE_SPI_TYPE_EVENT_SUBTYPE_CONNECT);
-            ble_spi_send_event(type, (uint8_t *)&p_event->conn_handle, 2);
         }
         break;
         case ECR_BLE_GAP_EVT_DISCONNECT:
@@ -180,15 +187,22 @@ static void ble_spi_gap_event_cb(ECR_BLE_GAP_PARAMS_EVT_T *p_event)
                 //empty packet
                 return;
             }
-            os_printf(LM_CMD, LL_INFO, "adv_addr");
-            for (int8_t i=5;i>=0;i--) {
-                os_printf(LM_CMD, LL_INFO, ":%02X",p_event->gap_event.adv_report.peer_addr.addr[i]);
-            }
-            os_printf(LM_CMD, LL_INFO, "\n\r");
-            os_printf(LM_CMD, LL_INFO, "rssi:%d dBm\n\r",p_event->gap_event.adv_report.rssi);
 
-            type = BLE_SPI_BUILD_TYPE(BLE_SPI_TYPE_EVENT, BLE_SPI_TYPE_EVENT_SUBTYPE_ADV_REPORT);
-            ble_spi_send_event(type, p_event->gap_event.adv_report.peer_addr.addr, 6);
+            if (BT_ERROR_NO_ERROR == p_event->result) {
+                os_printf(LM_CMD, LL_INFO, "adv_addr");
+                for (int8_t i=5;i>=0;i--) {
+                    os_printf(LM_CMD, LL_INFO, ":%02X",p_event->gap_event.adv_report.peer_addr.addr[i]);
+                }
+                os_printf(LM_CMD, LL_INFO, "\n\r");
+                os_printf(LM_CMD, LL_INFO, "rssi:%d dBm\n\r",p_event->gap_event.adv_report.rssi);
+
+                type = BLE_SPI_BUILD_TYPE(BLE_SPI_TYPE_EVENT, BLE_SPI_TYPE_EVENT_SUBTYPE_ADV_REPORT);
+                ble_spi_send_event(type, p_event->gap_event.adv_report.peer_addr.addr, 6);
+            } else if (BT_ERROR_TIMEOUT == p_event->result) {
+                os_printf(LM_CMD, LL_INFO, "scan complete\n");
+                type = BLE_SPI_BUILD_TYPE(BLE_SPI_TYPE_EVENT, BLE_SPI_TYPE_EVENT_SUBTYPE_ADV_REPORT_DOWN);
+                ble_spi_send_event(type, NULL, 0);
+            }
         }
         break;
         default:
@@ -199,6 +213,7 @@ static void ble_spi_gap_event_cb(ECR_BLE_GAP_PARAMS_EVT_T *p_event)
 static void ble_spi_gatt_event_cb(ECR_BLE_GATT_PARAMS_EVT_T *p_event)
 {
     uint8_t type;
+    ble_spi_priv_t *priv = ble_spi_get_priv();
 
     switch(p_event->type)
     {
@@ -225,8 +240,13 @@ static void ble_spi_gatt_event_cb(ECR_BLE_GATT_PARAMS_EVT_T *p_event)
             write_data[len] = '\0';
             os_printf(LM_CMD, LL_INFO, "Char handle:%#02x, write_data:%s\n", p_event->gatt_event.write_report.char_handle,write_data);
 
-            type = BLE_SPI_BUILD_TYPE(BLE_SPI_TYPE_DATA, BLE_SPI_TYPE_DATA_SUBTYPE_RECV_WRITE);
-            ble_spi_send_event(type, p_event->gatt_event.write_report.report.p_data, p_event->gatt_event.write_report.report.length);
+            if ((priv->ntf_ind_handler+1) == p_event->gatt_event.write_report.char_handle) {
+                type = BLE_SPI_BUILD_TYPE(BLE_SPI_TYPE_DATA, BLE_SPI_TYPE_DATA_SUBTYPE_RECV_ENABLE_CCCD);
+                ble_spi_send_event(type, p_event->gatt_event.write_report.report.p_data, p_event->gatt_event.write_report.report.length);
+            } else {
+                type = BLE_SPI_BUILD_TYPE(BLE_SPI_TYPE_DATA, BLE_SPI_TYPE_DATA_SUBTYPE_RECV_WRITE);
+                ble_spi_send_event(type, p_event->gatt_event.write_report.report.p_data, p_event->gatt_event.write_report.report.length);
+            }
         }
         break;
 
@@ -386,53 +406,51 @@ int ble_spi_role_init(uint8_t role)
 
     memset(ble_spi_common_service, 0x00, sizeof(ECR_BLE_SERVICE_PARAMS_T)*BLE_SPI_GATT_SERVICE_MAX_NUM);
 
-    if (role == BLE_ROLE_SLAVE) {
-        ECR_BLE_GATTS_PARAMS_T *p_ble_service = &ble_spi_gatt_service;
-        p_ble_service->svc_num =  BLE_SPI_GATT_SERVICE_MAX_NUM;
-        p_ble_service->p_service = ble_spi_common_service;
+    ECR_BLE_GATTS_PARAMS_T *p_ble_service = &ble_spi_gatt_service;
+    p_ble_service->svc_num =  BLE_SPI_GATT_SERVICE_MAX_NUM;
+    p_ble_service->p_service = ble_spi_common_service;
 
-        /*First service add*/
-        ECR_BLE_SERVICE_PARAMS_T *p_common_service = ble_spi_common_service;
-        p_common_service->handle = ECR_BLE_GATT_INVALID_HANDLE;
-        p_common_service->svc_uuid.uuid_type   =  ECR_BLE_UUID_TYPE_16;
-        p_common_service->svc_uuid.uuid.uuid16 =  BLE_SPI_SERVICE_UUID;
-        p_common_service->type     = ECR_BLE_UUID_SERVICE_PRIMARY;
-        p_common_service->char_num = BLE_SPI_GATT_CHAR_MAX_NUM;
-        p_common_service->p_char   = ble_spi_common_char;
+    /*First service add*/
+    ECR_BLE_SERVICE_PARAMS_T *p_common_service = ble_spi_common_service;
+    p_common_service->handle = ECR_BLE_GATT_INVALID_HANDLE;
+    p_common_service->svc_uuid.uuid_type   =  ECR_BLE_UUID_TYPE_16;
+    p_common_service->svc_uuid.uuid.uuid16 =  BLE_SPI_SERVICE_UUID;
+    p_common_service->type     = ECR_BLE_UUID_SERVICE_PRIMARY;
+    p_common_service->char_num = BLE_SPI_GATT_CHAR_MAX_NUM;
+    p_common_service->p_char   = ble_spi_common_char;
 
-        /*Add write characteristic*/
-        ECR_BLE_CHAR_PARAMS_T *p_common_char = ble_spi_common_char;
-        p_common_char->handle = ECR_BLE_GATT_INVALID_HANDLE;
-        p_common_char->char_uuid.uuid_type   = ECR_BLE_UUID_TYPE_16;
-        p_common_char->char_uuid.uuid.uuid16 = BLE_SPI_WRITE_CHAR_UUID;
-        p_common_char->property = ECR_BLE_GATT_CHAR_PROP_WRITE_NO_RSP;
-        p_common_char->permission = ECR_BLE_GATT_PERM_READ | ECR_BLE_GATT_PERM_WRITE;
-        p_common_char->value_len = 252;
-        p_common_char++;
+    /*Add write characteristic*/
+    ECR_BLE_CHAR_PARAMS_T *p_common_char = ble_spi_common_char;
+    p_common_char->handle = ECR_BLE_GATT_INVALID_HANDLE;
+    p_common_char->char_uuid.uuid_type   = ECR_BLE_UUID_TYPE_16;
+    p_common_char->char_uuid.uuid.uuid16 = BLE_SPI_WRITE_CHAR_UUID;
+    p_common_char->property = ECR_BLE_GATT_CHAR_PROP_WRITE_NO_RSP;
+    p_common_char->permission = ECR_BLE_GATT_PERM_READ | ECR_BLE_GATT_PERM_WRITE;
+    p_common_char->value_len = 252;
+    p_common_char++;
 
-        /*Add Notify characteristic*/
-        p_common_char->handle = ECR_BLE_GATT_INVALID_HANDLE;
-        p_common_char->char_uuid.uuid_type   = ECR_BLE_UUID_TYPE_16;
-        p_common_char->char_uuid.uuid.uuid16 = BLE_SPI_NOTIFY_CHAR_UUID;
-        p_common_char->property = ECR_BLE_GATT_CHAR_PROP_NOTIFY | ECR_BLE_GATT_CHAR_PROP_INDICATE;
-        p_common_char->permission = ECR_BLE_GATT_PERM_READ | ECR_BLE_GATT_PERM_WRITE;
-        p_common_char->value_len = 252;
-        p_common_char++;
+    /*Add Notify characteristic*/
+    p_common_char->handle = ECR_BLE_GATT_INVALID_HANDLE;
+    p_common_char->char_uuid.uuid_type   = ECR_BLE_UUID_TYPE_16;
+    p_common_char->char_uuid.uuid.uuid16 = BLE_SPI_NOTIFY_CHAR_UUID;
+    p_common_char->property = ECR_BLE_GATT_CHAR_PROP_NOTIFY | ECR_BLE_GATT_CHAR_PROP_INDICATE;
+    p_common_char->permission = ECR_BLE_GATT_PERM_READ | ECR_BLE_GATT_PERM_WRITE;
+    p_common_char->value_len = 252;
+    p_common_char++;
 
-        /*Add Read && write characteristic*/
-        p_common_char->handle = ECR_BLE_GATT_INVALID_HANDLE;
-        p_common_char->char_uuid.uuid_type   = ECR_BLE_UUID_TYPE_16;
-        p_common_char->char_uuid.uuid.uuid16 = BLE_SPI_READ_CHAR_UUID;
+    /*Add Read && write characteristic*/
+    p_common_char->handle = ECR_BLE_GATT_INVALID_HANDLE;
+    p_common_char->char_uuid.uuid_type   = ECR_BLE_UUID_TYPE_16;
+    p_common_char->char_uuid.uuid.uuid16 = BLE_SPI_READ_CHAR_UUID;
 
-        p_common_char->property = ECR_BLE_GATT_CHAR_PROP_READ | ECR_BLE_GATT_CHAR_PROP_WRITE;
-        p_common_char->permission = ECR_BLE_GATT_PERM_READ | ECR_BLE_GATT_PERM_WRITE;
-        p_common_char->value_len = 252;
+    p_common_char->property = ECR_BLE_GATT_CHAR_PROP_READ | ECR_BLE_GATT_CHAR_PROP_WRITE;
+    p_common_char->permission = ECR_BLE_GATT_PERM_READ | ECR_BLE_GATT_PERM_WRITE;
+    p_common_char->value_len = 252;
 
-        ecr_ble_gatts_service_add(p_ble_service, false);
+    ecr_ble_gatts_service_add(p_ble_service, false);
 
-        if (ble_spi_common_char[1].handle != ECR_BLE_GATT_INVALID_HANDLE) {
-            priv->ntf_ind_handler = ble_spi_common_char[1].handle;
-        }
+    if (ble_spi_common_char[1].handle != ECR_BLE_GATT_INVALID_HANDLE) {
+        priv->ntf_ind_handler = ble_spi_common_char[1].handle;
     }
     return BT_ERROR_NO_ERROR;
 }
@@ -481,7 +499,7 @@ int ble_spi_start_scan(void)
     scan_param.dup_filt_pol = ECR_DUP_FILT_EN;
     scan_param.scan_prop= ECR_BLE_SCAN_PROP_PHY_1M_BIT | ECR_BLE_SCAN_PROP_ACTIVE_1M_BIT;
 
-    scan_param.interval = 0x20;
+    scan_param.interval = 0x40;
     scan_param.window = 0x20;
     scan_param.duration = 1000;
     scan_param.period = 0;

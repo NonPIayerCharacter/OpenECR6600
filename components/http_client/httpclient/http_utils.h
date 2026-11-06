@@ -16,8 +16,8 @@
 
 #define HTTP_VOID 
 
-#define HTTP_ROBUSTNESS_CHECK(item, err) if (!(item)) {                                         \
-        HTTP_LOG_E("%s:%d %s()... check for error.", __FILE__, __LINE__, __FUNCTION__);         \
+#define HTTP_ROBUSTNESS_CHECK(item, err) if (!(item)) { \
+        HTTP_LOG_E("%s[%d] check failed.", __FUNCTION__, __LINE__); \
         return err; }
 
 char *http_utils_assign_string(char **str, const char *new_str, int len);

@@ -1,24 +1,3 @@
-/*******************************************************************************
- * Copyright by Transa Semi.
- *
- * File Name:    
- * File Mark:    
- * Description:  
- * Others:        
- * Version:       V1.0
- * Author:        lixiao
- * Date:          2018-12-12
- * History 1:      
- *     Date: 
- *     Version:
- *     Author: 
- *     Modification:  
- * History 2: 
-  ********************************************************************************/
-
-/****************************************************************************
-*                                                Include files
-****************************************************************************/
 #include "lwip/apps/lwiperf.h"
 #include "apps/ping/ping.h"
 #include "lwip/err.h"
@@ -29,8 +8,10 @@
 #include "lwip/dhcp.h"
 #include "lwip/netdb.h"
 #include "lwip/ip_addr.h"
+#include "lwip/nd6.h"
 #include "system_network.h"
 #include "system_wifi.h"
+#include "system_lwip.h"
 #include "system_log.h"
 #include "wifi_common.h"
 
@@ -43,6 +24,7 @@
 #ifdef CONFIG_CUSTOM_FHOSTAPD
 #include "ethernetif.h"
 #endif
+#include "lwip/../../../src/apps/dhcpserver/dhcpserver.h"
 
 /****************************************************************************
 *                                                Local Macros
@@ -52,15 +34,13 @@
 /****************************************************************************
 *                                                Local Types
 ****************************************************************************/
-static bool use_dhcp_server = true;
-static bool use_dhcp_client = true;
 static os_timer_handle_t dhcp_wait_timer = NULL;
 static uint8_t dhcp_wait_vif = STATION_IF;
 /****************************************************************************
 *                                                Local Constants
 ****************************************************************************/
 #ifdef LWIP_PING
-const char ping_usage_str[] = "Usage: ping [-c count] [-i interval] [-s packetsize] destination\n"
+const char ping_usage_str[] = "Usage: ping [-c count] [-i interval] [-s packetsize] [-w timeout] [-t ttl] [-Q tos] destination\n"
                            "      `ping destination stop' for stopping\n"
                            "      `ping -st' for checking current ping applicatino status\n";
 #endif
@@ -85,11 +65,13 @@ const char ping_usage_str[] = "Usage: ping [-c count] [-i interval] [-s packetsi
 ****************************************************************************/
 
 #ifdef LWIP_PING
+#ifndef CONFIG_CUSTOM_LXW
 u8_t get_vif_by_dstip(ip_addr_t *addr)
 {
     u8_t vif_id = STATION_IF;
     int i;
-    struct netif *itf = ip_route(NULL, addr);
+    ip_addr_t srcaddr = {0};
+    struct netif *itf = ip_route(&srcaddr, addr);
 
     if (!itf) {
         return vif_id;
@@ -115,6 +97,8 @@ void ping_run(char *cmd)
     ip_addr_t ping_addr;
     u8_t vif_id = 0xFF;
     u8_t rec_timeout = RCV_TIMEO;
+    u8_t ttl = 64;
+    u8_t tos = 0;
     ping_parm_t* ping_conn = NULL;
     ping_parm_t* ping_stop_conn = NULL;
     int ip4addr_aton_is_valid = false;
@@ -233,7 +217,25 @@ void ping_run(char *cmd)
                     os_free(ping_conn);
                     return;
                 }
-            } 
+            }
+			else if (strcmp(str, "-t") == 0 || strcmp(str, "-m") == 0) {
+                str = strtok_r(NULL, " ", &pcmdStr_log);
+                ttl = (u8_t)strtol(str, NULL, 0);
+                if(ttl < 1 || ttl > 255) {
+                    os_printf(LM_APP, LL_INFO, "input -t parameter Error, TTL must be 1-255 !!\n");
+                    os_free(ping_conn);
+                    return;
+                }
+            }
+			else if (strcmp(str, "-Q") == 0) {
+                str = strtok_r(NULL, " ", &pcmdStr_log);
+                tos = (u8_t)strtol(str, NULL, 0);
+                if(tos > 255) {
+                    os_printf(LM_APP, LL_INFO, "input -Q parameter Error, TOS must be 0-255 !!\n");
+                    os_free(ping_conn);
+                    return;
+                }
+            }
 			else {
                 os_printf(LM_APP, LL_INFO, "Error!! '%s' is unknown option. Run help ping\n", str);
                 os_free(ping_conn);
@@ -289,6 +291,9 @@ void ping_run(char *cmd)
     ping_conn->packet_size = (u32_t)packet_size;
     ping_conn->vif_id  = vif_id;
     ping_conn->rec_timeout  = rec_timeout * 1000;
+    ping_conn->ping_id = os_random() &0xffff;
+    ping_conn->ttl = ttl;
+    ping_conn->tos = tos;
 
 	#ifdef CONFIG_IPV6
 	if ((ip6addr_aton_is_valid == true 
@@ -321,30 +326,31 @@ void ping_run(char *cmd)
         return;
     }
 }
+#endif
 #endif /* LWIP_PING */
 
 static void set_netdb_ipconfig(int vif, struct ip_info *ipconfig)
 {
-    netif_db_t *netif_db = NULL;
+    netif_db_t *netdb = NULL;
 
     if (!IS_VALID_VIF(vif)) {
         return;
     }
 
-    netif_db = get_netdb_by_index(vif);
-	memcpy(&netif_db->ipconfig, ipconfig, sizeof(struct ip_info));
+    netdb = get_netdb_by_index(vif);
+	memcpy(&netdb->ipconfig, ipconfig, sizeof(struct ip_info));
 }
 
 static void set_netdb_dhcps_cfg(int vif, void *dhcps_cfg)
 {
-    netif_db_t *netif_db = NULL;
+    netif_db_t *netdb = NULL;
 
     if (!IS_VALID_VIF(vif)) {
         return;
     }
 
-    netif_db = get_netdb_by_index(vif);
-	memcpy(&netif_db->dhcps_cfg, dhcps_cfg, sizeof(struct dhcps_lease));
+    netdb = get_netdb_by_index(vif);
+	memcpy(&netdb->dhcps_cfg, dhcps_cfg, sizeof(struct dhcps_lease));
 }
 
 void set_softap_ipconfig(struct ip_info *ipconfig)
@@ -359,101 +365,67 @@ void set_softap_dhcps_cfg(void *dhcps_cfg)
 
 void set_sta_ipconfig(struct ip_info *ipconfig)
 {
-    netif_db_t *netif_db;
+    netif_db_t *netdb;
 
-    netif_db = get_netdb_by_index(STATION_IF);
-    netif_db->dhcp_stat = TCPIP_DHCP_STATIC;
+    netdb = get_netdb_by_index(STATION_IF);
+    netdb->dhcp_stat = TCPIP_DHCP_STATIC;
     set_netdb_ipconfig(STATION_IF, ipconfig);
 }
 
-void wifi_dhcp_open(int vif)
+void clear_sta_ipconfig(void)
 {
-    if (!IS_VALID_VIF(vif)) {
-        return;
-    }
-	
-	if(SOFTAP_IF == vif)
-	{
-		use_dhcp_server = true;
-	}
-	else
-	{
-		netif_db_t *netif_db;
+    netif_db_t *netdb;
 
-		netif_db = get_netdb_by_index(STATION_IF);
-		if(TCPIP_DHCP_STATIC == netif_db->dhcp_stat)
-		{
-			netif_db->dhcp_stat = TCPIP_DHCP_INIT;
-		}
-		use_dhcp_client = true;
-
-	}
-}
-
-// close dhcp
-void wifi_dhcp_close(int vif)
-{
-    if (!IS_VALID_VIF(vif)) {
+    netdb = get_netdb_by_index(STATION_IF);
+    if (netdb == NULL) {
         return;
     }
 
-    (vif == SOFTAP_IF) ? (use_dhcp_server = false) : (use_dhcp_client = false);
-} 
-
-bool get_wifi_dhcp_use_status(int vif)
-{
-    bool ret;
-
-    if (!IS_VALID_VIF(vif)) {
-        return false;
-    }
-	
-    (vif == SOFTAP_IF) ? (ret = use_dhcp_server) : (ret = use_dhcp_client);
-
-    return ret;
+    netdb->dhcp_stat = TCPIP_DHCP_INIT;
+    memset(&netdb->ipconfig, 0, sizeof(netdb->ipconfig));
 }
 
+#ifndef CONFIG_CUSTOM_LXW
 int wifi_station_dhcpc_start(int vif)
 {
     int8_t ret;
-    netif_db_t *netif_db;
+    netif_db_t *netdb = NULL;
 
     if (!IS_VALID_VIF(vif)) {
         return -1;
     }
 
-    netif_db = get_netdb_by_index(vif);
+    netdb = get_netdb_by_index(vif);
 
-    if (netif_db->dhcp_stat == TCPIP_DHCP_STATIC) {
-        wifi_set_ip_info(vif, &netif_db->ipconfig);
+    /* Donot get ip from AP, next we should set static IP */
+    if (netdb->dhcp_stat == TCPIP_DHCP_ABORD) {
         return 0;
     }
 
-    if (!use_dhcp_client) {
-        return -1;
+    if (netdb->dhcp_stat == TCPIP_DHCP_STATIC) {
+        /* static should not lost when wpa disconnect, recovery it */
+        wifi_set_ip_info(vif, &netdb->ipconfig);
+        return 0;
     }
     
 #ifdef CONFIG_PSM_SUPER_LOWPOWER
-	if(netif_db->dhcp_stat == TCPIP_DHCP_STARTED)
-	{
-		netifapi_dhcp_fast_select(netif_db->net_if);
-		return 0;
-	}
+    if (netdb->dhcp_stat == TCPIP_DHCP_STARTED) {
+        netifapi_dhcp_fast_select(netdb->net_if);
+        return 0;
+    }
 #endif
 
-#ifdef CONFIG_IPV6
-	netifapi_dhcp6_stop(netif_db->net_if);
+#if 0 // remove to ip4 ready
+    if (system_lwip_get_ipv6_enable()) {
+        netif_create_ip6_linklocal_address(netdb->net_if, 1);
+        nd6_restart_netif(netdb->net_if);
+    }
 #endif
-    netifapi_dhcp_stop(netif_db->net_if);
-
-    ip_addr_set_zero(&netif_db->net_if->ip_addr);
-    ip_addr_set_zero(&netif_db->net_if->netmask);
-    ip_addr_set_zero(&netif_db->net_if->gw);
-    netif_db->dhcp_stat = TCPIP_DHCP_STOPPED;
-
-    ret = netifapi_dhcp_start(netif_db->net_if);	
+    netifapi_dhcp_stop(netdb->net_if);
+    netdb->dhcp_stat = TCPIP_DHCP_INIT;
+    ret = netifapi_dhcp_start(netdb->net_if);
     if (!ret) {
-        netif_db->dhcp_stat = TCPIP_DHCP_STARTED;
+        netdb->dhcp_stat = TCPIP_DHCP_STARTED;
 
         if (!dhcp_wait_timer)
         {
@@ -469,6 +441,7 @@ int wifi_station_dhcpc_start(int vif)
 
     return 0;
 }
+#endif
 #ifdef CONFIG_PSM_SURPORT_close
 extern void ap_cap_clear_interface();
 extern void rf_ble_restore();
@@ -478,47 +451,59 @@ extern void rf_ble_restore();
 bool sta_remove_network_flag;
 #endif
 
+#ifndef CONFIG_CUSTOM_LXW
 int wifi_station_dhcpc_stop2(int vif, bool release_dhcp)
 {
-    netif_db_t *netif_db = NULL;
+    netif_db_t *netdb = NULL;
 
     if (!IS_VALID_VIF(vif)) {
         return -1;
     }
 
-    netif_db = get_netdb_by_index(vif);
-
-    if (netif_db->dhcp_stat == TCPIP_DHCP_STATIC) {
-        netif_set_addr(netif_db->net_if, IP4_ADDR_ANY4, IP4_ADDR_ANY4, IP4_ADDR_ANY4);
-        //if (wifi_get_status(vif) == STA_STATUS_STOP) { //clear static dhcpc info
-        //    netif_db->dhcp_stat = TCPIP_DHCP_INIT;
-        //    memset(&netif_db->ipconfig, 0, sizeof(netif_db->ipconfig));
-        //}
+    netdb = get_netdb_by_index(vif);
+    if (netdb->dhcp_stat == TCPIP_DHCP_STATIC || netdb->dhcp_stat == TCPIP_DHCP_ABORD) {
+        /* just remove the netif ipaddress, static ip should recovery at wpa complete time */
+        /* netdb will hold the static IP */
+        netif_set_addr(netdb->net_if, IP4_ADDR_ANY4, IP4_ADDR_ANY4, IP4_ADDR_ANY4);
+        #if defined(CONFIG_WIFI_MESH)
+        netdb->dhcp_stat = TCPIP_DHCP_INIT;
+        memset(&netdb->ipconfig, 0, sizeof(netdb->ipconfig));
+        #endif
         return 0;
     }
 #ifdef CONFIG_PSM_SUPER_LOWPOWER
-    if (sta_remove_network_flag && (netif_db->dhcp_stat == TCPIP_DHCP_STARTED)) {
+    /* lowpoer mode, lost wpa assiocate, donot drop dhcp info, just drop it at wpa remove time */
+    if (sta_remove_network_flag && (netdb->dhcp_stat == TCPIP_DHCP_STARTED)) {
 #else
-    if (netif_db->dhcp_stat == TCPIP_DHCP_STARTED) {
+    if (netdb->dhcp_stat == TCPIP_DHCP_STARTED) {
 #endif
-		#ifdef CONFIG_IPV6
-		netifapi_dhcp6_stop(netif_db->net_if);
-		#endif
-        netif_db->dhcp_stat = TCPIP_DHCP_STOPPED;
+#ifdef CONFIG_IPV6
+        int idx;
+        netifapi_dhcp6_stop(netdb->net_if);
+        nd6_cleanup_netif(netdb->net_if);
+        netif_ip6_addr_set_state(netdb->net_if, 0, IP6_ADDR_INVALID);
+
+        for (idx = 0; idx < LWIP_IPV6_NUM_ADDRESSES; idx++) {
+            netif_ip6_addr_set_state(netdb->net_if, idx, IP6_ADDR_INVALID);
+            ip_addr_set_zero_ip6(&(netdb->net_if->ip6_addr[idx]));
+        }
+
+#endif
+        netdb->dhcp_stat = TCPIP_DHCP_STOPPED;
         if (release_dhcp) {
-            netifapi_dhcp_stop(netif_db->net_if);
+            netifapi_dhcp_stop(netdb->net_if);
         } else {
-            netifapi_dhcp_stop_no_release(netif_db->net_if);
+            netifapi_dhcp_stop_no_release(netdb->net_if);
         }
 
 #ifdef CONFIG_PSM_SUPER_LOWPOWER
-		sta_remove_network_flag = false;
+        sta_remove_network_flag = false;
 #endif
         SYS_LOGV("stop dhcp client");
     }
 #ifdef CONFIG_PSM_SUPER_LOWPOWER
-    else if(netif_db->dhcp_stat == TCPIP_DHCP_STARTED){
-        netif_set_addr(netif_db->net_if, IP4_ADDR_ANY4, IP4_ADDR_ANY4, IP4_ADDR_ANY4);
+    else if (netdb->dhcp_stat == TCPIP_DHCP_STARTED) {
+        netif_set_addr(netdb->net_if, IP4_ADDR_ANY4, IP4_ADDR_ANY4, IP4_ADDR_ANY4);
     }
 #endif
 
@@ -538,7 +523,7 @@ int wifi_station_dhcpc_stop(int vif)
 {
     return wifi_station_dhcpc_stop2(vif, true);
 }
-
+#endif
 void dhcp_wait_timeout_func(os_timer_handle_t timer)
 {
     uint8_t *vif = NULL;
@@ -564,89 +549,99 @@ void discard_dhcp_wait_timer()
         os_timer_delete(dhcp_wait_timer);
         dhcp_wait_timer = NULL;
         dhcp_wait_vif = STATION_IF;
+
+#ifdef CONFIG_IPV6
+        netif_db_t *netdb = get_netdb_by_index(STATION_IF);
+
+        /* this shuould be at dhcpc start func, now we get ip6 address after ip4 */
+        if (netdb != NULL && netdb->net_if != NULL && system_lwip_get_ipv6_enable() &&
+                netif_is_up(netdb->net_if) &&
+                !ip4_addr_isany_val(*netif_ip4_addr(netdb->net_if)) &&
+                ip6_addr_isinvalid(netif_ip6_addr_state(netdb->net_if, 0))) {
+            netif_create_ip6_linklocal_address(netdb->net_if, 1);
+            nd6_restart_netif(netdb->net_if);
+        }
+#endif
     }
 }
 
 /*get dhcpc/dhcpserver status*/
 dhcp_status_t wifi_station_dhcpc_status(int vif)
 {
-    netif_db_t *netif_db = NULL;
+    netif_db_t *netdb = NULL;
 
     if (!IS_VALID_VIF(vif)) {
         return TCPIP_DHCP_STATUS_MAX;
     }
-    netif_db = get_netdb_by_index(vif);
-    return netif_db->dhcp_stat;
+    netdb = get_netdb_by_index(vif);
+    return netdb->dhcp_stat;
 }
 
+#ifndef CONFIG_CUSTOM_LXW
 void wifi_softap_dhcps_start(int intf)
 {
-    //struct ip_info ipinfo_tmp;
-    netif_db_t *netif_db;
+    netif_db_t *netdb = NULL;
 
     if (!IS_VALID_VIF(intf)) {
         return;
     }
 
-    netif_db = get_netdb_by_index(intf);
-    if (netif_db->dhcp_stat == TCPIP_DHCP_STARTED) {
+    netdb = get_netdb_by_index(intf);
+    if (netdb->dhcp_stat == TCPIP_DHCP_STARTED) {
         SYS_LOGD("start dhcps, dhcps already started.");
         return;
     }
 
-	#ifdef CONFIG_IPV6
-    if (ip4_addr_isany(&netif_db->ipconfig.ip.u_addr.ip4)) 
-	{
-        IP4_ADDR(&netif_db->ipconfig.ip.u_addr.ip4, 10, 10, 10, 1);
-        IP4_ADDR(&netif_db->ipconfig.gw.u_addr.ip4, 10, 10, 10, 1);
-        IP4_ADDR(&netif_db->ipconfig.netmask.u_addr.ip4, 255, 255, 255, 0);
+    if (ip_addr_isany(&netdb->ipconfig.ip)) {
+        ipaddr_aton(SYSTEM_NETWORK_SOFTAP_DEFAULT_IP, &netdb->ipconfig.ip);
+        ipaddr_aton(SYSTEM_NETWORK_SOFTAP_DEFAULT_IP, &netdb->ipconfig.gw);
+        ipaddr_aton(SYSTEM_NETWORK_SOFTAP_DEFAULT_IPMASK, &netdb->ipconfig.netmask);
     }
-	#else
-    if (ip4_addr_isany(&netif_db->ipconfig.ip)) 
-	{
-        IP4_ADDR(&netif_db->ipconfig.ip, 10, 10, 10, 1);
-        IP4_ADDR(&netif_db->ipconfig.gw, 10, 10, 10, 1);
-        IP4_ADDR(&netif_db->ipconfig.netmask, 255, 255, 255, 0);
-    }
-	#endif
-#if defined ENABLE_LWIP_NAPT
-#ifdef CONFIG_IPV6
-    if (ip4_addr_isany(&netif_db->ipconfig.dns1.u_addr.ip4)) {
-        netif_db->ipconfig.dns1 = (IP_ADDR_ANY != dns_getserver(0)) ? *dns_getserver(0) : netif_db->ipconfig.ip;
-        netif_db->ipconfig.dns2 = (IP_ADDR_ANY != dns_getserver(1)) ? *dns_getserver(1) : netif_db->ipconfig.ip;
-    }
-    netif_db->ipconfig.dns1.u_addr.ip4.addr = 0x8080808;
-#else
-    if (ip4_addr_isany(&netif_db->ipconfig.dns1)) {
-        netif_db->ipconfig.dns1 = (IP_ADDR_ANY != dns_getserver(0)) ? *dns_getserver(0) : netif_db->ipconfig.ip;
-        netif_db->ipconfig.dns2 = (IP_ADDR_ANY != dns_getserver(1)) ? *dns_getserver(1) : netif_db->ipconfig.ip;
-    }
-#endif
-#endif
-    wifi_set_ip_info(intf, &netif_db->ipconfig);
 
-	
-	wifi_softap_set_dhcps_lease(&netif_db->dhcps_cfg);
-    wifi_softap_set_dhcps_lease_time(netif_db->dhcps_cfg.dhcps_lease);
-	
-    if (!use_dhcp_server) {
+#ifdef CONFIG_IPV6
+    if (system_lwip_get_ipv6_enable()) {
+        netif_create_ip6_linklocal_address(netdb->net_if, 1);
+    }
+#endif
+
+#if defined ENABLE_LWIP_NAPT
+    if (ip4_addr_isany(ip_2_ip4(&netdb->ipconfig.dns1))) {
+        struct dhcps_lease lease = {0};
+        int idx;
+        lease.mask |= DHCP_SERVER_MASK_DNS;
+        for (idx = 0; idx < DNS_MAX_SERVERS; idx++) {
+            if (dns_getserver(idx) != IP_ADDR_ANY) {
+                lease.dnsserver[idx] = *dns_getserver(idx);
+            } else {
+                lease.dnsserver[idx] = netdb->ipconfig.ip;
+                SYS_LOGE("DNS cannot work by dnsserver default");
+            }
+        }
+
+        dhcps_lease_info_set(&lease);
+    }
+#endif
+    wifi_set_ip_info(intf, &netdb->ipconfig);
+
+    /* donot start dhcpserver, station set static ip to link */
+    if (netdb->dhcp_stat == TCPIP_DHCP_ABORD) {
         return;
     }
 
-    dhcps_start(netif_db->net_if , &netif_db->ipconfig);
-    netif_db->dhcp_stat = TCPIP_DHCP_STARTED;
+    dhcps_start(netdb->net_if);
+    netdb->dhcp_stat = TCPIP_DHCP_STARTED;
 }
 
 void wifi_softap_dhcps_stop(int intf)
 {
     struct ip_info ipinfo_tmp;
-    netif_db_t *netif_db;
+    netif_db_t *netdb;
 
     if (!IS_VALID_VIF(intf)) {
         return;
     }
-    netif_db = get_netdb_by_index(intf);
-    if (netif_db->dhcp_stat != TCPIP_DHCP_STARTED) {
+    netdb = get_netdb_by_index(intf);
+    if (netdb->dhcp_stat != TCPIP_DHCP_STARTED) {
         SYS_LOGD("stop dhcps, but dhcps not started.");
         return;
     }
@@ -655,23 +650,24 @@ void wifi_softap_dhcps_stop(int intf)
     wifi_set_ip_info(intf, &ipinfo_tmp);
 
     dhcps_stop();
-    netif_db->dhcp_stat = TCPIP_DHCP_STOPPED;
+    netdb->dhcp_stat = TCPIP_DHCP_STOPPED;
 }
 
 dhcp_status_t wifi_softap_dhcps_status(int vif)
 {
-    netif_db_t *netif_db;
+    netif_db_t *netdb;
     dhcp_status_t ret;
 
     if (!IS_VALID_VIF(vif)) {
         return TCPIP_DHCP_STATUS_MAX;
     }
 
-    netif_db = get_netdb_by_index(vif);
-    ret = netif_db->dhcp_stat;
+    netdb = get_netdb_by_index(vif);
+    ret = netdb->dhcp_stat;
 
     return ret;
 }
+#endif
 
 void wifi_ifconfig_help_display(void)
 {
@@ -777,10 +773,12 @@ void wifi_ifconfig(char *cmd)
 		{
             if (STATION_IF == vif)
             {
+                #ifndef CONFIG_CUSTOM_LXW
                 if (TCPIP_DHCP_STATIC != wifi_station_dhcpc_status(vif))
                 {
                     wifi_station_dhcpc_stop(vif);
                 }
+                #endif
             }
 
 			#ifdef CONFIG_IPV6
@@ -802,12 +800,13 @@ void wifi_ifconfig(char *cmd)
             if (SOFTAP_IF == vif)
             {
                 set_softap_ipconfig(&info);
-                
+                #ifndef CONFIG_CUSTOM_LXW
                 if (TCPIP_DHCP_STARTED == wifi_softap_dhcps_status(vif))
                 {
                     wifi_softap_dhcps_stop(vif);
                     wifi_softap_dhcps_start(vif);
                 }
+                #endif
             }
         }
     }
@@ -826,8 +825,10 @@ bool wifi_set_ip_info(wifi_interface_e if_index, ip_info_t *info)
     netif_set_addr(get_netif_by_index(if_index), &info->ip, &info->netmask, &info->gw);
 
     if (!ip4_addr_isany(&info->dns1) || !ip4_addr_isany(&info->dns1)) {
+        #ifndef CONFIG_CUSTOM_LXW
         dns_setserver(0, &info->dns1);
         dns_setserver(1, &info->dns2);
+        #endif
     }
 	#endif
 
@@ -849,13 +850,16 @@ bool wifi_get_ip_info(wifi_interface_e if_index, struct ip_info *info)
     info->ip = nif->ip_addr;
     info->netmask = nif->netmask;
     info->gw = nif->gw;
+    #ifndef CONFIG_CUSTOM_LXW
     info->dns1 = *dns_getserver(0);
     info->dns1 = *dns_getserver(1);
+    #endif
 	#endif
 
     return true;
 }
 
+#ifndef CONFIG_CUSTOM_LXW
 void wifi_send_heartbeat_pkg(void)
 {
     int socket_tmp;
@@ -912,4 +916,4 @@ void wifi_send_heartbeat_pkg(void)
     os_free(iecho);
     lwip_close(socket_tmp);
 }
-
+#endif

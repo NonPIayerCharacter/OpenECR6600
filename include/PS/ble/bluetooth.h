@@ -18,10 +18,17 @@
 #include "stdbool.h"
 #include "bluetooth_err.h"
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 /*
  * GLOBAL VARIABLES DEFINITIONS
  ****************************************************************************************
  */
+#define ENABLE_NOTIFY  0X01
+#define ENABLE_INDICATE  0X02
+
 #define VALUE_INVALID_PARAM 0xFF
 #define ATT_UUID_128_LEN                        0x0010
 #define ATT_BASE_UUID_128(h_b, l_b) {0xFB, 0x34, 0x9B, 0x5F, 0x80, 0x00, 0x00, 0x80, 0x00, 0x10, 0x00, 0x00, l_b, h_b, 0x00, 0x00}
@@ -65,6 +72,8 @@
 #define ECR_BLE_GAP_ADV_STATE_START                                         (0x01)  /**< Start Advertising. A temporary state, haven't received the result.*/
 #define ECR_BLE_GAP_ADV_STATE_ADVERTISING                                   (0x02)  /**< Advertising State */
 #define ECR_BLE_GAP_ADV_STATE_STOP                                          (0x04)  /**< Stop Advertising. A temporary state, haven't received the result.*/
+
+#define ECR_BLE_ATT_MAX_HANDLE                                             (0xFFFF) /**< MAX ATT Handle */
 
 #define BLE_ATT_MTU_DEF        (512)
 
@@ -131,7 +140,8 @@ enum ecr_ser_declation
     UUID_INCLUDE                             = (0x2802),
     /// Characteristic Declaration
     UUID_CHARACTERISTIC                      = (0x2803),
-
+    /// Characteristic user description
+    UUID_CHAR_USER_DESC                     = (0x2901),
 	/// Client characteristic configuration
     UUID_CLIENT_CHAR_CFG                     = (0x2902),
 };
@@ -145,6 +155,8 @@ enum ecr_ser_declation
 #define    UUID_INCLUDE_128                             ATT_BASE_UUID_128(0x28,0x02)
 /// Characteristic Declaration
 #define    UUID_CHARACTERISTIC_128                      ATT_BASE_UUID_128(0x28,0x03)
+/// characteristic user desc
+#define    UUID_CHAR_USER_DESC_128                      ATT_BASE_UUID_128(0x29,0x01)
 /// Client characteristic configuration
 #define    UUID_CLIENT_CHAR_CFG_128                     ATT_BASE_UUID_128(0x29,0x02)
 
@@ -244,6 +256,10 @@ typedef enum {
 	  ECR_BLE_SCAN_PROP_FILT_TRUNC_BIT    = (1 << 5),			/**< Filter truncated advertising or scan response reports */
   }ECR_BLE_SCAN_PROP;
 
+#define     ECR_BLE_GATTC_NOTIFY                                   (0x12)
+#define     ECR_BLE_GATTC_INDICATE                                 (0x13)
+#define     ECR_BLE_GAP_INVALID_CONHDL                             (0xFFFF)
+
  /**@brief GAP advertising parameters. */
 typedef struct {
 	uint8_t				 adv_type;					 /**< Adv Type. Refer to ECR_BLE_GAP_ADV_TYPE_CONN_SCANNABLE_UNDIRECTED etc.*/
@@ -253,6 +269,7 @@ typedef struct {
 	uint16_t				 adv_interval_max;			 /**< Range: 0x0020 to 0x4000  Time = N * 0.625 msec Time Range: 20 ms to 10.24 sec */
 	uint8_t				 adv_channel_map;			 /**< Advertising Channel Map, 0x01 = adv channel index 37,  0x02 = adv channel index 38,
 															 0x04 = adv channel index 39. Default Value: 0x07*/
+    uint8_t              filter_pol;
 } ECR_BLE_GAP_ADV_PARAMS_T;
  
 /**@brief GAP adv report parameters. */
@@ -269,6 +286,7 @@ typedef struct {
     uint8_t                 scan_type;                   /**< Type of scanning to be started @ECR_BLE_SCAN_TYPE_E*/
     uint8_t                 dup_filt_pol;                /**< Duplicate packet filtering policy @ECR_BLE_DUP_FILTER_POL_E*/
 	uint8_t                 scan_prop;                   /**< Properties for the scan procedure (@ECR_BLE_SCAN_PROP for bit signification)*/
+    uint8_t                 own_addr_type;               /**< scan addr type */
     uint16_t                interval;                   /**< Scan interval in 625 us units. */
     uint16_t                window;                     /**< Scan window in 625 us units. */
     uint16_t                duration;                    /**< Scan duration (in unit of 10ms). 0 means that the controller will scan continuously until
@@ -311,15 +329,22 @@ typedef struct {
 
 /**< GATT characteristic property bit field values */
 typedef enum {
-    ECR_BLE_GATT_CHAR_PROP_BROADCAST            = 0x01, /**< If set, permits broadcasts of the Characteristic Value using Server Characteristic Configuration Descriptor. */
-    ECR_BLE_GATT_CHAR_PROP_READ                 = 0x02, /**< If set, permits reads of the Characteristic Value */
-    ECR_BLE_GATT_CHAR_PROP_WRITE_NO_RSP         = 0x04, /**< If set, permit writes of the Characteristic Value without response */
-    ECR_BLE_GATT_CHAR_PROP_WRITE                = 0x08, /**< If set, permits writes of the Characteristic Value with response */
-    ECR_BLE_GATT_CHAR_PROP_NOTIFY               = 0x10, /**< If set, permits notifications of a Characteristic Value without acknowledgment */
-    ECR_BLE_GATT_CHAR_PROP_INDICATE             = 0x20, /**< If set, permits indications of a Characteristic Value with acknowledgment */
-    ECR_BLE_GATT_CHAR_PROP_WRITE_AUTHEN_SIGNED  = 0x40, /**< If set, permits signed writes to the Characteristic Value */
-    ECR_BLE_GATT_CHAR_PROP_EXT_PROP             = 0x80, /**< If set, additional characteristic properties are defined in the Characteristic */
-}ECR_BLE_CHAR_PROP_TYPE_E;
+    ECR_BLE_GATT_CHAR_PROP_BROADCAST            = 0x0001, /**< If set, permits broadcasts of the Characteristic Value using Server Characteristic Configuration Descriptor. */
+    ECR_BLE_GATT_CHAR_PROP_READ                 = 0x0002, /**< If set, permits reads of the Characteristic Value */
+    ECR_BLE_GATT_CHAR_PROP_WRITE_NO_RSP         = 0x0004, /**< If set, permit writes of the Characteristic Value without response */
+    ECR_BLE_GATT_CHAR_PROP_WRITE                = 0x0008, /**< If set, permits writes of the Characteristic Value with response */
+    ECR_BLE_GATT_CHAR_PROP_NOTIFY               = 0x0010, /**< If set, permits notifications of a Characteristic Value without acknowledgment */
+    ECR_BLE_GATT_CHAR_PROP_INDICATE             = 0x0020, /**< If set, permits indications of a Characteristic Value with acknowledgment */
+    ECR_BLE_GATT_CHAR_PROP_WRITE_AUTHEN_SIGNED  = 0x0040, /**< If set, permits signed writes to the Characteristic Value */
+    // ECR_BLE_GATT_CHAR_PROP_RELIABLE_WRITE    = 0x0080, /**< not support.If set, permits reliable writes to the Characteristic Value */
+    // ECR_BLE_GATT_CHAR_PROP_AUX_WRITE         = 0x0100, /**< not support.If set, permits auxiliary writes (long writes) to the Characteristic Value */
+    ECR_BLE_GATT_CHAR_PROP_READ_ENC             = 0x0200, /**< If set, requires encryption for read operations */
+    ECR_BLE_GATT_CHAR_PROP_READ_AUTHEN          = 0x0400, /**< If set, requires authentication for read operations */
+    // ECR_BLE_GATT_CHAR_PROP_READ_AUTHOR       = 0x0800, /**< not support. If set, requires authorization for read operations */
+    ECR_BLE_GATT_CHAR_PROP_WRITE_ENC            = 0x1000, /**< If set, requires encryption for write operations */
+    ECR_BLE_GATT_CHAR_PROP_WRITE_AUTHEN         = 0x2000, /**< If set, requires authentication for write operations */
+    // ECR_BLE_GATT_CHAR_PROP_WRITE_AUTHOR      = 0x4000, /**< not support. If set, requires authorization for write operations */
+} ECR_BLE_CHAR_PROP_TYPE_E;
 
 /**< GATT attribute permission bit field values */
 typedef enum {
@@ -333,13 +358,17 @@ typedef enum {
     ECR_BLE_GATT_PERM_PREPARE_WRITE             = 0x80, /**< Attribute prepare write permission. */
 } ECR_BLE_ATTR_PERM_E;
 
-typedef struct {
+typedef struct ecr_ble_gatt_char_type ECR_BLE_CHAR_PARAMS_T;
+typedef struct ecr_ble_gatt_srv_type ECR_BLE_SERVICE_PARAMS_T;
+
+typedef struct ecr_ble_gatt_char_type{
     uint16_t        handle;                             /**< [Output] After init the characteristic, we will get the char-handle, we need to restore it */
 
     ECR_BLE_UUID_T  char_uuid;                          /**< Characteristics UUID */
-    uint8_t         property;                           /**< Characteristics property , Refer to ECR_BLE_CHAR_PROP_TYPE_E */
-    uint8_t         permission;                         /**< Characteristics value attribute permission */
+    uint16_t         property;                           /**< Characteristics property , Refer to ECR_BLE_CHAR_PROP_TYPE_E */
+    uint16_t         permission;                         /**< Characteristics value attribute permission */
     uint16_t        value_len;                          /**< Characteristics value length */
+    uint16_t        cccd;                               /**< Characteristics desc */
 } ECR_BLE_CHAR_PARAMS_T;
 
 typedef enum {
@@ -350,12 +379,12 @@ typedef enum {
     ECR_BLE_UUID_CHARACTERISTIC             = 0x2803,   /**< Characteristic. */
 } ECR_BLE_SERVICE_TYPE_E;
 
-typedef struct {
+typedef struct ecr_ble_gatt_srv_type{
     uint16_t                    handle;                 /**< After init the service, we will get the svc-handle */
 
     ECR_BLE_UUID_T              svc_uuid;               /**< Service UUID */
     ECR_BLE_SERVICE_TYPE_E      type;                   /**< Service Type */
-    
+    bool                        start;                  /**< sevice start or not*/
     uint8_t                     char_num;               /**< Number of characteristic */
     ECR_BLE_CHAR_PARAMS_T       *p_char;                /**< Pointer of characteristic */
 } ECR_BLE_SERVICE_PARAMS_T;
@@ -383,6 +412,12 @@ typedef enum {
     ECR_BLE_GAP_EVT_CONN_RSSI,                          /**< Got RSSI value of link peer device */
 
 	ECR_BLE_GAP_IRK_GEN_IND,							  /**< Generate IRK */
+
+    ECR_BLE_GAP_IRK_RESOLV_IND,                         /**< resolv IRK */
+
+    ECR_BLE_GAP_EVT_SCAN_COMPLETE,                      /** Scan down*/
+
+    ECR_BLE_GAP_GET_SLAVE_TXPOWER,                      /**< get slave tx power lvl */
 } ECR_BLE_GAP_EVT_TYPE_E;
 
 typedef enum {      
@@ -391,6 +426,8 @@ typedef enum {
     ECR_BLE_GATT_EVT_MTU_RSP,                           /**< MTU exchange respond event, For Ble Central, the ble central has finished the MTU-Request */
 
     ECR_BLE_GATT_EVT_PRIM_SEV_DISCOVERY,                /**< [Ble Central] Discovery Service */
+
+    ECR_BLE_GATT_EVT_INCL_SEV_DISCOVERY,                /**< [Ble Central] Include Service */
 
     ECR_BLE_GATT_EVT_CHAR_DISCOVERY,                    /**< [Ble Central] Discovery Characteristics*/
 
@@ -405,7 +442,13 @@ typedef enum {
     ECR_BLE_GATT_EVT_NOTIFY_INDICATE_RX,                /**< [Ble Central] Get Notification or Indification data */
 
     ECR_BLE_GATT_EVT_READ_RX,                           /**< [Ble Central] Get Char-Read Data */
+
+    ECR_BLE_GATT_EVT_READ_IND,                          /**< [Ble Peripheral] RX Char-Read Indicate */
 } ECR_BLE_GATT_EVT_TYPE_E;
+
+typedef enum {
+    ECR_BLE_SEC_BOND_REQ,
+} ECR_BLE_SEC_EVT_TYPE_E;
 
 typedef struct {
 	uint8_t irk[16];
@@ -432,28 +475,45 @@ typedef struct {
     int32_t                           result;             /**< Write Result */
 } ECR_BLE_WRITE_RESULT_EVT_T;
 
+typedef struct ecr_ble_gatt_svc_disc_type ECR_BLE_GATT_SVC_DISC_TYPE_T;
+typedef struct ecr_ble_gatt_char_disc_type ECR_BLE_GATT_CHAR_DISC_TYPE_T;
+typedef struct ecr_ble_gatt_desc_disc_type ECR_BLE_GATT_DESC_DISC_TYPE_T;
 
-typedef struct {
-    ECR_BLE_UUID_T              uuid;               /**< Discovery Service UUID */
-    uint16_t                    start_handle;       /**< Discovery Start Handle */
-    uint16_t                    end_handle;         /**< Discovery End Handle */
-} ECR_BLE_GATT_SVC_DISC_TYPE_T;
 
-typedef struct {
-    ECR_BLE_UUID_T              uuid;               /**< Discovery Service UUID */
-    uint16_t                    handle;             /**< Discovery Char value Handle */
-} ECR_BLE_GATT_CHAR_DISC_TYPE_T;
+struct ecr_ble_gatt_svc_disc_type {
+    ECR_BLE_GATT_SVC_DISC_TYPE_T        *next_srv;          /**< next serive */
+    ECR_BLE_GATT_SVC_DISC_TYPE_T        *include_srv;       /**< include serive */
+    ECR_BLE_GATT_CHAR_DISC_TYPE_T       *charactristic;     /**< Service charactristic list */
+    ECR_BLE_UUID_T                      uuid;               /**< Service UUID */
+    uint16_t                            start_handle;       /**< Service Start Handle */
+    uint16_t                            end_handle;         /**< Service End Handle */
+};
 
-typedef struct {
+struct ecr_ble_gatt_char_disc_type{
+    ECR_BLE_GATT_CHAR_DISC_TYPE_T       *next_char;          /**< next charactrist */
+    ECR_BLE_UUID_T                      uuid;               /**< Discovery Service UUID */
+    uint16_t                            handle;             /**< Discovery Char value Handle */
+    uint8_t                             prop;               /**< properties */
+    ECR_BLE_GATT_DESC_DISC_TYPE_T       *cccd;               /**< Discovery CCCD */
+};
+
+struct ecr_ble_gatt_desc_disc_type{
     uint16_t                        cccd_handle;        /**< Discovery Descriptor Handle, Return CCCD Handle */
     uint8_t                         uuid_len;           /**< UUID length */
     uint16_t                        uuid16;             /**< Descriptor UUID */
-} ECR_BLE_GATT_DESC_DISC_TYPE_T;
+    uint8_t                         cccd_value;
+};
 
 typedef struct {
+    uint8_t                         ntf_flag;           /**< Disting Notify or Indicate, Notify: 0x01, Indicate:0x02 */
     uint16_t                        char_handle;        /**< Specify one characteristic handle */
+    uint8_t                         type;               /**indicate or notify*/
     ECR_BLE_DATA_T                  report;             /**< Report Data, Refer to @ ECR_BLE_DATA_T */
 } ECR_BLE_DATA_REPORT_T;
+
+typedef struct {
+    uint8_t                 addr[6];
+} ECR_BLE_RESLOV_IRK_REPORT_T;
 
 typedef struct {
     ECR_BLE_GAP_EVT_TYPE_E              type;           /**< Gap Event */
@@ -466,8 +526,11 @@ typedef struct {
         ECR_BLE_GAP_ADV_REPORT_T        adv_report;     /**< Receive Adv and Respond report*/
         ECR_BLE_GAP_CONN_PARAMS_T       conn_param;     /**< We will update connect parameters.This value can be used with ECR_BLE_EVT_CONN_PARAM_REQ and ECR_BLE_EVT_CONN_PARAM_UPDATE*/
         int8_t                          link_rssi;      /**< Peer device RSSI value */
-		ECR_BLE_GAP_GEN_IRK_T       gen_irk;
+		ECR_BLE_GAP_GEN_IRK_T           gen_irk;
+        ECR_BLE_RESLOV_IRK_REPORT_T     resolv_irk;
+        uint8_t                         txpower_lvl;
 	}gap_event;
+
 } ECR_BLE_GAP_PARAMS_EVT_T;
 
 typedef struct {
@@ -487,6 +550,23 @@ typedef struct {
         ECR_BLE_DATA_REPORT_T           data_read;      /**< After we do read attr in central mode, we will get the callback*/
     }gatt_event;
 } ECR_BLE_GATT_PARAMS_EVT_T;
+
+typedef struct {
+    uint8_t buttons;
+    uint8_t x_axis;
+    uint8_t y_axis;
+    uint16_t wheel;
+} ECR_BLE_HID_MOUSE_REPORT_T;
+
+typedef struct {
+    uint16_t modifier_keys;
+    uint8_t key_1;
+    uint8_t key_2;
+    uint8_t key_3;
+    uint8_t key_4;
+    uint8_t key_5;
+    uint8_t key_6;
+} ECR_BLE_HID_KB_REPORT_T;
 
 /// Privacy configuration
 enum ble_priv_cfg
@@ -509,6 +589,58 @@ enum ble_pairing_mode
     BLE_PAIRING_LEGACY   = (1 << 0),
     /// Secure Connection pairing Authorized
     BLE_PAIRING_SEC_CON  = (1 << 1),
+};
+
+/// Authentication mask
+enum ble_gap_auth_mask
+{
+    /// No Flag set
+    BLE_AUTH_NONE    = 0,
+    /// Bond authentication
+    BLE_AUTH_BOND    = (1 << 0),
+    /// Man In the middle protection
+    BLE_AUTH_MITM    = (1 << 2),
+    /// Secure Connection
+    BLE_AUTH_SEC_CON = (1 << 3),
+    /// Key Notification
+    BLE_AUTH_KEY_NOTIF = (1 << 4)
+};
+
+/// Authentication Requirements
+enum ble_gap_auth
+{
+    /// No MITM No Bonding
+    BLE_AUTH_REQ_NO_MITM_NO_BOND  = (BLE_AUTH_NONE),
+    /// No MITM Bonding
+    BLE_AUTH_REQ_NO_MITM_BOND     = (BLE_AUTH_BOND),
+    /// MITM No Bonding
+    BLE_AUTH_REQ_MITM_NO_BOND     = (BLE_AUTH_MITM),
+    /// MITM and Bonding
+    BLE_AUTH_REQ_MITM_BOND        = (BLE_AUTH_MITM | BLE_AUTH_BOND),
+    /// SEC_CON and No Bonding
+    BLE_AUTH_REQ_SEC_CON_NO_BOND  = (BLE_AUTH_SEC_CON | BLE_AUTH_MITM),
+    /// SEC_CON and Bonding
+    BLE_AUTH_REQ_SEC_CON_BOND     = (BLE_AUTH_SEC_CON | BLE_AUTH_MITM | BLE_AUTH_BOND),
+
+    BLE_AUTH_REQ_LAST,
+
+    /// Mask of  authentication features without reserved flag
+    BLE_AUTH_REQ_MASK             = 0x1F,
+};
+
+enum ble_gap_io_cap
+{
+    /// Display Only
+    BLE_GAP_IO_CAP_DISPLAY_ONLY = 0x00,
+    /// Display Yes No
+    BLE_GAP_IO_CAP_DISPLAY_YES_NO,
+    /// Keyboard Only
+    BLE_GAP_IO_CAP_KB_ONLY,
+    /// No Input No Output
+    BLE_GAP_IO_CAP_NO_INPUT_NO_OUTPUT,
+    /// Keyboard Display
+    BLE_GAP_IO_CAP_KB_DISPLAY,
+    BLE_GAP_IO_CAP_LAST
 };
 
 typedef struct{
@@ -546,6 +678,30 @@ typedef VOID(*ECR_BLE_GAP_EVT_FUNC_CB)(ECR_BLE_GAP_PARAMS_EVT_T *p_event);
 typedef VOID(*ECR_BLE_GATT_EVT_FUNC_CB)(ECR_BLE_GATT_PARAMS_EVT_T *p_event);
 
 
+typedef struct {
+    uint8_t    io_cap;                  /* local IO capabilities */
+    uint8_t    oob_data;                /* OOB data present (locally) for the peer device */
+    uint8_t    auth_req;                /* Authentication request (for local device) contain bonding and MITM info */
+    uint8_t    max_key_size;            /* max encryption key size */
+    uint8_t    init_keys;               /* keys to be distributed, bit mask */
+    uint8_t    rsp_keys;                /* keys to be distributed, bit mask */
+    uint8_t    auth_option;             /* Security authentication lvl*/
+} ECR_BLE_SEC_REQ_T;
+
+/// Random Address type
+enum ble_random_addr_type
+{
+    /// Mask over the 2 MSBs
+    BLE_ADDR_RND_ADDR_TYPE_MSK = 0xC0,
+
+    /// Static random address           - 11 (MSB->LSB)
+    BLE_ADDR_STATIC      = 0xC0,
+    /// Private non resolvable address  - 00 (MSB->LSB)
+    BLE_ADDR_NON_RSLV    = 0x00,
+    /// Private resolvable address      - 01 (MSB->LSB)
+    BLE_ADDR_RSLV        = 0x40,
+};
+
 /*
  * GLOBAL FUNCTION DEFINITIONS
  ****************************************************************************************
@@ -566,7 +722,7 @@ typedef VOID(*ECR_BLE_GATT_EVT_FUNC_CB)(ECR_BLE_GATT_PARAMS_EVT_T *p_event);
  *			ecr_ble_set_irk(irk);
  */
 void ecr_ble_reset(void);
-
+void ecr_ble_reset_adv_data(void);
 
 /* brief: Configuration can be modified only if no connection exists and no air
  * operation on-going.
@@ -575,11 +731,17 @@ void ecr_ble_set_dev_config(ECR_BLE_DEV_CONFIG *config);
 
 void ecr_ble_generate_irk(void);
 void ecr_ble_set_irk(uint8_t *irk);
+BT_RET_T ecr_ble_set_tx_power(uint8_t tx_power_index);
+void ecr_ble_slave_get_txpower(void);
 
 void ecr_ble_gap_callback_register(ECR_BLE_GAP_EVT_FUNC_CB gap_evt);
 
+BT_RET_T ecr_ble_set_rand_device_addr(uint8_t *p_addr);
+void ecr_ble_reset_rand_device_addr();
 BT_RET_T ecr_ble_set_device_addr(ECR_BLE_GAP_ADDR_T *p_addr);
 BT_RET_T ecr_ble_get_device_addr(ECR_BLE_GAP_ADDR_T *p_addr);
+void ecr_ble_set_addr_type(uint8_t addr_type);
+uint8_t ecr_ble_get_addr_type(void);
 
 /*
  * brief: the max length of shortened local name is 18 octets
@@ -591,6 +753,7 @@ BT_RET_T ecr_ble_get_device_name( uint8_t *dev_name, uint16_t dev_name_len);
 BT_RET_T ecr_ble_adv_param_update(ECR_BLE_DATA_T CONST *p_adv, ECR_BLE_DATA_T CONST *p_scan_rsp);
 BT_RET_T ecr_ble_adv_param_set(ECR_BLE_DATA_T CONST *p_adv, ECR_BLE_DATA_T CONST *p_scan_rsp);
 
+BT_RET_T ecr_ble_get_adv_start_state(void);
 BT_RET_T ecr_ble_gap_adv_start(ECR_BLE_GAP_ADV_PARAMS_T CONST *p_adv_params);
 BT_RET_T ecr_ble_gap_adv_stop(void);
 
@@ -617,12 +780,13 @@ void ecr_ble_gatt_callback_register(ECR_BLE_GATT_EVT_FUNC_CB gatt_evt);
 
 // add user gatt service
 void ecr_ble_gatts_service_add(ECR_BLE_GATTS_PARAMS_T *p_service, bool is_ues_deatult);
+uint8_t ecr_ble_gatt_svc_visibility_set(uint16_t handle, bool hide);
 
 void ecr_ble_gatts_value_get(uint16_t conn_handle, uint16_t char_handle, uint8_t *p_data, uint16_t length);
 void ecr_ble_gatts_value_set(uint16_t conn_handle, uint16_t char_handle, uint8_t *p_data, uint16_t length);
 
-void ecr_ble_gatts_value_notify(uint16_t conn_handle, uint16_t char_handle, uint8_t *p_data, uint16_t length);
-void ecr_ble_gatts_value_indicate(uint16_t conn_handle, uint16_t char_handle, uint8_t *p_data, uint16_t length);
+BT_RET_T ecr_ble_gatts_value_notify(uint16_t conn_handle, uint16_t char_handle, uint8_t *p_data, uint16_t length);
+BT_RET_T ecr_ble_gatts_value_indicate(uint16_t conn_handle, uint16_t char_handle, uint8_t *p_data, uint16_t length);
 
 void ecr_ble_gattc_exchange_mtu_rsp(uint16_t conn_handle, uint16_t server_mtu);
 
@@ -630,6 +794,7 @@ void ecr_ble_gattc_exchange_mtu_rsp(uint16_t conn_handle, uint16_t server_mtu);
 //master, to do
 void ecr_ble_gattc_all_service_discovery(uint16_t conn_handle);
 void ecr_ble_gattc_service_discovery_by_uuid(uint16_t conn_handle, ECR_BLE_UUID_T uuid);
+void ecr_ble_gattc_all_include_srv_discovery(uint16_t conn_handle, uint16_t start_handle, uint16_t end_handle);
 void ecr_ble_gattc_all_char_discovery(uint16_t conn_handle, uint16_t start_handle, uint16_t end_handle);
 void ecr_ble_gattc_char_desc_discovery(uint16_t conn_handle, uint16_t start_handle, uint16_t end_handle);
 void ecr_ble_gattc_write_without_rsp(uint16_t conn_handle, uint16_t char_handle, uint8_t *p_data, uint16_t length);
@@ -638,6 +803,32 @@ void ecr_ble_gattc_read(uint16_t conn_handle, uint16_t char_handle);
 void ecr_ble_gattc_exchange_mtu_req(uint16_t conn_handle, uint16_t client_mtu);
 uint16_t ecr_ble_gattc_get_mtu(uint16_t conn_handle);
 ECR_GAP_ACT_STATE_T ecr_ble_actv_state_get(ECR_BT_ACT_T idx);
+bool ecr_ble_get_cccd_value(uint16_t conn_handle, uint16_t cccd_handle);
+#if (CONFIG_BLE_PROFILE_HOGPD)
+void ecr_ble_init_hid(bool init);
+void ecr_ble_hid_send_mouse_report(uint16_t connect_idx, ECR_BLE_HID_MOUSE_REPORT_T report);
+void ecr_ble_hid_send_kb_report(uint16_t connect_idx, ECR_BLE_HID_KB_REPORT_T report);
+void ecr_ble_hid_send_consumer_report(uint16_t connect_idx, uint16_t report);
+#endif
+void ecr_ble_set_conninfo(uint16_t conn_info);
+void ecr_ble_set_bond_enable(bool enable);
+void ecr_ble_start_pairing(uint16_t conn_handle, ECR_BLE_SEC_REQ_T *param);
+void ecr_ble_send_enc_rsp(uint16_t conn_handle, uint8_t accept);
+void ecr_ble_send_security_req(uint16_t conn_handle, uint8_t sec_act);
+void ecr_ble_set_sec_param(const ECR_BLE_SEC_REQ_T *sec_param);
+BT_RET_T ecr_ble_set_scli_task();
+BT_RET_T ecr_ble_release_scli_task();
+BT_RET_T ecr_ble_entry_passkey(uint32_t passkey);
+BT_RET_T ecr_ble_receive_passkey(uint32_t passkey);
+void ecr_ble_enc_clear_all(void);
+BT_RET_T ecr_ble_enc_clear_dev_by_idx(uint8_t dev_idx);
+void ecr_ble_enc_get_stroe_dev(void);
+void ecr_ble_enc_get_resolv_addr(uint8_t *resolv_addr);
+void ecr_ble_enc_set_static_key(int32_t key);
+void ecr_ble_enc_set_passkey_callback(void (*callback)(uint32_t passkey));
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _BLUETOOTH_H */
 

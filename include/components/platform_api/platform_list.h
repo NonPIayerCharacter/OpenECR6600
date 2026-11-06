@@ -8,6 +8,17 @@ typedef struct platform_list_node {
     struct platform_list_node *prev;
 } platform_list_t;
 
+void platform_list_init(platform_list_t *list);
+void platform_list_add(platform_list_t *node, platform_list_t *list);
+void platform_list_add_tail(platform_list_t *node, platform_list_t *list);
+void platform_list_del(platform_list_t *entry);
+void platform_list_del_init(platform_list_t *entry);
+void platform_list_replace(platform_list_t *old, platform_list_t *new);
+void platform_list_replace_init(platform_list_t *old, platform_list_t *new);
+void platform_list_move(platform_list_t *node, platform_list_t *list);
+void platform_list_move_tail(platform_list_t *node, platform_list_t *list);
+int platform_list_is_empty(platform_list_t *list);
+
 #define OFFSET_OF_FIELD(type, field) \
     ((size_t)&(((type *)0)->field))
 
@@ -26,6 +37,9 @@ typedef struct platform_list_node {
 #define PLATFORM_LIST_FIRST_ENTRY(list, type, field) \
     PLATFORM_LIST_ENTRY((list)->next, type, field)
 
+#define PLATFORM_LIST_LAST_ENTRY(list,type, field) \
+    PLATFORM_LIST_ENTRY((list)->prev, type, field)
+
 #define PLATFORM_LIST_FIRST_ENTRY_OR_NULL(list, type, field) \
     (platform_list_is_empty(list) ? NULL : PLATFORM_LIST_FIRST_ENTRY(list, type, field))
 
@@ -35,14 +49,14 @@ typedef struct platform_list_node {
 #define PLATFORM_LIST_FOR_EACH_PREV(curr, list) \
     for (curr = (list)->prev; curr != (list); curr = curr->prev)
 
-#define PLATFORM_LIST_FOR_EACH_SAFE(curr, next, list) \
-    for (curr = (list)->next, next = curr->next; curr != (list); \
-        curr = next, next = curr->next)
+#define PLATFORM_LIST_FOR_EACH_SAFE(curr, ncurr, list) \
+    for (curr = (list)->next, ncurr = curr->next; curr != (list); \
+        curr = ncurr, ncurr = curr->next)
 
-#define PLATFORM_LIST_FOR_EACH_PREV_SAFE(curr, next, list) \
-    for (curr = (list)->prev, next = curr->prev; \
+#define PLATFORM_LIST_FOR_EACH_PREV_SAFE(curr, ncurr, list) \
+    for (curr = (list)->prev, ncurr = curr->prev; \
         curr != (list); \
-        curr = next, next = curr->prev)
+        curr = ncurr, ncurr = curr->prev)
 
 #define PLATFORM_LIST_FOR_EACH_ENTRY(pos, head, member) \
     for (pos = PLATFORM_LIST_ENTRY((head)->next, typeof(*pos), member); \
@@ -55,16 +69,4 @@ typedef struct platform_list_node {
         &pos->member != (head); \
         pos = npos, npos = PLATFORM_LIST_ENTRY(npos->member.next, typeof(*npos), member))
 
-
-void platform_list_init(platform_list_t *list);
-void platform_list_add(platform_list_t *node, platform_list_t *list);
-void platform_list_add_tail(platform_list_t *node, platform_list_t *list);
-void platform_list_del(platform_list_t *entry);
-void platform_list_del_init(platform_list_t *entry);
-void platform_list_move(platform_list_t *node, platform_list_t *list);
-void platform_list_move_tail(platform_list_t *node, platform_list_t *list);
-int platform_list_is_empty(platform_list_t *list);
-
-#endif /* _LIST_H_ */
-
-
+#endif /* __PLATFORM_LIST_H__ */

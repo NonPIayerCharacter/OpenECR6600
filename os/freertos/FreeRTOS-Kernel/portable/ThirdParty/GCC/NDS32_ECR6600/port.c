@@ -811,4 +811,22 @@ int mem_is_in_heap(void *mem)
 	
 
 
+/**************************************************************************************
+ * * XIP IN FLASH
+ * **************************************************************************************/
+static void prvTaskExitNormal( void )  __attribute__((section(".xip")));
+void vPortHeapInit(void)  __attribute__((section(".xip")));
+void vPortSetupTimerInterrupt( void ) __attribute__((section(".xip")));
+void vConfigureTickInterrupt( void ) __attribute__((section(".xip")));
+StackType_t *pxPortInitialiseStack( StackType_t *pxTopOfStack, 
+                                        TaskFunction_t pxCode, 
+                                        void *pvParameters ) __attribute__((section(".xip")));
+void vPortSuppressTicksAndSleep( TickType_t xExpectedIdleTime ) __attribute__((section(".xip")));
+BaseType_t xPortStartScheduler( void ) __attribute__((section(".xip")));
+void vApplicationGetTimerTaskMemory( StaticTask_t **ppxTimerTaskTCBBuffer,
+                                        StackType_t **ppxTimerTaskStackBuffer,
+                                        uint32_t *pulTimerTaskStackSize ) __attribute__((section(".xip")));
+void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer,
+                                        StackType_t **ppxIdleTaskStackBuffer,
+                                        uint32_t *pulIdleTaskStackSize ) __attribute__((section(".xip")));
 

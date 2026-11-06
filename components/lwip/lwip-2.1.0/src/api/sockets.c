@@ -79,6 +79,10 @@
 #undef LWIP_NETCONN
 #define LWIP_NETCONN 0
 #endif
+//#define WEIBO_CUST
+#ifdef WEIBO_CUST
+	  typedef int bool;
+#endif
 
 #define API_SELECT_CB_VAR_REF(name)               API_VAR_REF(name)
 #define API_SELECT_CB_VAR_DECLARE(name)           API_VAR_DECLARE(struct lwip_select_cb, name)

@@ -1,7 +1,6 @@
 ifndef CC
 CC=gcc
 endif
-
 ifndef CFLAGS
 CFLAGS = -MMD -O2 -Wall -g
 endif

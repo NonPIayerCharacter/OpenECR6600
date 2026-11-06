@@ -8,7 +8,7 @@
 #include "timer.h"
 #include "pit.h"
 #if 0
-static int utest_adc_config(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_adc_config( int argc, char *argv[])
 {
 	unsigned int input_a;
 	unsigned int input_b;
@@ -32,7 +32,7 @@ static int utest_adc_config(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_adc, config,    utest_adc_config,  " utest_adc_config",  " utest_adc_config [input_a] [input_b] [max_volt]");
 #endif
 
-static int utest_adc_single_test(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_adc_single_test( int argc, char *argv[])
 {
 	unsigned int input_a;
 	unsigned int input_b;
@@ -56,7 +56,7 @@ static int utest_adc_single_test(cmd_tbl_t *t, int argc, char *argv[])
 }
 CLI_SUBCMD(ut_adc, signaltest, utest_adc_single_test,  "utest_adc_single_test",  "utest_adc_single_test");
 
-static int utest_adc_diff_test(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_adc_diff_test( int argc, char *argv[])
 {
 	unsigned int input_a;
 	unsigned int input_b;
@@ -80,7 +80,7 @@ static int utest_adc_diff_test(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_adc, difftest,   utest_adc_diff_test,  "utest_adc_diff_test",  "utest_adc_diff_test");
 
 
-static int utest_adc_vbat_test(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_adc_vbat_test( int argc, char *argv[])
 {
 	
 	int vout =0;
@@ -91,7 +91,7 @@ static int utest_adc_vbat_test(cmd_tbl_t *t, int argc, char *argv[])
 }
 CLI_SUBCMD(ut_adc, vbat,   utest_adc_vbat_test,  "utest_vbat_test",  "utest_vbat_test");
 
-static int utest_adc_tempsensor_test(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_adc_tempsensor_test( int argc, char *argv[])
 {
     int temp;
     temp = hal_adc_tempsensor();
@@ -101,7 +101,7 @@ static int utest_adc_tempsensor_test(cmd_tbl_t *t, int argc, char *argv[])
 }
 CLI_SUBCMD(ut_adc, temp_test, utest_adc_tempsensor_test,  "utest_adc_tempsensor_test",  "utest_adc_tempsensor_test");
 
-static int utest_adc_dynamic_test(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_adc_dynamic_test( int argc, char *argv[])
 {
     int len =100;
     int i;
@@ -116,7 +116,7 @@ static int utest_adc_dynamic_test(cmd_tbl_t *t, int argc, char *argv[])
 }
 CLI_SUBCMD(ut_adc, dyn_test, utest_adc_dynamic_test,  "utest_adc_dynamic_test",  "utest_adc_dynamic_test");
 
-static int utest_adc_dynamic_init(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_adc_dynamic_init( int argc, char *argv[])
 {
 
     unsigned int input_a;

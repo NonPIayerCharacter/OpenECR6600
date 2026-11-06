@@ -62,7 +62,7 @@ enum psm_state_bit_pos
 #define CONFIG_ECR_BLE_PSM 1 
 
 //#define IO_DEBUG 1		//for scope debug,default 0 else 1
-#define CONFIG_TWT_POWER_SAVE 1 //define CONFIG_TWT_POWER_SAVE for twt powersave and chip sleep enable
+//#define CONFIG_TWT_POWER_SAVE 1 //define CONFIG_TWT_POWER_SAVE for twt powersave and chip sleep enable
 
 /*beacon period is 102ms*/
 #define BEACON_PERIOD (102)
@@ -171,6 +171,13 @@ typedef enum
     NULLDATA_FAIL,
 }SEND_NULLDATA_STATUS;
 
+typedef enum 
+{
+    WAKEUP_SRC_RTC = 1,
+    WAKEUP_SRC_GPIO,
+    WAKEUP_SRC_MAX,
+}WAKEUP_SRC;
+
 struct psm_wifi_info
 {
 	bool wifi_psm_en;				//wifi enable
@@ -259,6 +266,12 @@ struct psm_info
     bool    is_rtc_compenstion;
 	bool	is_rtc_update;
 	bool	rf_open_enable;
+	bool 	frequency_switch;
+	/*rf ox202090&0x203094 (adc/dac ldo ) can't close when modemsleep */
+	bool openldo_auxadc_en;
+	#ifdef CONFIG_CUSTOM_HEF
+	WAKEUP_SRC wakeup_src;
+	#endif
 };
 struct psm_dbg_wifi_info
 {
@@ -401,4 +414,11 @@ void psm_dbg_rcd_op(enum psm_dbg_wifi_cnt value);
 void psm_dbg_clr_op(enum psm_dbg_wifi_cnt value);
 unsigned int psm_sleep_next_time_point_op(bool isSet, unsigned char value);
 void psm_pad_gpio_status_init();
+#ifdef CONFIG_CUSTOM_HEF
+WAKEUP_SRC    psm_wakeup_src_op(bool isSet, WAKEUP_SRC src);
+unsigned int psm_prevent_sleep_time_op(bool isSet, unsigned int value);
+#endif
+unsigned int psm_bssid_match_op(bool isSet, unsigned int value);
+bool psm_axuadc_ldo_op(bool isSet, bool value);
+
 #endif

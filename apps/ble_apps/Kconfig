@@ -12,5 +12,18 @@ choice
 	config BLE_EXAMPLES_SPI_SERVER
 		depends on BLE_PRODUCT_BLEFULL
 		bool "ble spi server"
+
+	config BLE_EXAMPLES_BLUFI
+		depends on BLE_PRODUCT_BLEFULL
+		bool "blufi netcfg process"
 endchoice
 
+if BLE_EXAMPLES_BLUFI
+config AT_BLE_BLUFI_TIMEOUT_MIN
+	int "The minimum timeout time(sec) for BLUFI in AT"
+	default 120
+    
+config AT_BLE_BLUFI_TIMEOUT_MAX
+	int "The maximum timeout time(sec) for BLUFI in AT"
+	default 180
+endif

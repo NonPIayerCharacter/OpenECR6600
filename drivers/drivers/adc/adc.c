@@ -80,6 +80,9 @@ float VREF_TEST[20]={0.0};
 float VREF_REF_TEST[20]={0.0};
 
 #define ADC_TEMP_LOW                    0
+#ifdef CONFIG_CUSTOM_YZ
+#define ADC_TEMP_MEDIUM_TEM				50
+#endif
 #define ADC_TEMP_NORMAL_TEM                 80
 #define ADC_TEMP_SENSOR_TO_TEMP         -4.3285
 int create_timer;
@@ -846,11 +849,46 @@ int drv_aux_adc_dynamic_init()
 	//6.-----------------measure volt-------------------------- 
 	gain_cal_vos_data_fix_interface(1,VERR,1,3,DRV_ADC_PGA_GAIN1_MODE);
 	//7.-----------------measure volt-------------------------- 
+#if 1
+
+    int vout_min, vout_max;
+    for (int i=0; i<10; i++)
+    {
+        int vout_val;
+
+        os_usdelay(1);
+
+        vout_val =(READ_REG(AUX_ADC_DATA_OUT) & 0x3FFF);
+        if(((vout_val & 0x2000)>>13) == 1)
+        {
+            vout_val |= 0xffffc000;
+        }
+
+        vout += vout_val;
+
+        if (i==0)
+        {
+            vout_min = vout_val;
+            vout_max = vout_val;
+        }
+        else
+        {
+            vout_min = MIN(vout_min, vout_val);
+            vout_max = MAX(vout_max, vout_val);
+        }
+    }
+
+    vout -= vout_min;
+    vout -= vout_max;
+    vout /= 8;
+#else
 	vout =(READ_REG(AUX_ADC_DATA_OUT) & 0x3FFF);
 	if(((vout & 0x2000)>>13) == 1)
 	{
 		vout |= 0xffffc000;
 	}
+#endif
+
 	vout = (int)(vout *390.6/input_divider[1]);
 	
 	return vout;
@@ -987,9 +1025,11 @@ int get_current_temprature()
 
 DRV_ADC_TEMP_TYPE hal_adc_get_temp_type()
 {
-	unsigned int temp_to_volt_now = 0;
+	unsigned int temp_to_volt_now = 0,temp_now = 0;
     int volt_25 = 0;
-    //return DRV_ADC_TEMP_HIGH;  
+	temp_now = get_current_temprature();
+	os_printf(LM_CMD,LL_DBG,"temp now=%d\r\n", temp_now);
+    //return DRV_ADC_TEMP_LOW;  
 	temp_to_volt_now = temprature_sensor_get_pa();
 	//os_printf(LM_CMD,LL_DBG,"volt now=%d\r\n", temp_to_volt_now);
 	volt_25 = get_25_tempsensor_to_volt();
@@ -1006,11 +1046,24 @@ DRV_ADC_TEMP_TYPE hal_adc_get_temp_type()
             //os_printf(LM_CMD,LL_DBG,"--Currently at Low Temperature Status--\n");
             return DRV_ADC_TEMP_LOW;  
         }
+#ifdef CONFIG_CUSTOM_YZ
+		else if((temp_to_volt_now <= (volt_25-(ADC_TEMP_SENSOR_TO_TEMP*(25-ADC_TEMP_LOW))))&&(temp_to_volt_now >= (volt_25-(ADC_TEMP_SENSOR_TO_TEMP*(25-ADC_TEMP_MEDIUM_TEM)))))
+        {
+            //os_printf(LM_CMD,LL_DBG,"--Currently at Normal Temperature Status--\n");
+            return DRV_ADC_TEMP_NORMAL;
+        }
+        else if((temp_to_volt_now < (volt_25-(ADC_TEMP_SENSOR_TO_TEMP*(25-ADC_TEMP_MEDIUM_TEM))))&&(temp_to_volt_now >= (volt_25-(ADC_TEMP_SENSOR_TO_TEMP*(25-ADC_TEMP_NORMAL_TEM)))))
+        {
+            os_printf(LM_CMD,LL_DBG,"--Currently at Normal Temperature Status--\n");
+            return DRV_ADC_TEMP_HIGH_ADD_MEDIUM;
+        }
+#else
         else if((temp_to_volt_now <= (volt_25-(ADC_TEMP_SENSOR_TO_TEMP*(25-ADC_TEMP_LOW))))&&(temp_to_volt_now >= (volt_25-(ADC_TEMP_SENSOR_TO_TEMP*(25-ADC_TEMP_NORMAL_TEM)))))
         {
             //os_printf(LM_CMD,LL_DBG,"--Currently at Normal Temperature Status--\n");
             return DRV_ADC_TEMP_NORMAL;
         }
+#endif
         else 
         {       
             //os_printf(LM_CMD,LL_DBG,"--Currently at High Temperature Status--\n");
@@ -1025,6 +1078,37 @@ void hal_tempsensor_process(void *arg)
     //temp_status = hal_adc_get_temp_type();
 	temp_autogain_change();
 }
+
+#ifdef CONFIG_CUSTOM_YZ
+#if 0
+os_timer_handle_t g_adc_timer = NULL;
+static void low_temp_isr(void *param)
+{
+	if(get_current_temprature()<0)
+	{
+		WRITE_REG(0x201014,(READ_REG(0x201014)|(0x1<<29))&0x2fffffff);
+	}
+	else
+	{
+		WRITE_REG(0x201014,(READ_REG(0x201014)|(0x1<<28))&0x1fffffff);
+	}
+}
+#endif
+
+int low_temp_check()
+{
+#if 0
+	//60s
+	g_adc_timer = os_timer_create("low_temp_task", 60000, 1, low_temp_isr, NULL);
+
+	if (os_timer_start(g_adc_timer) != 0)
+	{
+		return -1;
+	}
+#endif
+	return 0;
+}
+#endif
 
 void time_check_temp()
 {

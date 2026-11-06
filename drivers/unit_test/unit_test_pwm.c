@@ -4,7 +4,7 @@
 #include "chip_pinmux.h"
 #include "stdlib.h"
 
-static int utest_pwm_init(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_pwm_init( int argc, char *argv[])
 {
 	int pwm_num = 0, gpio_num = 22;
 	int i;
@@ -138,9 +138,9 @@ static int utest_pwm_init(cmd_tbl_t *t, int argc, char *argv[])
 	return 0;
 }
 
-CLI_SUBCMD(ut_pwm, init, utest_pwm_init, "unit test pwm init", "ut_pwm init [pwm] [num] [gpio] [num]");
+CLI_SUBCMD(ut_pwm, pwm_init, utest_pwm_init, "unit test pwm init", "ut_pwm init [pwm] [num] [gpio] [num]");
 
-static int utest_pwm_config(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_pwm_config( int argc, char *argv[])
 {
 	int pwm_num, pwm_freq, pwm_ratio;
 
@@ -171,7 +171,7 @@ static int utest_pwm_config(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_pwm, config, utest_pwm_config, "unit test pwm config", "ut_pwm config [pwm-num] [pwm-freq] [pwm-ratio]");
 
 
-static int utest_pwm_start(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_pwm_start( int argc, char *argv[])
 {
 	int pwm_num;
 
@@ -200,7 +200,7 @@ static int utest_pwm_start(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_pwm, start, utest_pwm_start, "unit test pwm start", "ut_pwm start [pwm-num]");
 
 
-static int utest_pwm_stop(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_pwm_stop( int argc, char *argv[])
 {
 	int pwm_num;
 
@@ -228,7 +228,7 @@ static int utest_pwm_stop(cmd_tbl_t *t, int argc, char *argv[])
 
 CLI_SUBCMD(ut_pwm, stop, utest_pwm_stop, "unit test pwm stop", "ut_pwm stop [pwm-num]");
 
-static int utest_pwm_test(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_pwm_test( int argc, char *argv[])
 {
 	int pwm_num = 0, gpio_num = 22, pwm_freq = 1000, pwm_ratio = 500;
 
@@ -360,7 +360,7 @@ static int utest_pwm_test(cmd_tbl_t *t, int argc, char *argv[])
 
 CLI_SUBCMD(ut_pwm, test, utest_pwm_test, "unit test pwm", "ut_pwm test");
 
-static int utest_pwm_close(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_pwm_close( int argc, char *argv[])
 {
 	int pwm_num;
 
@@ -388,7 +388,7 @@ static int utest_pwm_close(cmd_tbl_t *t, int argc, char *argv[])
 
 CLI_SUBCMD(ut_pwm, close, utest_pwm_close, "unit test pwm close", "ut_pwm close [pwm-num]");
 
-static int utest_pwm_update(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_pwm_update( int argc, char *argv[])
 {
 	int pwm_num;
 

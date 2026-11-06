@@ -257,6 +257,10 @@ udp_input(struct pbuf *p, struct netif *inp)
     LWIP_DEBUGF(UDP_DEBUG, (", %"U16_F") <-- (", pcb->local_port));
     ip_addr_debug_print_val(UDP_DEBUG, pcb->remote_ip);
     LWIP_DEBUGF(UDP_DEBUG, (", %"U16_F")\n", pcb->remote_port));
+#ifdef CONFIG_MATTER
+    if (!(pcb->intf_filter == NULL || pcb->intf_filter == inp))
+      continue;
+#endif
 
     /* compare PCB local addr+port to UDP destination addr+port */
     if ((pcb->local_port == dest) &&
@@ -624,8 +628,22 @@ err_t
 udp_sendto_if(struct udp_pcb *pcb, struct pbuf *p,
               const ip_addr_t *dst_ip, u16_t dst_port, struct netif *netif)
 {
+
+#ifdef CONFIG_MATTER
+  err_t err = ERR_OK;
+  struct pbuf *tbuff = pbuf_alloc(PBUF_TRANSPORT, p->tot_len, PBUF_RAM);
+  LWIP_ERROR("udp_sendto_if: no mem to tbuff", tbuff != NULL, return err);
+  MEMCPY(tbuff->payload, p->payload, p->tot_len);
+
+  p = tbuff;
+#endif
+
 #if LWIP_CHECKSUM_ON_COPY && CHECKSUM_GEN_UDP
-  return udp_sendto_if_chksum(pcb, p, dst_ip, dst_port, netif, 0, 0);
+  err = udp_sendto_if_chksum(pcb, p, dst_ip, dst_port, netif, 0, 0);
+#ifdef CONFIG_MATTER
+  pbuf_free(p);
+#endif
+  return err;
 }
 
 /** Same as udp_sendto_if(), but with checksum */
@@ -634,6 +652,19 @@ udp_sendto_if_chksum(struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *dst_i
                      u16_t dst_port, struct netif *netif, u8_t have_chksum,
                      u16_t chksum)
 {
+#else
+#ifdef CONFIG_MATTER
+  err = matter_udp_sendto_if(pcb, p, dst_ip, dst_port, netif);
+  pbuf_free(p);
+  return err;
+}
+/** Same as udp_sendto_if(), but with checksum */
+err_t
+matter_udp_sendto_if(struct udp_pcb *pcb, struct pbuf *p,
+              const ip_addr_t *dst_ip, u16_t dst_port, struct netif *netif)
+{
+#endif/* matter for clean p_buf */
+
 #endif /* LWIP_CHECKSUM_ON_COPY && CHECKSUM_GEN_UDP */
   const ip_addr_t *src_ip;
 

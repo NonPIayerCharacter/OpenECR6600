@@ -1,0 +1,32 @@
+ifeq ($(CONFIG_MODBUS),y)
+
+	INCPATHS += $(TOPDIR)/components/modbus/modbus/include \
+		$(TOPDIR)/components/modbus/port \
+		$(TOPDIR)/components/modbus/modbus/rtu \
+		$(TOPDIR)/components/modbus/modbus/tcp \
+		$(TOPDIR)/os/freertos/FreeRTOS-Kernel/include \
+		$(TOPDIR)/os/freertos/FreeRTOS-Kernel/portable/ThirdParty/GCC/NDS32_ECR6600 
+	
+	VPATH += :modbus/port
+	VPATH += :modbus/modbus/ascii
+	VPATH += :modbus/modbus/functions
+	VPATH += :modbus/modbus/rtu
+	VPATH += :modbus/modbus/tcp
+	VPATH += :modbus/modbus
+
+	CSRCS   += mbfunccoils.c mbfuncdiag.c mbfuncdisc.c mbfuncholding.c mbfuncinput.c mbfuncother.c mbutils.c \
+	        mb.c portevent.c portother.c porttcp.c user_mb.c
+	
+	ifeq ($(CONFIG_MODBUS_RTU),y)
+		CSRCS += mbascii.c mbrtu.c mbcrc.c
+	endif
+
+	ifeq ($(CONFIG_MODBUS_ASSIC),y)
+		CSRCS += mbascii.c mbrtu.c mbcrc.c
+	endif
+
+	ifeq ($(CONFIG_MODBUS_TCP),y)
+		CSRCS += mbtcp.c
+	endif
+			
+endif

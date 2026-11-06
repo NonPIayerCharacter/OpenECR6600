@@ -59,6 +59,10 @@ ifeq ($(CONFIG_DRV_UNIT_TEST),y)
     ifeq ($(CONFIG_DRV_UNIT_TEST_SPI),y)
             CSRCS += unit_test_spi.c
     endif	
+
+    ifeq ($(CONFIG_DRV_UNIT_TEST_LCD),y)
+        CSRCS += unit_test_lcd.c
+    endif
 	
 	ifeq ($(CONFIG_DRV_UNIT_TEST_PROCESS_SENSOR),y)
         CSRCS += unit_test_process_sensor.c

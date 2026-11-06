@@ -772,7 +772,9 @@ altcp_tls_create_config_server_privkey_cert(const u8_t *privkey, size_t privkey_
     return NULL;
   }
 
-  ret = mbedtls_pk_parse_key(pkey, (const unsigned char *) privkey, privkey_len, privkey_pass, privkey_pass_len);
+  mbedtls_ctr_drbg_context ctr_drbg;
+  mbedtls_ctr_drbg_init( &ctr_drbg );
+  ret = mbedtls_pk_parse_key(pkey, (const unsigned char *) privkey, privkey_len, privkey_pass, privkey_pass_len,mbedtls_ctr_drbg_random, &ctr_drbg);
   if (ret != 0) {
     LWIP_DEBUGF(ALTCP_MBEDTLS_DEBUG, ("mbedtls_pk_parse_public_key failed: %d\n", ret));
     mbedtls_x509_crt_free(srvcert);
@@ -851,8 +853,10 @@ altcp_tls_create_config_client_2wayauth(const u8_t *ca, size_t ca_len, const u8_
     return NULL;
   }
 
+  mbedtls_ctr_drbg_context ctr_drbg;
+  mbedtls_ctr_drbg_init( &ctr_drbg );
   mbedtls_pk_init(conf->pkey);
-  ret = mbedtls_pk_parse_key(conf->pkey, privkey, privkey_len, privkey_pass, privkey_pass_len);
+  ret = mbedtls_pk_parse_key(conf->pkey, privkey, privkey_len, privkey_pass, privkey_pass_len,mbedtls_ctr_drbg_random, &ctr_drbg);
   if (ret != 0) {
     LWIP_DEBUGF(ALTCP_MBEDTLS_DEBUG, ("mbedtls_pk_parse_key failed: %d 0x%x", ret, -1*ret));
     altcp_mbedtls_free_config(conf);

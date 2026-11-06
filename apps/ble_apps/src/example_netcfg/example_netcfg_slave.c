@@ -129,7 +129,7 @@ static void ecr_ble_adv_scanRsp_param_set(void )
 
 static void ecr_ble_adv_start(void)
 {
-	ECR_BLE_GAP_ADV_PARAMS_T adv_param;
+	ECR_BLE_GAP_ADV_PARAMS_T adv_param={0};
 	adv_param.adv_type=ECR_BLE_GAP_ADV_TYPE_CONN_SCANNABLE_UNDIRECTED;
 	memset(&(adv_param.direct_addr),0,sizeof(ECR_BLE_GAP_ADDR_T));
 	adv_param.adv_interval_max=64;

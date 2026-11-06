@@ -1,0 +1,12 @@
+ifeq ($(CONFIG_WIFI_AIRKISS), y)
+	
+	INCPATHS += $(TOPDIR)/components/ak
+
+	AIRKISS_CSRCS =	ak.c \
+					ak_ack.c \
+					akmain.c \
+
+	CSRCS += $(AIRKISS_CSRCS)
+	VPATH += :ak
+	
+endif

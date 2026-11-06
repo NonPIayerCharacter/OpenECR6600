@@ -412,6 +412,7 @@ struct wpa_driver_scan_params {
 	 u8  max_num;
 	 u8  passive;
      u32 scan_time;
+     int glance;
 };
 
 /**
@@ -2073,9 +2074,13 @@ struct wpa_driver_ops {
 	 * Returns: Allocated buffer of scan results (caller is responsible for
 	 * freeing the data structure) on success, NULL on failure
 	 */
-	 struct wpa_scan_results * (*get_scan_results2)(void *priv);
+    struct wpa_scan_results* (*get_scan_results2)(void* priv);
 
-	/**
+    struct dl_list* (*get_glance_scan_results2)(void* priv);
+
+    int (*flush_glance_scan_results2)(void* priv);
+
+    /**
 	 * set_country - Set country
 	 * @priv: Private driver interface data
 	 * @alpha2: country to which to switch to

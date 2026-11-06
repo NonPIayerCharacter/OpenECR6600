@@ -34,6 +34,8 @@ static void wpa_printf(int level, const char *fmt, ...)
 //static void processCommand(char* cmd);
 int ctrl_iface_receive(struct wpa_supplicant *wpa_s, char *cmd);
 void wpa_task_exec_cmd(void *eloop_ctx, void *timeout_ctx);
+extern int wpa_rwnx_driver_get_glance_scan(void *priv);
+extern struct dl_list *wpa_rwnx_driver_get_glance_scan_results2(void *priv);
 
 struct ctrl_iface_priv {
 	struct wpa_supplicant *wpa_s;
@@ -216,11 +218,17 @@ int ctrl_iface_receive(struct wpa_supplicant *wpa_s, char *cmd)
     	reply[reply_len] = 0;
     }
 	//wpa_printf_error(MSG_ERROR, "reply_len: %d ", (int)reply_len);
+#if defined(CONFIG_WIFI_MESH)
+    if(reply_len == 7 && reply && memcmp(reply, "NOPRINT", 7) == 0){
+        os_free(reply);
+        return 0;
+    }
+#endif
 
 	if(reply_len == 1) {
 		wpa_printf(MSG_DEBUG, "FAIL");
 	} else if(reply_len >= 2 && (strncmp("OK",reply,2) == 0)) {
-		wpa_printf(MSG_DEBUG, "OK");
+		/* 静默处理OK响应（成功无需打印，避免日志噪音） */
 		os_free(reply);
 		return 0;
 	} else if(reply) {
@@ -305,7 +313,7 @@ struct ctrl_iface_global_priv* wpa_supplicant_global_ctrl_iface_init(struct wpa_
 #include "rsn_supp/wpa.h"
 #if !defined(CONFIG_FAST_CONNECT)
 #define WIFI_SSID_MAX_LEN   (32 + 1)
-#define WIFI_PWD_MAX_LEN    (64) // pwd string support max length is 63
+#define WIFI_PWD_MAX_LEN    (64 + 1) // pwd string support max length is 63
 
 typedef enum {
 	CIPHER_NONE = 0,
@@ -313,6 +321,9 @@ typedef enum {
 	CIPHER_WEP104,
 	CIPHER_TKIP,
 	CIPHER_CCMP,
+	CIPHER_TKIP_CCMP,
+	CIPHER_AES_CMAC_128,
+	CIPHER_MAX
 } wifi_cipher_mode_e;
 
 typedef struct {
@@ -322,9 +333,12 @@ typedef struct {
 	uint8_t   pwd_len;
 	uint8_t   auth;
 	uint8_t   cipher;
-	uint8_t  channel;
+	uint8_t   channel;
 	uint8_t   bssid[6];
 	int8_t    rssi;
+    uint8_t   group_cipher;
+    uint8_t   proto;
+    uint8_t   wps;
 } wifi_info_t;
 
 typedef enum {
@@ -333,24 +347,39 @@ typedef enum {
     AUTH_WPA_PSK,       /**< authenticate mode : WPA_PSK */
     AUTH_WPA2_PSK,      /**< authenticate mode : WPA2_PSK */
     AUTH_WPA_WPA2_PSK,  /**< authenticate mode : WPA_WPA2_PSK */
+	AUTH_WPA2_ENTERPRISE,
     AUTH_WPA3_PSK,      /**< authenticate mode : WPA3_PSK */
     AUTH_WPA2_WPA3_PSK, /**< authenticate mode : WPA2_WPA3_PSK */
+	AUTH_WAPI_PSK,
+	AUTH_OWE,
+	AUTH_WPA3_ENT_SUITE_B_192_BIT,
     AUTH_MAX
 } wifi_auth_mode_e;
 #endif
 int wpa_get_scan_num(void)
 {
-	struct wpa_supplicant *wpa_s;	
-	wpa_s = wpa_get_ctrl_iface(0);
-	return dl_list_len(&wpa_s->bss_id);
+    struct wpa_supplicant *wpa_s;
+    struct dl_list *list;
+    int count;
+
+    wpa_s = wpa_get_ctrl_iface(0);
+
+    if (wpa_rwnx_driver_get_glance_scan(wpa_s->drv_priv)) {
+        list = wpa_rwnx_driver_get_glance_scan_results2(wpa_s->drv_priv);
+        count = dl_list_len(list);
+    } else {
+        count = dl_list_len(&wpa_s->bss_id);
+    }
+
+    return count;
 }
 
-sys_err_t wpa_get_bss_mode(struct wpa_bss *bss, uint8_t *auth, uint8_t *cipher)
+sys_err_t wpa_get_bss_mode(struct wpa_bss *bss, uint8_t *auth, uint8_t *cipher, uint8_t *group_cipher)
 {
 	const u8 *ie, *ie2;
 	struct wpa_ie_data data;
 
-	if(!bss || !auth || !cipher)
+	if(!bss || !auth || !cipher || !group_cipher)
 		return -1;
 
 	ie  = wpa_bss_get_vendor_ie(bss, WPA_IE_VENDOR_TYPE);
@@ -363,22 +392,12 @@ sys_err_t wpa_get_bss_mode(struct wpa_bss *bss, uint8_t *auth, uint8_t *cipher)
 			if (wpa_parse_wpa_ie(ie, ie[1]+2, &data) < 0)
 				return -1;
 
-			if(data.pairwise_cipher & WPA_CIPHER_CCMP)
-				*cipher = CIPHER_CCMP;
-			else
-				*cipher = CIPHER_TKIP;
-
 			*auth = AUTH_WPA_PSK;
 		}
 		else if(!ie && ie2)
 		{
 			if (wpa_parse_wpa_ie(ie2, ie2[1]+2, &data) < 0)
 				return -1;
-			
-			if(data.pairwise_cipher & WPA_CIPHER_CCMP)
-				*cipher = CIPHER_CCMP;
-			else
-				*cipher = CIPHER_TKIP;
 
             if (data.key_mgmt & WPA_KEY_MGMT_SAE && data.key_mgmt & WPA_KEY_MGMT_PSK) {
                 *auth = AUTH_WPA2_WPA3_PSK;
@@ -393,59 +412,213 @@ sys_err_t wpa_get_bss_mode(struct wpa_bss *bss, uint8_t *auth, uint8_t *cipher)
 			if (wpa_parse_wpa_ie(ie2, ie2[1]+2, &data) < 0)
 				return -1;
 
-			if(data.pairwise_cipher & WPA_CIPHER_CCMP)
-				*cipher = CIPHER_CCMP;
-			else
-				*cipher = CIPHER_TKIP;
-			
 			*auth = AUTH_WPA_WPA2_PSK;
 		}
+
+		if (data.pairwise_cipher & WPA_CIPHER_TKIP && data.pairwise_cipher & WPA_CIPHER_CCMP)
+			*cipher = CIPHER_TKIP_CCMP;
+		else if(data.pairwise_cipher & WPA_CIPHER_CCMP)
+			*cipher = CIPHER_CCMP;
+		else if (data.pairwise_cipher & WPA_CIPHER_TKIP)
+			*cipher = CIPHER_TKIP;
+		else if (data.pairwise_cipher & WPA_CIPHER_AES_128_CMAC)
+			*cipher = CIPHER_AES_CMAC_128;
+		else
+			*cipher = CIPHER_MAX;
+
+		if(data.group_cipher & WPA_CIPHER_CCMP)
+			*group_cipher = CIPHER_CCMP;
+		else if (data.group_cipher & WPA_CIPHER_TKIP)
+			*group_cipher = CIPHER_TKIP;
+		else if (data.group_cipher & WPA_CIPHER_TKIP && data.group_cipher & WPA_CIPHER_CCMP)
+			*group_cipher = CIPHER_TKIP_CCMP;
+		else if (data.group_cipher & WPA_CIPHER_AES_128_CMAC)
+			*group_cipher = CIPHER_AES_CMAC_128;
+		else
+			*group_cipher = CIPHER_MAX;
 	}
     else if(bss->caps & IEEE80211_CAP_PRIVACY)
     {
 	    *auth   = AUTH_WEP;
 		*cipher = CIPHER_WEP40;
+		*group_cipher = CIPHER_WEP40;
     }
 	else
 	{
 		*auth   = AUTH_OPEN;
 		*cipher = CIPHER_NONE;
+		*group_cipher = CIPHER_NONE;
 	}
 
 	return SYS_OK;
 }
 
+sys_err_t wpa_get_bss_proto(struct wpa_bss *bss, uint8_t *proto)
+{
+	const u8 *bss_rate_ie, *bss_ext_rate_ie, *bss_ht_cap_ie, *bss_he_cap_ie;
+
+	if(!bss || !proto)
+		return -1;
+
+    memset(proto, 0, sizeof(*proto));
+    bss_rate_ie = wpa_bss_get_ie(bss, WLAN_EID_SUPP_RATES);
+    bss_ext_rate_ie = wpa_bss_get_ie(bss, WLAN_EID_EXT_SUPP_RATES);
+	bss_ht_cap_ie = wpa_bss_get_ie(bss, WLAN_EID_HT_CAP);
+	bss_he_cap_ie = wpa_bss_get_ie(bss, WLAN_EID_EXT_HE_CAPABILITIES);
+
+	if (bss_rate_ie)
+        *proto |= 1 << 0;
+	if (bss_ext_rate_ie)
+        *proto |= 1 << 1;
+	if (bss_ht_cap_ie)
+        *proto |= 1 << 2;
+	if (bss_he_cap_ie)
+        *proto |= 1 << 3;
+
+    return SYS_OK;
+}
+
+sys_err_t wpa_get_bss_wps(struct wpa_bss *bss, uint8_t *wps)
+{
+    const u8 *wps_ie = NULL;
+
+	if(bss == NULL)
+		return -1;
+
+	memset(wps, 0, sizeof(*wps));
+    wps_ie = wpa_bss_get_vendor_ie(bss, WPS_IE_VENDOR_TYPE);
+	if (wps_ie)
+        *wps = 1;
+	else
+        *wps = 0;
+
+    return SYS_OK;
+}
+
+int wpa_get_glance_scan_mode(const u8 *ies, size_t len, u16 caps, uint8_t *auth, uint8_t *cipher)
+{
+    const u8 *ie = NULL, *ie2 = NULL;
+    const u8 *end, *pos;
+    struct wpa_ie_data data;
+
+    if (!auth || !cipher)
+        return -1;
+
+    pos = (const u8 *)(ies);
+    end = pos + len;
+
+    while (end - pos > 1) {
+        if (2 + pos[1] > end - pos)
+            break;
+        if (pos[0] == WLAN_EID_VENDOR_SPECIFIC && pos[1] >= 4 && WPA_IE_VENDOR_TYPE == WPA_GET_BE32(&pos[2]))
+            ie = pos;
+        pos += 2 + pos[1];
+    }
+    ie2 = (const u8 *)get_ie(ies, len, WLAN_EID_RSN);
+
+    if (ie || ie2) {
+        if (ie && !ie2) {
+            if (wpa_parse_wpa_ie(ie, ie[1] + 2, &data) < 0)
+                return -1;
+
+            if (data.pairwise_cipher & WPA_CIPHER_CCMP)
+                *cipher = CIPHER_CCMP;
+            else
+                *cipher = CIPHER_TKIP;
+
+            *auth = AUTH_WPA_PSK;
+        } else if (!ie && ie2) {
+            if (wpa_parse_wpa_ie(ie2, ie2[1] + 2, &data) < 0)
+                return -1;
+
+            if (data.pairwise_cipher & WPA_CIPHER_CCMP)
+                *cipher = CIPHER_CCMP;
+            else
+                *cipher = CIPHER_TKIP;
+
+            if (data.key_mgmt & WPA_KEY_MGMT_SAE && data.key_mgmt & WPA_KEY_MGMT_PSK) {
+                *auth = AUTH_WPA2_WPA3_PSK;
+            } else if (data.key_mgmt & WPA_KEY_MGMT_SAE) {
+                *auth = AUTH_WPA3_PSK;
+            } else {
+                *auth = AUTH_WPA2_PSK;
+            }
+        } else  // if(ie && ie2)
+        {
+            if (wpa_parse_wpa_ie(ie2, ie2[1] + 2, &data) < 0)
+                return -1;
+
+            if (data.pairwise_cipher & WPA_CIPHER_CCMP)
+                *cipher = CIPHER_CCMP;
+            else
+                *cipher = CIPHER_TKIP;
+
+            *auth = AUTH_WPA_WPA2_PSK;
+        }
+    } else if (caps & IEEE80211_CAP_PRIVACY) {
+        *auth = AUTH_WEP;
+        *cipher = CIPHER_WEP40;
+    } else {
+        *auth = AUTH_OPEN;
+        *cipher = CIPHER_NONE;
+    }
+
+    return SYS_OK;
+}
+
 extern uint8_t system_modem_api_mac80211_frequency_to_channel(uint32_t frequency);
 extern int wpa_rwnx_get_connect_ap_rssi(int vif_index, int8_t *rssi);
-
 sys_err_t wpa_get_scan_result(unsigned int index, wifi_info_t *info)
 {
     struct wpa_bss *bss;
-	struct wpa_supplicant *wpa_s;
-	unsigned char i=0;
+    struct wpa_supplicant *wpa_s;
+    struct dl_list *scan_res_min;
+    struct wpa_rwnx_driver_scan_res_min *cur;
+    unsigned char i = 0, count = 0;
 
-	if(!info)
-		return SYS_ERR_INVALID_ARG;
-	
-	memset((char*)info, 0, sizeof(*info));
-	
-	wpa_s = wpa_get_ctrl_iface(0);
-	
-	dl_list_for_each(bss, &wpa_s->bss_id, struct wpa_bss, list_id)
-	{
-        if(i++ == index)//if(bss->id == index)
-        {
-			memcpy(info->bssid, bss->bssid, 6);
-			memcpy(info->ssid, bss->ssid, bss->ssid_len);
-			info->ssid_len = bss->ssid_len;
-			info->channel = system_modem_api_mac80211_frequency_to_channel(bss->freq);
-			info->rssi = (char)(bss->level);
-			wpa_get_bss_mode(bss, &info->auth, &info->cipher);
-			return SYS_OK;
-		}
-	}
-	
-	return SYS_ERR_NOT_FOUND;
+    if (!info)
+        return SYS_ERR_INVALID_ARG;
+
+    memset((char *)info, 0, sizeof(*info));
+
+    wpa_s = wpa_get_ctrl_iface(0);
+
+    if (wpa_rwnx_driver_get_glance_scan(wpa_s->drv_priv)) {
+        scan_res_min = wpa_rwnx_driver_get_glance_scan_results2(wpa_s->drv_priv);
+        count = dl_list_len(scan_res_min);
+
+        if (!count) {
+            return SYS_ERR_NOT_FOUND;
+        }
+
+        dl_list_for_each(cur, scan_res_min, struct wpa_rwnx_driver_scan_res_min, list) {
+            if (index <= count && i++ == index) {
+                memcpy(info->bssid, cur->res.bssid, 6);
+                memcpy(info->ssid, cur->res.ssid, cur->res.ssid_len);
+                info->ssid_len = cur->res.ssid_len;
+                info->channel = cur->res.channel;
+                info->rssi = cur->res.rssi;
+                info->auth = cur->res.auth_method;
+                info->cipher = cur->res.cipher;
+                return SYS_OK;
+            }
+        }
+    } else {
+        dl_list_for_each(bss, &wpa_s->bss_id, struct wpa_bss, list_id) {
+            if (i++ == index)  // if(bss->id == index)
+            {
+                memcpy(info->bssid, bss->bssid, 6);
+                memcpy(info->ssid, bss->ssid, bss->ssid_len);
+                info->ssid_len = bss->ssid_len;
+                info->channel = system_modem_api_mac80211_frequency_to_channel(bss->freq);
+                info->rssi = (char)(bss->level);
+                wpa_get_bss_mode(bss, &info->auth, &info->cipher, &info->group_cipher);
+                return SYS_OK;
+            }
+        }
+    }
+
+    return SYS_ERR_NOT_FOUND;
 }
 
 struct wpa_get_info_msg {
@@ -453,7 +626,7 @@ struct wpa_get_info_msg {
     int status;
     os_sem_handle_t finish;
 };
-
+extern char num2hex(uint8_t n);
 static void wpa_get_connected_info(void *eloop_data, void *user_ctx)
 {
     struct wpa_supplicant *wpa_s;
@@ -488,7 +661,7 @@ static void wpa_get_connected_info(void *eloop_data, void *user_ctx)
 	info->channel = system_modem_api_mac80211_frequency_to_channel(bss->freq);
     wpa_rwnx_get_connect_ap_rssi(0, (int8_t *)&(bss->level));
 	info->rssi = bss->level;
-	wpa_get_bss_mode(bss, &info->auth, &info->cipher);
+	wpa_get_bss_mode(bss, &info->auth, &info->cipher, &info->group_cipher);
 	if(ssid->passphrase)
 	{
 		info->pwd_len = strlen(ssid->passphrase);
@@ -499,7 +672,17 @@ static void wpa_get_connected_info(void *eloop_data, void *user_ctx)
 		info->pwd_len = ssid->wep_key_len[0];
 		memcpy(info->pwd,  &ssid->wep_key[0], info->pwd_len);
 	}
-
+	else if(ssid->psk_set == 1)
+	{
+		for(int i = 0;i < 32; i++)
+		{
+			char lc = (ssid->psk[i] & 0x0F);
+			char hc = (ssid->psk[i] >> 4);	
+			info->pwd[i * 2] = num2hex(hc);
+			info->pwd[i *2 +1] = num2hex(lc);
+		}
+		info->pwd_len = 64;
+	}
 	msg->status = 0;
 	os_sem_post(msg->finish);
 }
@@ -579,17 +762,18 @@ sys_err_t wifi_set_max_sta(uint16_t max_sta)
     if (wpa_s) {
         /* max_sta range from 1 to get_sta_max_cnt */
         if (max_sta < 1 || max_sta > get_macsw_sta_max_cnt()) {
-            wpa_printf(MSG_ERROR, "max sta para error, set default value\n");
+            wpa_printf_error(MSG_ERROR, "max sta para error, set default value\n");
             wpa_s->max_stations = get_macsw_sta_max_cnt();
             return SYS_ERR;
         } else {
             wpa_s->max_stations = max_sta;
         }
     } else {
-        wpa_printf(MSG_ERROR, "wpa_s is NULL\n");
+        wpa_printf_error(MSG_ERROR, "wpa_s is NULL\n");
         return SYS_ERR;
     }
 
     return SYS_OK;
 }
+
 

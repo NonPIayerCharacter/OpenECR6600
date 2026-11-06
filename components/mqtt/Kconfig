@@ -2,12 +2,26 @@
 menuconfig MQTT
 	bool "MQTT Component Support"
 	default n
-	depends on LWIP
-	depends on PHREAD
+	select TRANSPORT_TCP
 	select MBEDTLS
 	select URLPARSER
 
-menuconfig MQTT_SSL
+config MQTT_SSL
 	bool "MQTT SSL Support"
-	default y
-	
+	depends on MQTT
+	default n
+
+config MQTT_ENABLE_WS
+	bool "MQTT ENABLE WS"
+	depends on MQTT
+	default n
+
+config MQTT_ENABLE_WSS
+	bool "MQTT ENABLE WSS"
+	depends on MQTT
+	default n
+
+config MQTT_PROTOCOL_5
+	bool "MQTT PROTOCOL 5 Support"
+	depends on MQTT
+	default n

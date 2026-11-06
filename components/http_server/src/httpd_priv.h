@@ -33,14 +33,14 @@ extern "C" {
 #define HTTPD_SCRATCH_BUF  MAX(HTTPD_MAX_REQ_HDR_LEN, HTTPD_MAX_URI_LEN)
 
 /* Formats a log string to prepend context function name */
-#define LOG_FMT(x)      "%s: " x, __func__
+#define LOG_FMT(x)      "%s: " x"\n", __func__
 
 /**
  * @brief Thread related data for internal use
  */
 struct thread_data {
     othread_t handle;   /*!< Handle to thread/task */
-    enum {
+    volatile enum {
         THREAD_IDLE = 0,
         THREAD_RUNNING,
         THREAD_STOPPING,

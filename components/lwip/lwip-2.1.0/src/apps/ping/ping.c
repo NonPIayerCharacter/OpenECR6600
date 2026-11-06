@@ -144,6 +144,14 @@ ping_parameters_init(void *arg)
 	ping_info->total_delay = 0;
 }
 
+static u16_t ping_id_get(ping_parm_t* ping_info)
+{
+    #if 0
+    return PING_ID;
+    #else
+    return ping_info->ping_id;
+    #endif
+}
 /** Prepare a echo ICMP request */
 static void
 ping_prepare_echo(void *arg, struct icmp_echo_hdr *iecho, u16_t len)
@@ -155,7 +163,7 @@ ping_prepare_echo(void *arg, struct icmp_echo_hdr *iecho, u16_t len)
 	ICMPH_TYPE_SET(iecho, ICMP_ECHO);
 	ICMPH_CODE_SET(iecho, 0);
 	iecho->chksum = 0;
-	iecho->id     = PING_ID;
+	iecho->id     = ping_id_get(ping_info);
 	iecho->seqno  = htons(++ping_info->seq_num);
 
 	/* fill the additional data buffer with some data */
@@ -224,7 +232,7 @@ ping_recv(void *arg, int s)
 		if (len >= (int)(sizeof(struct ip_hdr)+sizeof(struct icmp_echo_hdr))) {
 			iphdr = (struct ip_hdr *)buf;
 			iecho = (struct icmp_echo_hdr *)(buf + (IPH_HL(iphdr) * 4));
-			if ((iecho->id == PING_ID) && (iecho->seqno == htons(ping_info->seq_num)) && !memcmp(&from.sin_addr, &ping_info->addr, 4)) {
+			if ((iecho->id == ping_id_get(ping_info)) && (iecho->seqno == htons(ping_info->seq_num)) && !memcmp(&from.sin_addr, &ping_info->addr, 4)) {
 				ping_info->time_delay = (sys_now() -ping_info->time);
 				ip_addr_t fromaddr;
 				#if LWIP_IPV4 && LWIP_IPV6
@@ -362,8 +370,10 @@ ping_thread(void *arg)
 		return;
 	}
 
-    int opt = 6 << 5;//TID6
-    lwip_setsockopt(s, IPPROTO_IP, IP_TOS, &opt, sizeof(opt));
+	int tos_opt = ping_info->tos;
+	lwip_setsockopt(s, IPPROTO_IP, IP_TOS, &tos_opt, sizeof(tos_opt));
+	int ttl_opt = ping_info->ttl;
+	lwip_setsockopt(s, IPPROTO_IP, IP_TTL, &ttl_opt, sizeof(ttl_opt));
 	lwip_setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 	ping_parameters_init(ping_info);
 	ping_list_add(ping_info);
@@ -439,7 +449,7 @@ static int ping_recv_once(void *arg, int s)
 		{
 			iphdr = (struct ip_hdr *)buf;
 			iecho = (struct icmp_echo_hdr *)(buf + (IPH_HL(iphdr) * 4));
-			if ( ( iecho->id == PING_ID ) && ( iecho->seqno == htons(ping_info-> seq_num ) ) )
+			if ( ( iecho->id == ping_id_get(ping_info) ) && ( iecho->seqno == htons(ping_info-> seq_num ) ) )
 			{
 				ping_info->time_delay = (sys_now() -ping_info-> time);
 				ip_addr_t fromaddr;
@@ -507,6 +517,7 @@ int ping_once(ping_parm_t* ping_info)
 
 	lwip_setsockopt(socket_tmp, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 	ping_parameters_init(ping_info);
+	ping_info->ping_id = os_random() &0xffff;
 
 	if (ping_send(ping_info, socket_tmp, &(ping_info->addr)) == ERR_OK) 
 	{

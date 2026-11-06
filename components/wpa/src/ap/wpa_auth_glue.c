@@ -224,10 +224,10 @@ static const u8 * hostapd_wpa_auth_get_psk(void *ctx, const u8 *addr,
 					   const u8 *prev_psk)
 {
 	struct hostapd_data *hapd = ctx;
-	struct sta_info *sta = ap_get_sta(hapd, addr);
 	const u8 *psk;
 
 #ifdef CONFIG_SAE
+    struct sta_info *sta = ap_get_sta(hapd, addr);
 	if (sta && sta->auth_alg == WLAN_AUTH_SAE) {
 		if (!sta->sae || prev_psk)
 			return NULL;

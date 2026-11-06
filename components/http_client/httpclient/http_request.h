@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 #include <http_general.h>
+#include <platform_list.h>
 #include <http_message_buffer.h>
 
 
@@ -93,9 +94,9 @@ int http_request_set_start_line(http_request_t *req, const char *path);
 int http_request_set_start_line_with_query(http_request_t *req, const char *path, const char *query);
 int http_request_header_init(http_request_t *req);
 void http_request_add_header(http_request_t *req, const char *key, const char *value);
-void http_request_add_header_form_index(http_request_t *req, http_request_header_t index, const char *value);
+void http_request_add_header_form_key(http_request_t *req, const char *key, const char *value);
 char *http_request_get_header(http_request_t *req, const char *key);
-char *http_request_get_header_form_index(http_request_t *req, http_request_header_t index);
+char *http_request_get_header_form_key(http_request_t *req, const char *key);
 
 int http_request_set_body(http_request_t *req, const char *buf, size_t size);
 int http_request_set_body_form_pointer(http_request_t *req, const char *buf, size_t size);
@@ -111,12 +112,67 @@ size_t http_request_get_start_line_length(http_request_t *req);
 size_t http_request_get_header_length(http_request_t *req);
 size_t http_request_get_body_length(http_request_t *req);
 
-void http_request_print_start_line(http_request_t *req);
-void http_request_print_header(http_request_t *req);
-void http_request_print_body(http_request_t *req);
+typedef struct {
+    platform_list_t list;
+    char *key;
+    char *value;
+    char release;
+    char repeat;
+} http_user_header_t;
 
-void http_request_user_msg_header_release(unsigned int index);
-void http_request_user_msg_header_init(void);
-int http_request_user_msg_header_add(const char *key, unsigned int keylen, const char *value, unsigned int vlen);
+/**
+ * @brief Release a custom HTTP request header by key.
+ *
+ * @param key Header field name to release.
+ * @param keylen Header field name length.
+ */
+void http_request_user_msg_header_release(const char *key, unsigned int keylen);
+
+/**
+ * @brief Release all custom HTTP request headers and related resources.
+ *
+ * This removes every header in the global custom-header list, regardless of
+ * the release flag passed to http_request_user_msg_header_add().
+ * Use this when the request/session no longer needs any custom headers.
+ */
+void http_request_user_msg_header_release_all(void);
+
+/**
+ * @brief Clear temporary custom HTTP request headers.
+ *
+ * This only removes headers added with release set to 0. Headers added with
+ * release set to 1 are kept for later requests, and must be removed with
+ * http_request_user_msg_header_release() or
+ * http_request_user_msg_header_release_all().
+ */
+void http_request_user_msg_header_clean_all(void);
+
+/**
+ * @brief Check whether a custom Content-Length header exists.
+ *
+ * @return HTTP_FAILED_ERROR if Content-Length exists, or HTTP_SUCCESS_ERROR if it does not exist.
+ */
+int http_request_user_msg_header_check_contentlength(void);
+
+/**
+ * @brief Get the list of current custom HTTP request headers.
+ *
+ * @return Pointer to the platform_list_t list that stores http_user_header_t nodes.
+ */
+platform_list_t *http_request_user_msg_header_get(void);
+
+/**
+ * @brief Add a custom HTTP request header.
+ *
+ * @param key Header field name.
+ * @param keylen Header field name length.
+ * @param value Header field value.
+ * @param vlen Header field value length.
+ * @param release Header lifetime flag. 0 means a temporary header removed by
+ *        http_request_user_msg_header_clean_all(); 1 means a persistent header
+ *        kept by clean_all() until it is explicitly released.
+ * @return 0 on success, or non-zero on failure.
+ */
+int http_request_user_msg_header_add(const char *key, unsigned int keylen, const char *value, unsigned int vlen, unsigned char release);
 
 #endif // !_HTTP_REQUEST_H_

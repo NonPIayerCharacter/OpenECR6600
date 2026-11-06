@@ -58,6 +58,7 @@ static T_DRV_TIMER_DEV drv_timer_dev;
 /**    @brief       Pit timer isr.
  *     @details     Pit timer interrupt mode.
  */
+static void drv_timer_isr(void) __attribute__((section(".ilm_text_drv")));
 static void drv_timer_isr(void)
 {
 	#ifdef CONFIG_SYSTEM_IRQ
@@ -171,6 +172,7 @@ int drv_timer_close(unsigned int chn_timer)
 *	   @param[in]	* arg    Pointer to control parameters, the specific meaning is determined according to the event
 *	   @return  	ret=0--Handle event succeed, ret=other--Handle event failed
 */
+int drv_timer_ioctrl(unsigned int chn_timer, int event, void * arg)  __attribute__((section(".ilm_text_drv")));
 int drv_timer_ioctrl(unsigned int chn_timer, int event, void * arg)
 {
 	unsigned int flags, val;

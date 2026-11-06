@@ -194,11 +194,11 @@ struct hostapd_data {
 #endif /* CONFIG_FULL_DYNAMIC_VLAN */
 
 	struct l2_packet_data *l2;
-	//struct wps_context *wps;
+	struct wps_context *wps;
 
 	int beacon_set_done;
-	//struct wpabuf *wps_beacon_ie;
-	//struct wpabuf *wps_probe_resp_ie;
+	struct wpabuf *wps_beacon_ie;
+	struct wpabuf *wps_probe_resp_ie;
 #ifdef CONFIG_WPS
 	unsigned int ap_pin_failures;
 	unsigned int ap_pin_failures_consecutive;
@@ -222,14 +222,14 @@ struct hostapd_data {
 	//			int freq);
 	//void *vendor_action_cb_ctx;
 
-	/*void (*wps_reg_success_cb)(void *ctx, const u8 *mac_addr,
+	void (*wps_reg_success_cb)(void *ctx, const u8 *mac_addr,
 				   const u8 *uuid_e);
 	void *wps_reg_success_cb_ctx;
 
 	void (*wps_event_cb)(void *ctx, enum wps_event event,
 			     union wps_event_data *data);
 	void *wps_event_cb_ctx;
-    */
+
 	void (*sta_authorized_cb)(void *ctx, const u8 *mac_addr,
 				  int authorized, const u8 *p2p_dev_addr);
 	void *sta_authorized_cb_ctx;

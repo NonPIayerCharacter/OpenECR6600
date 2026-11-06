@@ -1,5 +1,115 @@
+menu "MBEDTLS"
 
-menuconfig MBEDTLS
-	bool "MBEDTLS Component Support"
-	depends on LWIP
-	default n
+	config MBEDTLS
+		bool "MBEDTLS Component Support"
+		depends on LWIP
+		default y
+
+	config MBEDTLS_HAVE_TIME
+		bool "Use RTC time for mbedTLS"
+		depends on MBEDTLS && RTC
+		default n
+
+	config MBEDTLS_HAVE_TIME_DATE
+		bool "Check certificate validity periods using RTC"
+		depends on MBEDTLS && RTC
+		select MBEDTLS_HAVE_TIME
+		default n
+		help
+			Set UTC time through RTC or SNTP before certificate authentication.
+
+	config MBEDTLS_KEY_EXCHANGE_PSK
+		bool "Enable TLS 1.2 PSK cipher suites"
+		depends on MBEDTLS_SSL_PROTO_TLS1_2
+		default n
+
+	config MBEDTLS_SSL_PROTO_TLS1_2
+		bool "Support TLS 1.2 protocol"
+		depends on MBEDTLS
+		default y
+		
+	config MBEDTLS_SSL_PROTO_TLS1_3
+		bool "Support TLS 1.3 protocol"
+		depends on MBEDTLS
+		select MBEDTLS_HKDF_C
+		default n
+
+	config MBEDTLS_SSL_PROTO_DTLS
+		bool "Support DTLS protocol"
+		depends on MBEDTLS
+		select MBEDTLS_SSL_PROTO_TLS1_2
+		default n
+		help
+			Enable support for DTLS (Datagram TLS) protocol.
+			This is required for applications that need PSK (Pre-Shared Key) support.
+			Note: DTLS requires TLS 1.2 to be enabled.
+
+	menu "TLS 1.3 related configurations"
+		depends on MBEDTLS_SSL_PROTO_TLS1_3
+
+		config MBEDTLS_SSL_TLS1_3_COMPATIBILITY_MODE
+			bool "TLS 1.3 middlebox compatibility mode"
+			default y
+
+		config MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_ENABLED
+			bool "TLS 1.3 PSK key exchange mode"
+			default y
+
+		config MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_EPHEMERAL_ENABLED
+			bool "TLS 1.3 ephemeral key exchange mode"
+			default y
+
+		config MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_EPHEMERAL_ENABLED
+			bool "TLS 1.3 PSK ephemeral key exchange mode"
+			default y
+	endmenu
+
+	config MBEDTLS_DEBUG
+		bool "Enable mbedTLS debugging"
+		depends on MBEDTLS
+		default n
+		help
+			Enable mbedTLS debugging functions at compile time.
+			If this option is enabled, you can include
+			"mbedtls/esp_debug.h" and call mbedtls_esp_enable_debug_log()
+			at runtime in order to enable mbedTLS debug output via the ESP
+			log mechanism.
+
+	choice MBEDTLS_DEBUG_LEVEL
+		bool "Set mbedTLS debugging level"
+		depends on MBEDTLS_DEBUG
+		default MBEDTLS_DEBUG_LEVEL_VERBOSE
+		help
+			Set mbedTLS debugging level
+
+		config MBEDTLS_DEBUG_LEVEL_WARN
+			bool "Warning"
+		config MBEDTLS_DEBUG_LEVEL_INFO
+			bool "Info"
+		config MBEDTLS_DEBUG_LEVEL_DEBUG
+			bool "Debug"
+		config MBEDTLS_DEBUG_LEVEL_VERBOSE
+			bool "Verbose"
+	endchoice
+
+	config MBEDTLS_DEBUG_LEVEL
+		int
+		default 1 if MBEDTLS_DEBUG_LEVEL_WARN
+		default 2 if MBEDTLS_DEBUG_LEVEL_INFO
+		default 3 if MBEDTLS_DEBUG_LEVEL_DEBUG
+		default 4 if MBEDTLS_DEBUG_LEVEL_VERBOSE
+
+	config MBEDTLS_TLS_SERVER
+		bool "Enable mbedTLS srv"
+		depends on MBEDTLS
+		default y
+		help
+			Allow to act as an SSL/TLS server
+
+	config MBEDTLS_TLS_CLIENT
+		bool "Enable mbedTLS cli"
+		depends on MBEDTLS
+		default y
+		help
+			Allow to act as an SSL/TLS client
+endmenu

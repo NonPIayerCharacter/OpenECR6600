@@ -1,0 +1,8 @@
+
+menuconfig CMD_AT
+	bool "CMD_AT Component Support"
+	default n
+	
+if CMD_AT
+	source "components/cmd/cmd_core/cmd_core_at/fatfs_command/Kconfig"
+endif

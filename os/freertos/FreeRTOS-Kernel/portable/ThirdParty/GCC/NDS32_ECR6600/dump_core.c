@@ -211,9 +211,19 @@ static void uart_dump(const unsigned char * buf, unsigned int len)
 {
     int            i                  = 0;
     int            uart_tx_fifo_depth = 0;
-    extern CLI_DEV s_cli_dev;
-    unsigned int   p_uart_reg = (unsigned int )s_cli_dev.cli_uart_base;
 
+unsigned int   p_uart_reg = MEM_BASE_UART0;
+
+#ifdef CONFIG_CLI_UART_0
+   p_uart_reg = MEM_BASE_UART0;
+#endif
+#ifdef CONFIG_CLI_UART_1
+   p_uart_reg = MEM_BASE_UART1;
+#endif
+#ifdef CONFIG_CLI_UART_2
+   p_uart_reg = MEM_BASE_UART2;
+#endif
+  
     while (len)
     {
         if (uart_tx_fifo_depth == 0)
@@ -445,8 +455,18 @@ void show_dumpstack(panic_printf dump_show, struct trap_info *ptrap_info, TaskSt
 /******************************************* dump process *******************************************/
 void ram_dump()
 {
-    extern CLI_DEV s_cli_dev;
-    unsigned int   uart_base_reg = (unsigned int )s_cli_dev.cli_uart_base;
+unsigned int   uart_base_reg = MEM_BASE_UART0;
+
+#ifdef CONFIG_CLI_UART_0
+uart_base_reg = MEM_BASE_UART0;
+#endif
+#ifdef CONFIG_CLI_UART_1
+uart_base_reg = MEM_BASE_UART1;
+#endif
+#ifdef CONFIG_CLI_UART_2
+uart_base_reg = MEM_BASE_UART2;
+#endif
+
     unsigned int   num           = 0;
     char           cmd[32];
 
@@ -617,6 +637,20 @@ void core_dump(struct pt_regs *pregs, TaskStatus_t *ptsk)
     ram_dump();
 }
 
+#ifdef CONFIG_AI_VLLM
+#include "aon_reg.h"
+#include "chip_pinmux.h"
+void jtag_init()
+{
+    WRITE_REG(AON_PAD_MODE_REG, READ_REG(AON_PAD_MODE_REG) &~ 0x1f); 
+    PIN_FUNC_SET(IO_MUX_GPIO0, FUNC_GPIO0_TCK);
+    PIN_FUNC_SET(IO_MUX_GPIO1, FUNC_GPIO1_TMS);
+    PIN_FUNC_SET(IO_MUX_GPIO2, FUNC_GPIO2_TDO);
+    PIN_FUNC_SET(IO_MUX_GPIO3, FUNC_GPIO3_TDI);
+    PIN_FUNC_SET(IO_MUX_GPIO4, FUNC_GPIO4_TRST);
+}
+#endif
+
 void handle_general_exception(struct pt_regs *pregs)
 {
     while (1 == g_trap_index)
@@ -625,7 +659,10 @@ void handle_general_exception(struct pt_regs *pregs)
     }
     g_trap_index++;
     saved_pt = pregs;
-
+    #ifdef CONFIG_AI_VLLM
+    chip_uart0_pinmux_cfg(UART0_RX_USED_GPIO5, UART0_TX_USED_GPIO6, 0);
+    jtag_init();
+    #endif
     hal_set_reset_type(RST_TYPE_FATAL_EXCEPTION);
 
     g_trap_info.trap_type   = __nds32__mfsr(NDS32_SR_ITYPE);
@@ -711,6 +748,7 @@ void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName)
     trap_Heap_Error((int)pxTask, 0);
 }
 
+void vApplicationStackOverflowCheck(int task_handle)  __attribute__((section(".ilm_text_drv")));
 void vApplicationStackOverflowCheck(int task_handle)
 {
     StaticTask_t           * pxTcb      = (StaticTask_t*)task_handle;
@@ -846,3 +884,9 @@ void __attribute__((naked))     trap_Syscall(void)
 //}
 //#pragma GCC diagnostic pop
 
+/**************************************************************************************
+* XIP IN FLASH
+**************************************************************************************/
+
+void trap_Heap_Error(int task_handle, unsigned char error_type)  __attribute__((section(".xip")));
+void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName)  __attribute__((section(".xip")));

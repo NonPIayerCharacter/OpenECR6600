@@ -9,9 +9,9 @@ extern unsigned char rtc_get_weekday(int year, int month, int day);
 #define DIFF_SEC_1970_2036          ((unsigned int)2085978496L)
 const char *weeken[7] = {"Sun", "Mon", "Tues", "Wed", "Thur", "Fri", "Sat"};
 #ifdef CONFIG_SNTP
-#include "sntp_tr.h"
+#include "hal_sntp.h"
 #endif
-static int utest_rtc_set_time(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_rtc_set_time( int argc, char *argv[])
 {
 	int time;
 
@@ -25,7 +25,7 @@ static int utest_rtc_set_time(cmd_tbl_t *t, int argc, char *argv[])
 		return 0;
 	}
 #ifdef CONFIG_SNTP
-	float tz = get_timezone();
+	float tz = hal_sntp_timezone_get();
 	int local_time = time + (int)(tz * ONE_HOUR2SEC);
 	if (hal_rtc_set_time(local_time) == 0)
 #else
@@ -45,13 +45,13 @@ static int utest_rtc_set_time(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_rtc, set, utest_rtc_set_time, "unit test set time", "ut_rtc set [time-seconds]");
 
 
-static int utest_rtc_get_time(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_rtc_get_time( int argc, char *argv[])
 {
 	int res = 0;
 
 	res = hal_rtc_get_time();
 	#ifdef CONFIG_SNTP
-	float tz = get_timezone();
+	float tz = hal_sntp_timezone_get();
 	res = res - (int)(tz * ONE_HOUR2SEC);
 	#endif
 	os_printf(LM_CMD,LL_INFO,"\r\nunit test rtc, get rtc time = %d(s)!\r\n", res);
@@ -62,7 +62,7 @@ static int utest_rtc_get_time(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_rtc, get, utest_rtc_get_time, "unit test get time", "ut_rtc get");
 
 
-static int utest_rtc_utctime_to_date(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_rtc_utctime_to_date( int argc, char *argv[])
 {
 	int time;
 	DATE_RTC dr;
@@ -90,7 +90,7 @@ static int utest_rtc_utctime_to_date(cmd_tbl_t *t, int argc, char *argv[])
 
 CLI_SUBCMD(ut_rtc, utctime_to_date, utest_rtc_utctime_to_date, "unit test utctime to date format", "ut_rtc utctime_to_date [time-seconds]");	
 
-static int utest_rtc_date_to_utctime(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_rtc_date_to_utctime( int argc, char *argv[])
 {
 	int time;
 	unsigned char daysofmonth=0;
@@ -133,7 +133,8 @@ static int utest_rtc_date_to_utctime(cmd_tbl_t *t, int argc, char *argv[])
 
 	if (hal_rtc_date_to_utctime(dr,&time) == 0)
 	{
-		os_printf(LM_CMD,LL_INFO,"\r\nunit test rtc, YYYY-MM-DD HH:mm:ss = %4d-%02d-%02d %02d:%02d:%02d week=%s!date to utctime =[%d]\r\n", dr.year,dr.month,dr.day,dr.hour,dr.min,dr.sec,weeken[dr.wday], time);
+		os_printf(LM_CMD,LL_INFO,"\r\nunit test rtc tz %f dst[%u], YYYY-MM-DD HH:mm:ss = %4d-%02d-%02d %02d:%02d:%02d week=%s!date to utctime =[%d]\r\n",
+            hal_sntp_timezone_get(), hal_sntp_dst_sec(), dr.year,dr.month,dr.day,dr.hour,dr.min,dr.sec,weeken[dr.wday], time);
 	}
 	else
 	{
@@ -147,5 +148,4 @@ CLI_SUBCMD(ut_rtc, date_to_utctime, utest_rtc_date_to_utctime, "unit test date t
 
 
 CLI_CMD(ut_rtc, NULL, "unit test hal rtc", "test_hal_rtc");
-
 

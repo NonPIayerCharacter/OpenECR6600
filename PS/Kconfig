@@ -1,380 +1,272 @@
-config ECR_BLE
-      bool 
-      default y
-
-config BLE_APP_ECR
-      bool 
-      default y
-
-config BLE_APP
-      bool 
-      default y
-
-config COMP_AES
-      bool 
-      default y
-
-config COMP_DEBUG_BLE
-      bool 
-      default y
-
-config COMP_ECC_P256
-      bool 
-      default y
-
-config COMP_H4TL
-      bool 
-      default y
-
-config COMP_RF
-      bool 
-      default y
-
-config COMP_RWIP
-      bool 
-      default y
-
-config BLE_RF_EXTRC
-      bool 
-      default y
-
-config BLE_PRODUCT_BLEFULL
-      bool 
-      default y
-
-config BLE_PRODUCT
-      string 
-      default "ble-full"
-
-config BLE_BUBBLE
-      bool 
-      default y
-
-config BLE_ROLE_ALL
-      bool 
-      default y
-
-config BLE_ROLE
-      string 
-      default "all"
-
-config LE_ACT
-      int 
-      default 3
-
-config LE_CONN
-      int 
-      default 1
-
-config BLE_HCITL
-      bool 
-      default y
-
-config MULTIPLEX_UART
-      bool 
-      default y
-
-config BLE_ATTC
-      bool 
-      default y
-
-config BLE_ATTS
-      bool 
-      default y
-
-config BLE_SEC_CON
-      int 
-      default 32
-
-config BLE_NBPRF
-      int 
-      default 1
-
-config BLE_PROFILES
-      bool 
-      default y
-
-config BLE_WLCOEX
-      bool 
-      default y
-
-config BLE_RAL
-      int 
-      default 1
-
-config BLE_HOST_PRESENT
-      bool 
-      default y
-
-config BLE_AHI_PRESENT
-      bool 
-      default y
-
-config BLE_SCH_PRESENT
-      bool 
-      default y
-
 config ECR6600_WIFI
-      bool 
+      bool
       default y
 
 config FULLMASK
-      bool 
+      bool
       default y
 
 config WIFI_PRODUCT_FHOST
-      bool 
+      bool
       default y
 
 config WIFI_PRODUCT
-      string 
+      string
       default "fhost"
 
 config WIFI_UMAC
-      bool 
+      bool
       default y
 
 config WIFI_FHOST
-      bool 
+      bool
+      default y
+
+config WIFI_STA_SURPORT
+      bool
       default y
 
 config WIFI_PLATFORM_VIRTEX7
-      bool 
+      bool
       default y
 
 config WIFI_PLATFORM
-      string 
+      string
       default "virtex7"
 
 config WIFI_VIF
-      int 
+      int
       default 4
 
 config WIFI_STA
-      int 
+      int
       default 8
 
-config FAST_CONNECT
-      bool 
-      default y
-
 config WIFI_MAC_VERSION21
-      bool 
+      bool
       default y
 
 config WIFI_MAC_VERSION
-      int 
+      int
       default 21
 
 config WIFI_MDM_V30
-      bool 
+      bool
       default y
 
 config WIFI_MDM_VERSION
-      int 
+      int
       default 30
 
 config WIFI_IPC_V11
-      bool 
+      bool
       default y
 
 config WIFI_IPC_VERSION
-      int 
+      int
       default 11
 
 config WIFI_TXDESC0
-      int 
+      int
       default 4
 
 config WIFI_TXDESC1
-      int 
+      int
       default 64
 
 config WIFI_TXDESC2
-      int 
+      int
       default 4
 
 config WIFI_TXDESC3
-      int 
+      int
       default 64
 
 config WIFI_TXDESC4
-      int 
+      int
       default 4
 
 config WIFI_DPSM
-      bool 
+      bool
       default y
 
 config WIFI_UF
-      bool 
+      bool
       default y
 
 config WIFI_MON_DATA
-      bool 
+      bool
       default y
 
 config WIFI_REC
-      bool 
+      bool
       default y
 
 config WIFI_BCN
-      bool 
+      bool
       default y
 
 config WIFI_AMSDURX
-      int 
+      int
       default 12
 
 config WIFI_SPC
-      int 
+      int
       default 16
 
+config ENHANCE_11B_CCI_BY_SW
+      bool
+      default y
+
 config WIFI_BFMEE
-      bool 
+      bool
       default y
 
 config WIFI_BWLEN
-      bool 
+      bool
       default y
 
 config WIFI_KEYCFG
-      bool 
+      bool
       default y
 
 config WIFI_MESH_VIF
-      int 
+      int
       default 0
 
 config WIFI_MESH_LINK
-      int 
+      int
       default 2
 
 config MESH_PATH
-      int 
+      int
       default 5
 
 config MESH_PROXY
-      int 
+      int
       default 5
 
 config WIFI_P2P
-      int 
+      int
       default 0
 
 config WIFI_MURX
-      bool 
+      bool
       default y
 
 config ONLY_HSU
-      bool 
+      bool
       default y
 
 config WIFI_HSU
-      int 
+      int
       default 2
 
 config WIFI_CMON
-      bool 
+      bool
       default y
 
 config WIFI_MROLE
-      bool 
+      bool
       default y
 
 config WIFI_HWSCAN
-      bool 
+      bool
       default y
 
 config WIFI_AUTOBCN
-      bool 
+      bool
       default y
 
 config WIFI_HE
-      bool 
+      bool
       default y
 
 config WIFI_BARX
-      int 
+      int
       default 8
 
 config WIFI_REORDBUF
-      int 
+      int
       default 4
 
 config WIFI_BATX
-      int 
+      int
       default 4
 
 config WIFI_MFP
-      bool 
+      bool
+      default y
+
+config WIFI_MESH_LIB
+      bool
       default y
 
 config WIFI_LMAC_TEST
-      bool 
+      bool
       default y
 
 config WIFI_AMT_VERSION
-      bool 
+      bool
       default y
 
 config COMP_DEBUG_WIFI
-      bool 
+      bool
       default y
 
 config ECR6600_WIFI_DBG_LEVEL0
-      bool 
+      bool
       default y
 
 config ECR6600_WIFI_DBG_LEVEL
-      int 
+      int
       default 0
 
 config CRM
-      bool 
+      bool
       default y
 
 config IPC_DMA
-      bool 
+      bool
       default y
 
 config INTC
-      bool 
+      bool
       default y
 
 config IPC_FHOST
-      bool 
+      bool
       default y
 
 config WIFIPHY
-      bool 
+      bool
       default y
 
 config WIFI_PHY_CUSTOM_RF
-      bool 
+      bool
       default y
 
 config WIFI_PHY_TYPE
-      string 
+      string
       default "custom_rf"
 
 config SYSCTRL
-      bool 
+      bool
       default y
 
 config TIME
-      bool 
+      bool
       default y
 
 config ASIC_RF
-      bool 
-      default y
-
-config CUSTOM_XC
-      bool 
+      bool
       default y
 
 config FUNC_TRIM
-      bool 
+      bool
+      default y
+
+config BLE_FIXED_AGC_GAIN
+      bool
       default y
 

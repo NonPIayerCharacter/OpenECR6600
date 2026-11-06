@@ -27,6 +27,7 @@
 /* Standard includes. */
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 /* Defining MPU_WRAPPERS_INCLUDED_FROM_API_FILE prevents task.h from redefining
  * all the API functions to use the MPU wrappers.  That should only be done when
@@ -292,6 +293,13 @@ typedef struct tskTaskControlBlock       /* The old naming convention is used to
         TaskHookFunction_t pxTaskTag;
     #endif
 
+    #if ( configLIBC_PRINTF_BSS_TASK_LOCAL == 1 )
+        uint32_t ulLibcVsnprintfCountNow;
+        uint32_t ulLibcVsnprintfCount;
+        uint32_t ulLibcVprintfOutputIdx;
+        uint32_t ulLibcVprintfOutputBuff;
+    #endif
+
     #if ( configNUM_THREAD_LOCAL_STORAGE_POINTERS > 0 )
         void * pvThreadLocalStoragePointers[ configNUM_THREAD_LOCAL_STORAGE_POINTERS ];
 	#if ( configTHREAD_LOCAL_STORAGE_DELETE_CALLBACKS )
@@ -346,6 +354,43 @@ typedef tskTCB TCB_t;
 /*lint -save -e956 A manual analysis and inspection has been used to determine
  * which static variables must be declared volatile. */
 PRIVILEGED_DATA TCB_t * volatile pxCurrentTCB = NULL;
+
+/*-----------------------------------------------------------*/
+
+#ifndef configLIBC_PRINTF_BSS_TASK_LOCAL
+    #define configLIBC_PRINTF_BSS_TASK_LOCAL    0
+#endif
+
+#if ( configLIBC_PRINTF_BSS_TASK_LOCAL == 1 )
+    extern uint32_t __libandes_vsnprintf_countNow;
+    extern uint32_t __libandes_vsnprintf_count;
+    extern uint32_t __libandes_vprintf_output_idx;
+    extern uint32_t __libandes_vprintf_output_buff;
+
+    #define taskLIBC_BSS_WORD( xSymbol )    ( *( ( volatile uint32_t * ) &( xSymbol ) ) )
+
+    static void prvSaveLibcPrintfBssState( TCB_t * pxTCB )
+    {
+        if( pxTCB != NULL )
+        {
+            pxTCB->ulLibcVsnprintfCountNow = taskLIBC_BSS_WORD( __libandes_vsnprintf_countNow );
+            pxTCB->ulLibcVsnprintfCount = taskLIBC_BSS_WORD( __libandes_vsnprintf_count );
+            pxTCB->ulLibcVprintfOutputIdx = taskLIBC_BSS_WORD( __libandes_vprintf_output_idx );
+            pxTCB->ulLibcVprintfOutputBuff = taskLIBC_BSS_WORD( __libandes_vprintf_output_buff );
+        }
+    }
+
+    static void prvRestoreLibcPrintfBssState( const TCB_t * pxTCB )
+    {
+        if( pxTCB != NULL )
+        {
+            taskLIBC_BSS_WORD( __libandes_vsnprintf_countNow ) = pxTCB->ulLibcVsnprintfCountNow;
+            taskLIBC_BSS_WORD( __libandes_vsnprintf_count ) = pxTCB->ulLibcVsnprintfCount;
+            taskLIBC_BSS_WORD( __libandes_vprintf_output_idx ) = pxTCB->ulLibcVprintfOutputIdx;
+            taskLIBC_BSS_WORD( __libandes_vprintf_output_buff ) = pxTCB->ulLibcVprintfOutputBuff;
+        }
+    }
+#endif /* configLIBC_PRINTF_BSS_TASK_LOCAL */
 
 /* Lists for ready and blocked tasks. --------------------
  * xDelayedTaskList1 and xDelayedTaskList2 could be move to function scople but
@@ -982,6 +1027,15 @@ static void prvInitialiseNewTask( TaskFunction_t pxTaskCode,
             pxNewTCB->pxTaskTag = NULL;
         }
     #endif /* configUSE_APPLICATION_TASK_TAG */
+
+    #if ( configLIBC_PRINTF_BSS_TASK_LOCAL == 1 )
+        {
+            pxNewTCB->ulLibcVsnprintfCountNow = 0UL;
+            pxNewTCB->ulLibcVsnprintfCount = 0UL;
+            pxNewTCB->ulLibcVprintfOutputIdx = 0UL;
+            pxNewTCB->ulLibcVprintfOutputBuff = 0UL;
+        }
+    #endif /* configLIBC_PRINTF_BSS_TASK_LOCAL */
 
     #if ( configGENERATE_RUN_TIME_STATS == 1 )
         {
@@ -3127,9 +3181,16 @@ void vTaskSwitchContext( void )
             }
         #endif
 
+#if ( configLIBC_PRINTF_BSS_TASK_LOCAL == 1 )
+        prvSaveLibcPrintfBssState( pxCurrentTCB );
+#endif
+
         /* Select a new task to run using either the generic C or port
          * optimised asm code. */
         taskSELECT_HIGHEST_PRIORITY_TASK(); /*lint !e9079 void * is used as this macro is used with timers and co-routines too.  Alignment is known to be fine as the type of the pointer stored and retrieved is the same. */
+#if ( configLIBC_PRINTF_BSS_TASK_LOCAL == 1 )
+        prvRestoreLibcPrintfBssState( pxCurrentTCB );
+#endif
 #if defined(CONFIG_TASK_IRQ_RUN_NUM)
         if(pxCurrentTCB->uxTCBNumber < MAX_TASK_NUM)
         {
@@ -5502,3 +5563,43 @@ static void prvAddCurrentTaskToDelayedList( TickType_t xTicksToWait,
     #endif
 
 #endif /* if ( configINCLUDE_FREERTOS_TASK_C_ADDITIONS_H == 1 ) */
+
+/**************************************************************************************
+* XIP IN FLASH
+**************************************************************************************/
+#if ( INCLUDE_vTaskDelete == 1 )
+void vTaskDelete( TaskHandle_t xTaskToDelete ) __attribute__((section(".xip")));
+static void prvDeleteTCB( TCB_t * pxTCB ) PRIVILEGED_FUNCTION __attribute__((section(".xip")));;
+#if ( ( configNUM_THREAD_LOCAL_STORAGE_POINTERS > 0 ) && ( configTHREAD_LOCAL_STORAGE_DELETE_CALLBACKS == 1 ) )
+    static void prvDeleteTLS( TCB_t * pxTCB ) PRIVILEGED_FUNCTION __attribute__((section(".xip")));;
+#endif
+#endif
+static void prvInitialiseNewTask( TaskFunction_t pxTaskCode,
+                                  const char * const pcName, 
+                                  const uint32_t ulStackDepth,
+                                  void * const pvParameters,
+                                  UBaseType_t uxPriority,
+                                  TaskHandle_t * const pxCreatedTask,
+                                  TCB_t * pxNewTCB,
+                                  const MemoryRegion_t * const xRegions )  __attribute__((section(".xip")));
+#if ( configSUPPORT_STATIC_ALLOCATION == 1 )
+TaskHandle_t xTaskCreateStatic( TaskFunction_t pxTaskCode,
+                                const char * const pcName,
+                                const uint32_t ulStackDepth,
+                                void * const pvParameters,
+                                UBaseType_t uxPriority,
+                                StackType_t * const puxStackBuffer,
+                                StaticTask_t * const pxTaskBuffer ) __attribute__((section(".xip")));
+#endif
+BaseType_t xTaskCreate( TaskFunction_t pxTaskCode,
+                        const char * const pcName,
+                        const configSTACK_DEPTH_TYPE uxStackDepth,
+                        void * const pvParameters,
+                        UBaseType_t uxPriority,
+                        TaskHandle_t * const pxCreatedTask ) __attribute__((section(".xip")));
+void vTaskStartScheduler( void ) __attribute__((section(".xip")));
+#if ( INCLUDE_vTaskDelay == 1 )
+void vTaskDelay( const TickType_t xTicksToDelay ) __attribute__((section(".xip")));
+#endif
+static void prvIdleTask( void * pvParameters ) __attribute__((section(".xip")));
+/*-----------------------------------------------------------*/

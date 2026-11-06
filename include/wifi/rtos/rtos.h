@@ -29,11 +29,7 @@ extern const volatile char wifi_lib_compile_date[];
 extern const volatile char wifi_lib_compile_time[];
 /* reade only compile flag : end */
 
-#if defined(CONFIG_SPI_SERVICE) && defined(CONFIG_SPI_SLAVE)
-#define g_vnet_service_enabled	1 
-#else
-#define g_vnet_service_enabled	0 
-#endif
+extern volatile uint8_t g_vnet_service_enabled;
 
 /**
  ****************************************************************************************

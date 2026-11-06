@@ -16,6 +16,11 @@
 #include <http_general.h>
 #include <http_event.h>
 
+#ifdef CONFIG_HTTP_REDIRECT_BUILD
+#define HTTP_REDIRECT_MAX_COUNT 5
+#define HTTP_REDIRECT_URL_SIZE 512
+#endif
+
 typedef enum http_interceptor_status {
     http_interceptor_status_invalid = 0x00,
     http_interceptor_status_init,
@@ -44,6 +49,11 @@ typedef struct http_interceptor {
     http_event_t                *evetn;
     void                        *owner;
     HTTP_GENERAL_FLAG;
+    char hdritems[1024];
+#ifdef CONFIG_HTTP_REDIRECT_BUILD
+    char redirect_location[HTTP_REDIRECT_URL_SIZE];
+    int header_value;
+#endif
 } http_interceptor_t;
 
 

@@ -31,15 +31,18 @@
 #define BLE_SPI_TYPE_DATA_SUBTYPE_RECV_WRITE              0x05
 #define BLE_SPI_TYPE_DATA_SUBTYPE_RECV_READ_RSP           0x06
 #define BLE_SPI_TYPE_DATA_SUBTYPE_RECV_NOTIFY             0x07
+#define BLE_SPI_TYPE_DATA_SUBTYPE_RECV_ENABLE_CCCD        0x08
 
 #define BLE_SPI_TYPE_EVENT                                0x2
 #define BLE_SPI_TYPE_EVENT_SUBTYPE_ADV_REPORT             0x00
-#define BLE_SPI_TYPE_EVENT_SUBTYPE_CONNECT                0x01
-#define BLE_SPI_TYPE_EVENT_SUBTYPE_DISCONNECT             0x02
-#define BLE_SPI_TYPE_EVENT_SUBTYPE_SEND_WRITE             0x03 /*Reports the status of whether the write send is successful*/
-#define BLE_SPI_TYPE_EVENT_SUBTYPE_SEND_NOTIFY            0x04
-#define BLE_SPI_TYPE_EVENT_SUBTYPE_GETADDR                0x05
-#define BLE_SPI_TYPE_EVENT_SUBTYPE_MTUREQ                 0x06
+#define BLE_SPI_TYPE_EVENT_SUBTYPE_ADV_REPORT_DOWN        0x01
+#define BLE_SPI_TYPE_EVENT_SUBTYPE_CONNECT                0x02
+#define BLE_SPI_TYPE_EVENT_SUBTYPE_CONNECT_TIMEOUT        0x03
+#define BLE_SPI_TYPE_EVENT_SUBTYPE_DISCONNECT             0x04
+#define BLE_SPI_TYPE_EVENT_SUBTYPE_SEND_WRITE             0x05 /*Reports the status of whether the write send is successful*/
+#define BLE_SPI_TYPE_EVENT_SUBTYPE_SEND_NOTIFY            0x06
+#define BLE_SPI_TYPE_EVENT_SUBTYPE_GETADDR                0x07
+#define BLE_SPI_TYPE_EVENT_SUBTYPE_MTUREQ                 0x08
 
 #define BLE_SPI_TYPE_IS_CTRL(type)        (BLE_SPI_GET_TYPE((type)) == BLE_SPI_TYPE_CTRL)
 #define BLE_SPI_TYPE_IS_DATA(type)        (BLE_SPI_GET_TYPE((type)) == BLE_SPI_TYPE_DATA)

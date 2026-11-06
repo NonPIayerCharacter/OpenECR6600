@@ -1,5 +1,3 @@
-/* wangc add xip link flie */
-
 
 MEMORY
 {
@@ -24,10 +22,19 @@ SECTIONS
   .text : 
     {
 	KEEP(*(.vector_init ));
-	/* Sleep resume and SPI flash restoration use these routines before
-	 * XIP is available. */
+#ifdef CONFIG_CPP
+	KEEP(*(.init ))
+#endif
+    
+	*libboard.a:chip_entry.o(.text .text.*)
+	*libboard.a:chip_startup.o(.text .text.*)
 	*libboard.a:chip_clk_ctrl.o(.text .text.*)
-	*libpsm.a:(.text .text.*)
+	//*libboard.a:(.text .text.*)
+	TEXT_BEGIN_PM = .;
+	*( .ilm_text_pm )
+	//*libpsm.a:(.text .text.*)
+	*libpsm.a:psm_mode_ctrl.o(.text .text.*)
+	TEXT_SIZE_PM = . - TEXT_BEGIN_PM;
 
 	TEXT_BEGIN_DRV = .;
 	*( .ilm_text_drv )
@@ -35,11 +42,10 @@ SECTIONS
 	*libdrivers.a:efuse.o(.text .text.*)
 	*libdrivers.a:flash*.o(.text .text.*)
 
-	*libdrivers.a:ir.o(.text .text.*)
 	*libdrivers.a:i2c.o(.text .text.*)
 	*libdrivers.a:i2s.o(.text .text.*)
 	*libdrivers.a:pit.o(.text .text.*)
-	*libdrivers.a:pwm.o(.text .text.*)
+	//*libdrivers.a:pwm.o(.text .text.*)
 	*libdrivers.a:rtc.o(.text .text.*)
 
 	*libdrivers.a:sdhci.o(.text .text.*)
@@ -47,9 +53,9 @@ SECTIONS
 	*libdrivers.a:spi_slave_service.o(.text .text.*)
 	*libdrivers.a:spi_slave.o(.text .text.*)
 
-	*libdrivers.a:timer.o(.text .text.*)
-	*libdrivers.a:trng.o(.text .text.*)
-	*libdrivers.a:uart.o(.text .text.*)
+	//*libdrivers.a:timer.o(.text .text.*)
+	//*libdrivers.a:trng.o(.text .text.*)
+	//*libdrivers.a:uart.o(.text .text.*)
 	*libdrivers.a:wdt.o(.text .text.*)
 
 	*libdrivers.a:hal_system.o(.text .text.*)
@@ -63,42 +69,32 @@ SECTIONS
 	*( .ilm_text_ble )
 	TEXT_SIZE_BLE = . - TEXT_BEGIN_BLE;
 
-	*libps_wifi.a:hal_machw.o(.text .text.*)
-	*libps_wifi.a:intc.o(.text .text.*)
 	*libarch.a:(.text .text.*)
 	//*libdrivers.a:(.text .text.*)
-	*libos.a:(.text .text.*)
-	*libps_wifi.a:hal_rf_6600.o(.text .text.*)
-	//*libps_wifi.a:phy_custom_rf.o(.text .text.*)
-	//*libps_wifi.a:fhost_tx.o(.text .text.*)
-	//*libps_wifi.a:net_al.o(.text .text.*)
-	//*libps_wifi.a:tx_*.o(.text .text.*)
-	*libps_wifi.a:rxl_*.o(.text .text.*)
-	//*libps_wifi.a:txl_*.o(.text .text.*)
-	*libps_wifi.a:txl_buffer_shared.o(.text .text.*)
-        *libps_wifi.a:txl_frame_shared.o(.text .text.*)
-        *libps_wifi.a:txl_cntrl.o(.text .text.*)
-        *libps_wifi.a:txl_cfm.o(.text .text.*)
-        *libps_wifi.a:txl_agg.o(.text .text.*)
-        *libps_wifi.a:txl_he.o(.text .text.*)
-        //*libps_wifi.a:txl_buffer.o(.text .text.*)
-        //*libps_wifi.a:txl_frame.o(.text .text.*)
+	//*libos.a:(.text .text.*)
+	*libos.a:irq.o(.text .text.*)
+	*libos.a:list.o(.text .text.*)
+	*libos.a:queue.o(.text .text.*)
+	*libos.a:tasks.o(.text .text.*)
+	*libos.a:timers.o(.text .text.*)
+	*libos.a:port.o(.text .text.*)
+	*libos.a:debug_core.o(.text .text.*)
+	//*libps_wifi.a:hal_rf_6600.o(.text .text.*)
 
-	*libps_wifi.a:mm_timer.o(.text .text.*)
-	*libps_ble.a:sch_alarm.o(.text .text.*)
-	*libps_ble.a:sch_arb.o(.text .text.*)
-	*libps_ble.a:sch_plan.o(.text .text.*)
-	*libps_ble.a:sch_prog.o(.text .text.*)
-	*libps_ble.a:sch_slice.o(.text .text.*)
-	*libps_ble.a:lld_adv.o(.text .text.*)
-	*libps_ble.a:lld_con.o(.text .text.*)
-	*libps_ble.a:lld_scan.o(.text .text.*)
-	*libps_ble.a:lld_init.o(.text .text.*)
-	*libps_ble.a:lld.o(.text .text.*)
-	*libps_ble.a:rwip_driver.o(.text .text.*)
-	*libps_ble.a:rwble.o(.text .text.*)
-	*libps_ble.a:ble_util_buf.o(.text .text.*)
-	*libps_wifi.a:co_list_ble.o(.text .text.*)
+	//*libps_ble.a:sch_alarm.o(.text .text.*)
+	//*libps_ble.a:sch_arb.o(.text .text.*)
+	//*libps_ble.a:sch_plan.o(.text .text.*)
+	//*libps_ble.a:sch_prog.o(.text .text.*)
+	//*libps_ble.a:sch_slice.o(.text .text.*)
+	//*libps_ble.a:lld_adv.o(.text .text.*)
+	//*libps_ble.a:lld_con.o(.text .text.*)
+	//*libps_ble.a:lld_scan.o(.text .text.*)
+	//*libps_ble.a:lld_init.o(.text .text.*)
+	//*libps_ble.a:lld.o(.text .text.*)
+	//*libps_ble.a:rwip_driver.o(.text .text.*)
+	//*libps_ble.a:rwble.o(.text .text.*)
+	//*libps_ble.a:ble_util_buf.o(.text .text.*)
+	//*libps_wifi.a:co_list_ble.o(.text .text.*)
 	//*libps_wifi.a:ke.o(.text .text.*)
 	//*libps_wifi.a:ke_event.o(.text .text.*)
 	//*libps_wifi.a:ke_mem_freertos.o(.text .text.*)
@@ -106,7 +102,20 @@ SECTIONS
 	//*libps_wifi.a:ke_queue.o(.text .text.*)
 	//*libps_wifi.a:ke_task.o(.text .text.*)
 	//*libps_wifi.a:ke_timer.o(.text .text.*)
-	
+	//*libps_wifi.a:ke.o(.text .text.*)
+	//*libps_wifi.a:ke_event.o(.text .text.*)
+	//*libps_wifi.a:ke_mem_freertos.o(.text .text.*)
+	//*libps_wifi.a:ke_msg.o(.text .text.*)
+	//*libps_wifi.a:ke_queue.o(.text .text.*)
+	//*libps_wifi.a:ke_task.o(.text .text.*)
+	//*libps_wifi.a:ke_timer.o(.text .text.*)
+#ifdef CONFIG_OPUS
+	*libcomponents.a:opus_encoder.o(.text .text.*)
+	*libcomponents.a:mathops.o(.text .text.*)
+#endif
+#ifdef CONFIG_CPP
+	KEEP(*(.fini ))
+#endif
 	*(.ex9.itable )
 	. = ALIGN(0x4);
 	PROVIDE(_eilm = .);
@@ -117,6 +126,19 @@ SECTIONS
        . = ALIGN(4);
        PROVIDE(_sbss = .);
        *(.sbss_w .sbss_w.* )
+       . = ALIGN(4);
+       PROVIDE(__libandes_vsnprintf_countNow = .);
+       *libandes.a:lib_a-vsnprintf.o(.bss.countNow)
+       . = __libandes_vsnprintf_countNow + 4;
+       PROVIDE(__libandes_vsnprintf_count = .);
+       *libandes.a:lib_a-vsnprintf.o(.bss.count)
+       . = __libandes_vsnprintf_count + 4;
+       PROVIDE(__libandes_vprintf_output_idx = .);
+       *libandes.a:lib_a-vprintf.o(.bss.output_idx)
+       . = __libandes_vprintf_output_idx + 4;
+       PROVIDE(__libandes_vprintf_output_buff = .);
+       *libandes.a:lib_a-vprintf.o(.bss.output_buff)
+       . = __libandes_vprintf_output_buff + 4;
        *(.bss*)
        *(COMMON)
        *(.scommon_*)
@@ -127,10 +149,21 @@ SECTIONS
     SHARED (NOLOAD):
     {
         _sshram = . ;
+        . += 0x44;
         *(LARAM)
+#ifdef CONFIG_CPP
+        PROVIDE(_sdma_data = .);
+#endif
         *(.dma.data)
+#ifdef CONFIG_CPP
+        PROVIDE(_edma_data = .);
+#endif
         *(SHAREDRAM)
         *(SHAREDRAMIPC)
+#ifdef CONFIG_CPP
+        PROVIDE(_sbss2 = .);
+        PROVIDE(_ebss2 = .);
+#endif
     } > iram_memory
 	
 	.data :
@@ -138,6 +171,18 @@ SECTIONS
        . = ALIGN(4);
        PROVIDE(_data_load = LOADADDR(.data));
        PROVIDE(_sdata = .);
+#ifdef CONFIG_CPP
+       //KEEP(*(.gcc_except_table )) 
+       //*(.gcc_except_table.* )
+       KEEP(*chip_cxx_crtbegin*.o(.ctors)) 
+       KEEP(*(EXCLUDE_FILE (*chip_cxx_crtend*.o) .ctors)) 
+       KEEP(*(SORT(.ctors.* ))) 
+       KEEP(*(.ctors ))
+       KEEP(*chip_cxx_crtbegin*.o(.dtors)) 
+       KEEP(*(EXCLUDE_FILE (*chip_cxx_crtend*.o) .dtors)) 
+       KEEP(*(SORT(.dtors.* ))) 
+       KEEP(*(.dtors ))
+#endif
        *(.sdata*);
 	   . = ALIGN(4);
        *(.srodata*);
@@ -157,6 +202,12 @@ SECTIONS
         *(.rodata .rodata.* ) 
 		*(.version.data);
         KEEP(*(SORT(.cli_cmd* )))
+        KEEP(*(SORT(.at_cmd* )))
+        KEEP(*(SORT(.at_init* )))
+        . = ALIGN(4);
+        __start_ads_local_audio = .;
+        KEEP(*(ads_local_audio))
+        __stop_ads_local_audio = .;
     } > xip_memory
 
     _end = .;

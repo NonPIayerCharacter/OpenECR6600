@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "defaultScope": "ECW6630、ECW6700",
+  "webTitle": "ECW SDK",
+  "fromPlaceholder": "ECW6700SDK_V1.0.0B01P21",
+  "toPlaceholder": "ECW6700SDK_V1.0.0B02P03",
+  "acceptedJiraStatuses": ["等待确认", "已解决", "已关闭"]
+}

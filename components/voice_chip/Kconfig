@@ -1,0 +1,62 @@
+menuconfig VOICE_CHIP
+	bool "Voice chip"
+	default n
+	help
+	  Shared hardware voice chip abstraction for board-level codec or
+	  offload-audio devices.
+
+if VOICE_CHIP
+
+choice VOICE_CHIP_BACKEND
+	prompt "Voice chip backend"
+	default VOICE_CHIP_ES8311
+
+config VOICE_CHIP_ES8311
+	bool "ES8311 voice chip backend"
+	help
+	  Build the shared ES8311 board codec control backend used by
+	  Coze and JoyInside.
+
+config VOICE_CHIP_GX8006
+	bool "GX8006 voice chip backend"
+	help
+	  Build the shared GX8006 voice chip backend and service bridge
+	  used by Tomcat and future GX8006-based products.
+
+config CI1302
+	bool "CI1302 PCM UART voice chip backend"
+	select UART_DMA_LOOPLIST_RX
+
+endchoice
+
+if VOICE_CHIP_GX8006
+	config SMARTBOT_FLOWCTRL_USING_IO
+		bool "io flow control"
+		default n
+
+	config GX8006_EXAMPLES
+		bool "gx8006 examples"
+		default n
+endif
+
+if CI1302
+
+config CI1302_UART_BAUDRATE
+	int "CI1302 UART baud rate"
+	range 115200 2000000
+	default 921600
+
+config CI1302_AUTO_INIT
+	bool "Initialize CI1302 at startup"
+	default n
+	help
+	  Legacy board startup option. New applications should call
+	  voice_chip_service_start() from a task after the scheduler starts.
+
+config CI1302_CLI
+	bool "CI1302 raw driver diagnostic CLI"
+	default n
+	depends on CLI
+
+endif
+endif

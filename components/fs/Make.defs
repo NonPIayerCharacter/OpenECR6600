@@ -6,3 +6,13 @@ ifeq ($(CONFIG_FATFS),y)
 	INCPATHS +=fs/fatfs
 
 endif
+
+ifeq ($(CONFIG_LFS),y)
+
+	CSRCS += lfs.c lfs_port.c lfs_util.c
+ifneq ($(CONFIG_MATTER_CUSTOMER_LFS),y)
+    CSRCS += lfs_test.c
+endif
+	VPATH += :fs/littlefs
+
+endif

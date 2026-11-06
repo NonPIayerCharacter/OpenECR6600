@@ -577,8 +577,12 @@ ip4_input(struct pbuf *p, struct netif *inp)
 
 #if IP_NAPT
     /* for unicast packet, check NAPT table and modify dest if needed */
-    if (!inp->napt && ip4_addr_cmp(&iphdr->dest, &(inp->ip_addr.u_addr.ip4)))
-      ip_napt_recv(p, iphdr, inp);
+#ifdef CONFIG_IPV6
+	if (!inp->napt && ip4_addr_cmp(&iphdr->dest, &(inp->ip_addr.u_addr.ip4)))
+#else
+	if (!inp->napt && ip4_addr_cmp(&iphdr->dest, &(inp->ip_addr)))
+#endif
+		ip_napt_recv(p, iphdr, inp);
 #endif
 
   /* copy IP addresses to aligned ip_addr_t */

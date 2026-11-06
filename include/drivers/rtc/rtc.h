@@ -63,6 +63,11 @@ struct rtc_time
 	unsigned int cnt_32k;
 };
 
+/**    @brief		rtc interrupt except alarm.
+*	   @return  	none
+*/
+void drv_rtc_isr(void);
+
 /**    @brief		initial rtc .
 *	   @return  	0--initial succeed, -1--initial failed
 */

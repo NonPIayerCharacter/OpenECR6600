@@ -177,6 +177,7 @@ dhcp6_inc_pcb_refcount(void)
   if (dhcp6_pcb_refcount == 0) {
     LWIP_ASSERT("dhcp6_inc_pcb_refcount(): memory leak", dhcp6_pcb == NULL);
 
+#if LWIP_UDP
     /* allocate UDP PCB */
     dhcp6_pcb = udp_new_ip6();
 
@@ -190,6 +191,7 @@ dhcp6_inc_pcb_refcount(void)
     udp_bind(dhcp6_pcb, IP6_ADDR_ANY, DHCP6_CLIENT_PORT);
     udp_recv(dhcp6_pcb, dhcp6_recv, NULL);
   }
+#endif
 
   dhcp6_pcb_refcount++;
 

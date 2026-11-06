@@ -137,7 +137,7 @@
  */
 #if !defined SNTP_STARTUP_DELAY || defined __DOXYGEN__
 #ifdef LWIP_RAND
-#define SNTP_STARTUP_DELAY          1
+#define SNTP_STARTUP_DELAY          0
 #else
 #define SNTP_STARTUP_DELAY          0
 #endif

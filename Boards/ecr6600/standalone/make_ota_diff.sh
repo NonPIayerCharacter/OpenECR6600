@@ -48,7 +48,7 @@ then
 	#Éú³ÉÑ¹Ëõ°ü
 	echo ""
 	echo "* * * * * * Generate AB upgrade package * * * * * * *"
-	$TOPDIR/scripts/bin/ota_tool/ota_tool$HOSTEXEEXT diff ref_bin/*Partition*.bin $TOPDIR/build/$BOARD_DIR"_diff_"$1/ECR6600F_*_cpu_0x*.bin $TOPDIR/build/$BOARD_DIR"_diff_"$3/ECR6600F_*_cpu_0x*.bin $TOPDIR/build/ECR6600F_Diff_ota_package_$1"_to_"$3.bin
+	$TOPDIR/scripts/bin/ota_tool/ota_tool$HOSTEXEEXT -m diff -p ref_bin/*Partition*.bin --old $TOPDIR/build/$BOARD_DIR"_diff_"$1/ECR6600F_*_cpu_0x*.bin --new $TOPDIR/build/$BOARD_DIR"_diff_"$3/ECR6600F_*_cpu_0x*.bin -o $TOPDIR/build/ECR6600F_Diff_ota_package_$1"_to_"$3.bin
 else
 	if [ $# == 1 ]
 	then

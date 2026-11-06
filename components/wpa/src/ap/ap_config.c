@@ -389,7 +389,7 @@ void hostapd_config_free_bss(struct hostapd_bss_config *conf)
 	os_free(conf->subscr_remediation_url);
 #endif /* CONFIG_HS20 */
 
-	//wpabuf_free(conf->vendor_elements);
+	wpabuf_free(conf->vendor_elements);
 	//wpabuf_free(conf->assocresp_elements);
 
 #ifdef CONFIG_TESTING_OPTIONS

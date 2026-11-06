@@ -1,0 +1,7 @@
+
+menuconfig TRANSPORT_TCP
+	bool "Transport TCP Support"
+	select MBEDTLS
+	select TRS_TLS
+	select PTHREAD
+	default n

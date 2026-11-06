@@ -653,9 +653,6 @@ void ap_sta_session_warning_timeout(struct hostapd_data *hapd,
 			       hapd, sta);
 }
 
-#ifdef CONFIG_APP_AT_COMMAND
-extern uint8_t g_max_connect;
-#endif
 struct sta_info * ap_sta_add(struct hostapd_data *hapd, const u8 *addr)
 {
 	struct sta_info *sta;
@@ -664,9 +661,6 @@ struct sta_info * ap_sta_add(struct hostapd_data *hapd, const u8 *addr)
 	if (sta)
 		return sta;
 
-#ifdef CONFIG_APP_AT_COMMAND
-    hapd->conf->max_num_sta = g_max_connect;
-#endif
 	wpa_printf(MSG_DEBUG, "  New STA");
 	if (hapd->num_sta >= hapd->conf->max_num_sta) {
 		/* FIX: might try to remove some old STAs first? */

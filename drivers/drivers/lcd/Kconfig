@@ -1,0 +1,89 @@
+menu "LCD Driver Support"
+
+config LCD
+    bool "LCD driver support"
+    depends on SPI_MASTER && GPIO && !SPI_SERVICE
+    default n
+
+if LCD
+
+choice
+    prompt "LCD panel type"
+    default LCD_ST7789
+
+config LCD_ST7789
+    bool "ST7789 LCD panel support"
+
+config LCD_ST77916
+    bool "ST77916 LCD panel support"
+
+endchoice
+
+config LCD_SPI_NUM
+    int "LCD SPI controller number"
+    range 1 1
+    default 1
+
+config LCD_USE_DMA
+    bool "LCD use SPI DMA"
+    default y
+
+config LCD_SPI_CLK_DIV
+    int "LCD SPI clock divider"
+    range 0 255
+    default 3
+
+config LCD_HOR_RES
+    int "LCD horizontal resolution"
+    range 1 1024
+    default 240 if LCD_ST7789
+    default 360 if LCD_ST77916
+    default 240
+
+config LCD_VER_RES
+    int "LCD vertical resolution"
+    range 1 1024
+    default 240 if LCD_ST7789
+    default 360 if LCD_ST77916
+    default 240
+
+config LCD_DC_GPIO
+    int "LCD DC GPIO"
+    range -1 63
+    default -1
+
+config LCD_RST_GPIO
+    int "LCD reset GPIO"
+    range -1 63
+    default -1
+
+config LCD_BL_GPIO
+    int "LCD backlight GPIO"
+    range -1 63
+    default -1
+
+config LCD_RST_ACTIVE_HIGH
+    bool "LCD reset active high"
+    default n
+
+config LCD_BL_ACTIVE_HIGH
+    bool "LCD backlight active high"
+    default y
+
+config LCD_BGR
+    bool "LCD BGR color order"
+    default n
+
+config LCD_INVERT_COLOR
+    bool "LCD invert display color"
+    default n
+
+config LCD_MAX_TRANSFER_BYTES
+    int "LCD maximum transfer bytes"
+    range 4 512
+    default 512
+
+endif
+
+endmenu
+

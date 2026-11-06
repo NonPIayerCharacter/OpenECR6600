@@ -9,6 +9,7 @@
 #include "includes.h"
 
 #include "common.h"
+#include "eapol_supp/eapol_supp_sm.h"
 #include "rsn_supp/wpa.h"
 #include "eloop.h"
 #include "config.h"
@@ -16,6 +17,7 @@
 #include "common/wpa_common.h"
 #include "wpa_supplicant_i.h"
 #include "driver_i.h"
+#include "rsn_supp/pmksa_cache.h"
 #include "sme.h"
 #include "common/ieee802_11_defs.h"
 #include "common/wpa_ctrl.h"
@@ -34,6 +36,13 @@ static void wpa_supplicant_set_config_blob(void *ctx,
 {
 	struct wpa_supplicant *wpa_s = ctx;
 	wpa_config_set_blob(wpa_s->conf, blob);
+	if (wpa_s->conf->update_config) {
+		int ret = wpa_config_write(wpa_s->confname, wpa_s->conf);
+		if (ret) {
+			wpa_printf(MSG_DEBUG, "Failed to update config after "
+				   "blob set");
+		}
+	}
 }
 
 
@@ -146,6 +155,33 @@ static int wpa_supplicant_eapol_send(void *ctx, int type, const u8 *buf,
 		return -1;
 	}
 
+	if (pmksa_cache_get_current(wpa_s->wpa) &&
+	    type == IEEE802_1X_TYPE_EAPOL_START) {
+		/*
+		 * We were trying to use PMKSA caching and sending EAPOL-Start
+		 * would abort that and trigger full EAPOL authentication.
+		 * However, we've already waited for the AP/Authenticator to
+		 * start 4-way handshake or EAP authentication, and apparently
+		 * it has not done so since the startWhen timer has reached zero
+		 * to get the state machine sending EAPOL-Start. This is not
+		 * really supposed to happen, but an interoperability issue with
+		 * a deployed AP has been identified where the connection fails
+		 * due to that AP failing to operate correctly if PMKID is
+		 * included in the Association Request frame. To work around
+		 * this, assume PMKSA caching failed and try to initiate full
+		 * EAP authentication.
+		 */
+		if (!wpa_s->current_ssid ||
+		    wpa_s->current_ssid->eap_workaround) {
+			wpa_printf(MSG_DEBUG,
+				   "RSN: Timeout on waiting for the AP to initiate 4-way handshake for PMKSA caching or EAP authentication - try to force it to start EAP authentication");
+		} else {
+			wpa_printf(MSG_DEBUG,
+				   "RSN: PMKSA caching - do not send EAPOL-Start");
+			return -1;
+		}
+	}
+
 	if (is_zero_ether_addr(wpa_s->bssid)) {
 		wpa_printf(MSG_DEBUG, "BSSID not set when trying to send an "
 			   "EAPOL frame");
@@ -207,6 +243,13 @@ static int wpa_eapol_set_wep_key(void *ctx, int unicast, int keyidx,
 }
 
 
+static void wpa_supplicant_aborted_cached(void *ctx)
+{
+	struct wpa_supplicant *wpa_s = ctx;
+	wpa_sm_aborted_cached(wpa_s->wpa);
+}
+
+#ifndef CONFIG_ECR6600_DBGTRIM
 static const char * result_str(enum eapol_supp_result result)
 {
 	switch (result) {
@@ -219,6 +262,7 @@ static const char * result_str(enum eapol_supp_result result)
 	}
 	return "?";
 }
+#endif
 
 
 static void wpa_supplicant_eapol_cb(struct eapol_sm *eapol,
@@ -274,7 +318,6 @@ static void wpa_supplicant_eapol_cb(struct eapol_sm *eapol,
 		res = -1;
 #endif /* CONFIG_IEEE80211R */
 	} else {
-	    #if 0
 		res = eapol_sm_get_key(eapol, pmk, PMK_LEN);
 		if (res) {
 			/*
@@ -284,7 +327,6 @@ static void wpa_supplicant_eapol_cb(struct eapol_sm *eapol,
 			res = eapol_sm_get_key(eapol, pmk, 16);
 			pmk_len = 16;
 		}
-        #endif
 	}
 
 	if (res) {
@@ -324,7 +366,7 @@ static void wpa_supplicant_notify_eapol_done(void *ctx)
 
 
 #ifndef CONFIG_NO_WPA
-#ifdef COMPILE_WARNING_OPTIMIZE_WPA
+
 static int wpa_get_beacon_ie(struct wpa_supplicant *wpa_s)
 {
 	int ret = 0;
@@ -374,7 +416,6 @@ static int wpa_supplicant_get_beacon_ie(void *ctx)
 
 	return wpa_get_beacon_ie(wpa_s);
 }
-#endif /* COMPILE_WARNING_OPTIMIZE_WPA */
 
 
 static u8 * _wpa_alloc_eapol(void *wpa_s, u8 type,
@@ -464,7 +505,6 @@ static int wpa_supplicant_set_key(void *_wpa_s, enum wpa_alg alg,
 }
 
 
-#ifdef COMPILE_WARNING_OPTIMIZE_WPA
 static int wpa_supplicant_mlme_setprotection(void *wpa_s, const u8 *addr,
 					     int protection_type,
 					     int key_type)
@@ -472,7 +512,6 @@ static int wpa_supplicant_mlme_setprotection(void *wpa_s, const u8 *addr,
 	return wpa_drv_mlme_setprotection(wpa_s, addr, protection_type,
 					  key_type);
 }
-#endif /* COMPILE_WARNING_OPTIMIZE_WPA */
 
 
 static int wpa_supplicant_add_pmkid(void *wpa_s,
@@ -807,7 +846,7 @@ static void wpa_supplicant_eap_param_needed(void *ctx,
 
 	if (field == WPA_CTRL_REQ_EXT_CERT_CHECK)
 		ssid->eap.pending_ext_cert_check = PENDING_CHECK;
-	//wpas_notify_network_request(wpa_s, ssid, field, default_txt);
+	wpas_notify_network_request(wpa_s, ssid, field, default_txt);
 
 	field_name = wpa_supplicant_ctrl_req_to_string(field, default_txt,
 						       &txt);
@@ -911,12 +950,69 @@ static void wpa_supplicant_set_anon_id(void *ctx, const u8 *id, size_t len)
 			return;
 	}
 
+	if (wpa_s->conf->update_config) {
+		res = wpa_config_write(wpa_s->confname, wpa_s->conf);
+		if (res) {
+			wpa_printf(MSG_DEBUG, "Failed to update config after "
+				   "anonymous_id update");
+		}
+	}
 }
 #endif /* IEEE8021X_EAPOL */
 
 
+int wpa_supplicant_init_eapol(struct wpa_supplicant *wpa_s)
+{
+#ifdef IEEE8021X_EAPOL
+	struct eapol_ctx *ctx;
+	ctx = os_zalloc(sizeof(*ctx));
+	if (ctx == NULL) {
+		wpa_printf_error(MSG_ERROR, "Failed to allocate EAPOL context.");
+		return -1;
+	}
+
+	ctx->ctx = wpa_s;
+	ctx->msg_ctx = wpa_s;
+	ctx->eapol_send_ctx = wpa_s;
+	ctx->preauth = 0;
+	ctx->eapol_done_cb = wpa_supplicant_notify_eapol_done;
+	ctx->eapol_send = wpa_supplicant_eapol_send;
+	ctx->set_wep_key = wpa_eapol_set_wep_key;
+#ifndef CONFIG_NO_CONFIG_BLOBS
+	ctx->set_config_blob = wpa_supplicant_set_config_blob;
+	ctx->get_config_blob = wpa_supplicant_get_config_blob;
+#endif /* CONFIG_NO_CONFIG_BLOBS */
+	ctx->aborted_cached = wpa_supplicant_aborted_cached;
+	ctx->opensc_engine_path = wpa_s->conf->opensc_engine_path;
+	ctx->pkcs11_engine_path = wpa_s->conf->pkcs11_engine_path;
+	ctx->pkcs11_module_path = wpa_s->conf->pkcs11_module_path;
+	ctx->openssl_ciphers = wpa_s->conf->openssl_ciphers;
+	ctx->wps = wpa_s->wps;
+	ctx->eap_param_needed = wpa_supplicant_eap_param_needed;
+#ifdef CONFIG_EAP_PROXY
+	ctx->eap_proxy_cb = wpa_supplicant_eap_proxy_cb;
+#endif /* CONFIG_EAP_PROXY */
+	ctx->port_cb = wpa_supplicant_port_cb;
+	ctx->cb = wpa_supplicant_eapol_cb;
+	ctx->cert_cb = wpa_supplicant_cert_cb;
+	ctx->cert_in_cb = wpa_s->conf->cert_in_cb;
+	ctx->status_cb = wpa_supplicant_status_cb;
+	ctx->set_anon_id = wpa_supplicant_set_anon_id;
+	ctx->cb_ctx = wpa_s;
+	wpa_s->eapol = eapol_sm_init(ctx);
+	if (wpa_s->eapol == NULL) {
+		os_free(ctx);
+		wpa_printf_error(MSG_ERROR, "Failed to initialize EAPOL state "
+			   "machines.");
+		return -1;
+	}
+#endif /* IEEE8021X_EAPOL */
+
+	return 0;
+}
+
+
 #ifndef CONFIG_NO_WPA
-#ifdef COMPILE_WARNING_OPTIMIZE_WPA
 static void wpa_supplicant_set_rekey_offload(void *ctx,
 					     const u8 *kek, size_t kek_len,
 					     const u8 *kck, size_t kck_len,
@@ -931,7 +1027,6 @@ static void wpa_supplicant_set_rekey_offload(void *ctx,
 static int wpa_supplicant_key_mgmt_set_pmk(void *ctx, const u8 *pmk,
 					   size_t pmk_len)
 {
-#if 0
 	struct wpa_supplicant *wpa_s = ctx;
 
 	if (wpa_s->conf->key_mgmt_offload &&
@@ -939,10 +1034,8 @@ static int wpa_supplicant_key_mgmt_set_pmk(void *ctx, const u8 *pmk,
 		return wpa_drv_set_key(wpa_s, WPA_ALG_PMK, NULL, 0, 0,
 				       NULL, 0, pmk, pmk_len);
 	else
-#endif        
 		return 0;
 }
-#endif /* COMPILE_WARNING_OPTIMIZE_WPA */
 #endif /* CONFIG_NO_WPA */
 
 
@@ -965,7 +1058,7 @@ int wpa_supplicant_init_wpa(struct wpa_supplicant *wpa_s)
 	ctx->get_network_ctx = wpa_supplicant_get_network_ctx;
 	ctx->get_bssid = wpa_supplicant_get_bssid;
 	ctx->ether_send = _wpa_ether_send;
-	ctx->get_beacon_ie = NULL;//wpa_supplicant_get_beacon_ie;
+	ctx->get_beacon_ie = wpa_supplicant_get_beacon_ie;
 	ctx->alloc_eapol = _wpa_alloc_eapol;
 	ctx->cancel_auth_timeout = _wpa_supplicant_cancel_auth_timeout;
 	ctx->add_pmkid = wpa_supplicant_add_pmkid;
@@ -974,7 +1067,7 @@ int wpa_supplicant_init_wpa(struct wpa_supplicant *wpa_s)
 	ctx->set_config_blob = wpa_supplicant_set_config_blob;
 	ctx->get_config_blob = wpa_supplicant_get_config_blob;
 #endif /* CONFIG_NO_CONFIG_BLOBS */
-	//ctx->mlme_setprotection = wpa_supplicant_mlme_setprotection;
+	ctx->mlme_setprotection = wpa_supplicant_mlme_setprotection;
 #ifdef CONFIG_IEEE80211R
 	ctx->update_ft_ies = wpa_supplicant_update_ft_ies;
 	ctx->send_ft_action = wpa_supplicant_send_ft_action;
@@ -990,8 +1083,8 @@ int wpa_supplicant_init_wpa(struct wpa_supplicant *wpa_s)
 	ctx->tdls_disable_channel_switch =
 		wpa_supplicant_tdls_disable_channel_switch;
 #endif /* CONFIG_TDLS */
-	//ctx->set_rekey_offload = wpa_supplicant_set_rekey_offload;
-	//ctx->key_mgmt_set_pmk = wpa_supplicant_key_mgmt_set_pmk;
+	ctx->set_rekey_offload = wpa_supplicant_set_rekey_offload;
+	ctx->key_mgmt_set_pmk = wpa_supplicant_key_mgmt_set_pmk;
 
 	wpa_s->wpa = wpa_sm_init(ctx);
 	if (wpa_s->wpa == NULL) {
@@ -1013,7 +1106,7 @@ void wpa_supplicant_rsn_supp_set_config(struct wpa_supplicant *wpa_s,
 	if (ssid) {
 		os_memset(&conf, 0, sizeof(conf));
 		conf.network_ctx = ssid;
-		//conf.peerkey_enabled = ssid->peerkey;
+		conf.peerkey_enabled = ssid->peerkey;
 		conf.allowed_pairwise_cipher = ssid->pairwise_cipher;
 #ifdef IEEE8021X_EAPOL
 		conf.proactive_key_caching = ssid->proactive_key_caching < 0 ?

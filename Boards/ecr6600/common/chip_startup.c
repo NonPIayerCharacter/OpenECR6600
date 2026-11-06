@@ -1,5 +1,5 @@
 
-
+#include <stdlib.h>
 #include <string.h>
 #include "chip_clk_ctrl.h"
 #include "arch_cpu.h"
@@ -16,6 +16,22 @@
 #include "hal_rtc.h"
 #include "chip_configuration.h"
 #include "psm_system.h"
+
+#ifdef CONFIG_CPP
+extern void _crt_init(void);
+extern void _crt_fini(void);
+
+/*
+ * When compiling C++ code with static objects, the compiler inserts
+ * a call to __cxa_atexit() with __dso_handle as one of the arguments.
+ * The dummy versions of these symbols should be provided.
+ */
+void __cxa_atexit(void (*arg1)(void*), void* arg2, void* arg3)
+{
+}
+
+void* __dso_handle = (void*) &__dso_handle;
+#endif
 
 void chip_c_init(void)
 {
@@ -37,8 +53,25 @@ void chip_c_init(void)
 	{
 	    *dest++ = 0;
 	}
+
+#ifdef CONFIG_CPP
+	extern unsigned int _sbss2, _ebss2;
+	extern unsigned int _sdma_data, _edma_data;
+
+	/* clear .bss2 */
+	for (dest = &_sbss2; dest < &_ebss2; )
+	{
+	    *dest++ = 0;
+	}
+
+    /* clear .dma.data */
+	for (dest = &_sdma_data; dest < &_edma_data; )
+	{
+	    *dest++ = 0;
+	}
+#endif
 }
- 
+
 
 
 void chip_startup(void)
@@ -62,7 +95,14 @@ extern int main(void);
 	
 #if defined(CONFIG_RTC)
 	//drv_rtc_init();
+	if (hal_get_reset_type() != RST_TYPE_SOFTWARE_REBOOT)
+	{
 	hal_rtc_init();
+	}
+	else
+	{
+		hal_rtc_restore();
+	}
 #endif //CONFIG_RTC
 
 #ifdef CONFIG_AES
@@ -98,5 +138,19 @@ extern int main(void);
 #ifdef CONFIG_PSM_SURPORT
 	psm_pad_gpio_status_init();
 #endif
+
+#ifdef CONFIG_AI_VLLM
+extern void ledc_deinit();
+	ledc_deinit();
+#endif
+
+#ifdef CONFIG_CPP
+	/* Do global constructors */
+	_crt_init();
+
+	/* Register global destructors to be called upon exit */
+	atexit(_crt_fini);
+#endif
+
 	main();
 }

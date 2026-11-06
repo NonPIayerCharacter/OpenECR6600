@@ -1,4 +1,4 @@
+menuconfig TRS_TLS
+	bool "Tls Support"
+	default n
 
-#config TRS_TLS
-#    bool
-#    default n

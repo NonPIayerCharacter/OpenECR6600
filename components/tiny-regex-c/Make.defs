@@ -1,0 +1,12 @@
+
+ifeq ($(CONFIG_CMD),y)
+
+
+ifeq ($(CONFIG_CMD_AT),y)
+	CSRCS += re.c
+	VPATH += :tiny-regex-c
+	INCPATHS +=tiny-regex-c
+	
+endif
+
+endif

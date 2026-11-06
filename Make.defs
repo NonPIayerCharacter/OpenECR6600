@@ -2,6 +2,18 @@ override TOPDIR:=$(shell realpath --relative-to=$(CURDIR) $(TOPDIR))
 override OUTPUTDIR:=$(shell realpath --relative-to=$(CURDIR) $(OUTPUTDIR))
 override BOARD_DIR:=$(shell realpath --relative-to=$(CURDIR) $(BOARD_DIR))
 override GENERATED_DIR:=$(shell realpath --relative-to=$(CURDIR) $(GENERATED_DIR))
+ifneq ($(BOARD_TOOL_DIR),)
+override BOARD_TOOL_DIR:=$(shell realpath --relative-to=$(CURDIR) $(BOARD_TOOL_DIR))
+endif
+ifneq ($(BOARD_COMMON_DIR),)
+override BOARD_COMMON_DIR:=$(shell realpath --relative-to=$(CURDIR) $(BOARD_COMMON_DIR))
+endif
+ifneq ($(BOARD_PSM_DIR),)
+override BOARD_PSM_DIR:=$(shell realpath --relative-to=$(CURDIR) $(BOARD_PSM_DIR))
+endif
+ifneq ($(BOARD_CPP_DIR),)
+override BOARD_CPP_DIR:=$(shell realpath --relative-to=$(CURDIR) $(BOARD_CPP_DIR))
+endif
 
 include ${GENERATED_DIR}/.config
 include $(TOPDIR)/scripts/Config.mk

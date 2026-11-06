@@ -1,0 +1,37 @@
+
+ifeq ($(CONFIG_CMD),y)
+
+ifneq ($(CONFIG_CLI)$(CONFIG_CMD_AT),)
+	CSRCS += cmd_hal_uart.c cmd_core_comm.c
+ifeq ($(CONFIG_CUSTOM_YED),y)
+		CSRCS += cmd_hal_uart_reliable.c cmd_hal_uart_reliable_protocol.c
+endif
+
+	VPATH += :cmd/cmd_hal:cmd/cmd_core : cmd/cmd_core/cmd_core_cli : cmd/cmd_core/cmd_core_at
+
+	INCPATHS +=cmd/cmd_hal \
+			cmd/cmd_core \
+			cmd/cmd_core/cmd_core_cli \
+			cmd/cmd_core/cmd_core_at \
+			$(TOPDIR)/drivers/uart \
+			$(TOPDIR)/include/PS/ble/module/nvds \
+			$(TOPDIR)/os/freertos/FreeRTOS-Kernel/include \
+			$(TOPDIR)/os/freertos/FreeRTOS-Kernel/portable/ThirdParty/GCC/NDS32_ECR6600 \
+			$(TOPDIR)/components/ble_ctrl $(TOPDIR)/components/ble_ctrl/tuya_hci_adapt \
+	
+endif
+
+
+ifeq ($(CONFIG_CLI),y)
+	CSRCS += cmd_core_cli.c
+
+	CFLAGS += -DUTIL_TRACE_STACK
+endif
+
+
+ifeq ($(CONFIG_CMD_AT),y)
+	CSRCS += cmd_at_user.c 
+	VPATH += cmd/cmd_core/cmd_core_at/user_command 
+endif
+
+endif

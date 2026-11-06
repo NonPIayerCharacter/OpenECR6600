@@ -108,6 +108,39 @@ EfErrCode customer_set_env_blob(const char *key, const void *value_buf, signed i
 EfErrCode customer_del_env(const char *key);
 void customer_print_env(void);
 
+
+
+/* only for mfg infac  */
+
+typedef enum _MFG_KEY_TYPE_E
+{
+	MFG_KEY_TYPE_UNKNOW 	= 0,
+	MFG_KEY_TYPE_U8     	= 1,
+	MFG_KEY_TYPE_I8     	= 2,
+	MFG_KEY_TYPE_U16 		= 3,
+	MFG_KEY_TYPE_I16		= 4,
+	MFG_KEY_TYPE_U32		= 5,
+	MFG_KEY_TYPE_I32		= 6,
+	MFG_KEY_TYPE_STRING		= 7,
+	MFG_KEY_TYPE_BINARY		= 8,
+} MFG_KEY_TYPE_E;
+
+typedef struct _MFG_KEY_INFO_T
+{
+	char * name_space;
+	char * name_key;
+	MFG_KEY_TYPE_E type;
+}  MFG_KEY_INFO_T;
+
+signed int mcfg_get_env_blob(MFG_KEY_INFO_T *key, void *value_buf, signed int buf_len, signed int *value_len);
+EfErrCode mcfg_set_env_blob(MFG_KEY_INFO_T *key, const void *value_buf, signed int buf_len);
+
+EfErrCode mcfg_del_env(MFG_KEY_INFO_T * key);
+void mcfg_print_env(void);
+
+typedef int (*mcfg_iterator_key_callback)(MFG_KEY_INFO_T * key_match);
+EfErrCode mcfg_iterator_key(mcfg_iterator_key_callback cb, MFG_KEY_INFO_T * key_match);
+
 /* ef_env.c, ef_env_legacy_wl.c and ef_env_legacy.c */
 EfErrCode ef_load_env(void);
 void ef_print_env(void);
@@ -142,10 +175,11 @@ void develop_print_env(void);
 #define PARTION_NAME_CA_CRT			"ca_crt"
 #define PARTION_NAME_CLIENT_CRT		"client_crt"
 #define PARTION_NAME_CLIENT_KEY		"client_key"
+#define PARTION_NAME_NV_MCFG		"nv_mcfg"
 #define PARTION_NAME_NV_CUSTOMER	"nv_customer"
 #define PARTION_NAME_NV_DEVELOP		"nv_develop"
 #define PARTION_NAME_NV_AMT			"nv_amt"
-#define PARTION_NAME_CFG		    "cfg"
+#define PARTION_NAME_CFG			"cfg"
 //#define PARTION_NAME_DATA_CERT		"data_cert"
 //#define PARTION_NAME_DATA_CA		"data_ca" // add by wangxia 20200226
 //#define PARTION_NAME_DATA_KEY		"data_key" // add by wangxia 20200226
@@ -154,7 +188,8 @@ void develop_print_env(void);
 int partion_info_get(char *key, unsigned int *addr, unsigned int * length);
 int partion_init(void);
 void partion_print_all(void);
-void partion_get_string_part(char *buff, unsigned int len);
+//void partion_get_string_part(char *buff, unsigned int len);
+int partion_info_get_by_index(int i, char **key, unsigned int *addr, unsigned int * length);
 
 
 EfErrCode ef_port_init(ef_env const **default_env, signed int *default_env_size);

@@ -54,17 +54,30 @@
 /****************************************************************************
 * 	                                          Function Definitions
 ****************************************************************************/
+#define USER_EVENT_HANDLERS_NUM     (3)
 
 static os_queue_handle_t s_event_queue = NULL;
-static system_event_cb_t s_event_handler_cb = NULL;
-static void *s_event_ctx = NULL;
+static system_event_cb_t s_event_handler_cb[USER_EVENT_HANDLERS_NUM];
+static void *s_event_ctx[USER_EVENT_HANDLERS_NUM];
 EventGroupHandle_t os_event_handle;
+
+static system_event_handler_t wifi_event_cb = NULL;
+
+void wifi_event_cb_register(system_event_handler_t cb)
+{
+	wifi_event_cb = cb;
+}
 
 static sys_err_t sys_event_post_to_user(system_event_t *event)
 {
-    if (s_event_handler_cb) {
-        return (*s_event_handler_cb)(s_event_ctx, event);
+    int idx;
+
+    for (idx = 0; idx < USER_EVENT_HANDLERS_NUM; idx++) {
+        if (s_event_handler_cb[idx]) {
+            return s_event_handler_cb[idx](s_event_ctx[idx], event);
+        }
     }
+
     return SYS_OK;
 }
 
@@ -78,6 +91,7 @@ static void sys_event_loop_task(void *arg)
     while (1) {
         system_event_t evt;
         if (os_queue_receive(s_event_queue, (char*)&evt, sizeof(system_event_t),WAIT_FOREVER) == 0) {
+            #if !defined(CONFIG_WIFI_MESH)
             sys_err_t ret = sys_event_process_default(&evt);
             if (ret != SYS_OK) {
                 //SYS_LOGE("default event handler failed!");
@@ -86,6 +100,19 @@ static void sys_event_loop_task(void *arg)
             if (ret != SYS_OK) {
                 //SYS_LOGE("post event to user fail!");
             }
+
+            if(wifi_event_cb != NULL)
+                wifi_event_cb(&evt);
+            #else
+            sys_err_t ret = sys_event_post_to_user(&evt);
+            if (ret != SYS_OK) {
+               //SYS_LOGE("post event to user fail!");
+            }
+             ret = sys_event_process_default(&evt);
+            if (ret != SYS_OK) {
+               //SYS_LOGE("default event handler failed!");
+            }
+            #endif
         }
     }
 	return;
@@ -93,10 +120,39 @@ static void sys_event_loop_task(void *arg)
 
 system_event_cb_t sys_event_loop_set_cb(system_event_cb_t cb, void *ctx)
 {
-    system_event_cb_t old_cb = s_event_handler_cb;
-    s_event_handler_cb = cb;
-    s_event_ctx = ctx;
+    system_event_cb_t old_cb = NULL;
+    int result = -1;
+    int idx;
+
+    for (idx = 0; idx < USER_EVENT_HANDLERS_NUM; idx++) {
+        if (s_event_handler_cb[idx] == NULL) {
+            s_event_handler_cb[idx] = cb;
+            s_event_ctx[idx] = ctx;
+            result = 0;
+        }
+    }
+
+    if (result) {
+        old_cb = s_event_handler_cb[0];
+        s_event_handler_cb[0] = cb;
+        s_event_ctx[0] = ctx;
+    }
+    
     return old_cb;
+}
+
+sys_err_t sys_event_loop_clear_cb(system_event_cb_t cb)
+{
+    int idx;
+
+    for (idx = 0; idx < USER_EVENT_HANDLERS_NUM; idx++) {
+        if (s_event_handler_cb[idx] == cb) {
+            s_event_handler_cb[idx] = NULL;
+            s_event_ctx[idx] = NULL;
+        }
+    }
+
+    return SYS_OK;
 }
 
 sys_err_t sys_event_send(system_event_t *event)
@@ -129,10 +185,7 @@ sys_err_t sys_event_loop_init(system_event_cb_t cb, void *ctx)
     int handle;
 
     if (cb) {
-        s_event_handler_cb = cb;
-    }
-    if (ctx) {
-        s_event_ctx = ctx;
+        sys_event_loop_set_cb(cb, ctx);
     }
 
     if (s_event_init_flag) {

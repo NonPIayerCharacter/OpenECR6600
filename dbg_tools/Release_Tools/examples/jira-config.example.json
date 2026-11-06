@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "baseUrl": "https://jira.eswincomputing.com",
+  "deployment": "server",
+  "auth": {
+    "mode": "basic-password",
+    "userEnv": "ECW_JIRA_USER",
+    "passwordEnv": "ECW_JIRA_PASSWORD"
+  },
+  "caFile": null,
+  "projects": {
+    "ECW6700": {
+      "issueTypeMap": {"11101": "fixes", "11100": "fixes", "10603": "fixes", "10100": "improvements"},
+      "fallbackIssueTypeMap": {"10604": "features", "10007": "features", "10304": "features"}
+    },
+    "ECW6630": {
+      "issueTypeMap": {"11101": "fixes", "11100": "fixes", "10603": "fixes", "10100": "improvements"},
+      "fallbackIssueTypeMap": {"10604": "features", "10512": "features", "10509": "features", "10007": "features", "10304": "features"}
+    },
+    "ECW6280": {
+      "issueTypeMap": {"11101": "fixes", "11100": "fixes", "10603": "fixes", "10100": "improvements"},
+      "fallbackIssueTypeMap": {"10604": "features", "10007": "features", "10304": "features"}
+    }
+  },
+  "releaseCategoryField": null,
+  "releaseCategoryMap": {},
+  "timeoutSeconds": 10,
+  "totalBudgetSeconds": 120,
+  "maxAttempts": 2
+}

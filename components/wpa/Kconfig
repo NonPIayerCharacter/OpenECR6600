@@ -9,9 +9,14 @@ menuconfig WIRELESS_WPA_SUPPLICANT
 	default n
 	
 config ECR6600_DBGTRIM
-	bool "Debug Trim"
+	bool
 	depends on ECR6600_WIFI
 	default y
+
+config ECR6600_WPS
+	bool "wpa supplicant wps"
+	depends on WIRELESS_WPA_SUPPLICANT
+	default n
 
 menuconfig WIRELESS_WPA3_SUPPORT
 	bool "IEEE 802.11 WIRELESS_WPA3 Support, Need MBEDTLS and MFP Feature enabled"

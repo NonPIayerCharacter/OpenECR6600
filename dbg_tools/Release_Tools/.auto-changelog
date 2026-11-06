@@ -1,0 +1,13 @@
+{
+  "template": "dbg_tools/Release_Tools/templates/engineering.zh.hbs",
+  "remote": "origin",
+  "commitLimit": false,
+  "backfillLimit": false,
+  "sortCommits": "date-desc",
+  "hideCredit": true,
+  "hideEmptyReleases": false,
+  "releaseSummary": false,
+  "autodetectMonorepoDisabled": true,
+  "issuePattern": "(?:ECW6700|ECW6630|ECW6280)-\\d+",
+  "breakingPattern": "BREAKING[ -]CHANGE:|^[A-Za-z]+(?:\\([^\\r\\n)]+\\))?!:"
+}

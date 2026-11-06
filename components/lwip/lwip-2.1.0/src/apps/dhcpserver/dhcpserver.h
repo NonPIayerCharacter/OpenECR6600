@@ -28,10 +28,15 @@ typedef struct dhcps_msg {
 
 #ifndef LWIP_OPEN_SRC
 struct dhcps_lease {
-	bool enable;
-	ip_addr_t start_ip;
-	ip_addr_t end_ip;
-	u32_t dhcps_lease;
+#define DHCP_SERVER_MASK_INIT 0x1
+#define DHCP_SERVER_MASK_IP   0x2
+#define DHCP_SERVER_MASK_TIME 0x4
+#define DHCP_SERVER_MASK_DNS  0x8
+    unsigned int mask;
+    ip_addr_t start_ip;
+    ip_addr_t end_ip;
+    unsigned int dhcps_lease;
+    ip_addr_t dnsserver[DNS_MAX_SERVERS];
 };
 
 enum dhcps_offer_option {
@@ -44,6 +49,7 @@ enum dhcps_offer_option {
 struct dhcps_pool {
 	ip_addr_t ip;
 	u8_t mac[6];
+	char hostname[WIFI_SOFTAP_STA_HOSTNAME_MAX_LEN];
 	s32_t lease_timer;
 };
 
@@ -52,9 +58,7 @@ typedef struct _list_node {
 	struct _list_node* pnext;
 } list_node;
 
-extern u32_t dhcps_lease_time;
 #define DHCPS_COARSE_TIMER_SECS  1
-#define DHCPS_LEASE_TIMER  dhcps_lease_time  //0x05A0
 #define DHCPS_MAX_LEASE 0x64
 #define BOOTP_BROADCAST 0x8000
 
@@ -77,6 +81,7 @@ extern u32_t dhcps_lease_time;
 #define DHCP_OPTION_SUBNET_MASK   1
 #define DHCP_OPTION_ROUTER        3
 #define DHCP_OPTION_DNS_SERVER    6
+#define DHCP_OPTION_HOSTNAME      12
 #define DHCP_OPTION_REQ_IPADDR   50
 #define DHCP_OPTION_LEASE_TIME   51
 #define DHCP_OPTION_MSG_TYPE     53
@@ -98,16 +103,14 @@ extern u32_t dhcps_lease_time;
 
 #define   dhcps_router_enabled(offer)	((offer & OFFER_ROUTER) != 0)
 
-void dhcps_start(struct netif *netif, struct ip_info* info);
+void dhcps_start(struct netif *netif);
 void dhcps_stop(void);
 
 void dhcps_coarse_tmr(void);
 
-bool wifi_softap_set_dhcps_lease(struct dhcps_lease* please);
-bool wifi_softap_get_dhcps_lease(struct dhcps_lease* please);
-bool wifi_softap_set_dhcps_lease_time(u32_t minute);
-u32_t wifi_softap_get_dhcps_lease_time(void);
-bool wifi_softap_reset_dhcps_lease_time(void);
+int dhcps_lease_info_set(struct dhcps_lease* please);
+int dhcps_lease_info_get(struct dhcps_lease *lease);
+void dhcps_get_sta_hostname(const u8_t *mac, char *hostname, u16_t hostname_len);
 
 #endif
 

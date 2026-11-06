@@ -12,6 +12,10 @@
 #include <stdint.h>
 #include <stddef.h>
 
+/* Return only from the final on_headers callback (data == NULL, len == 0).
+ * Complete after headers and close the connection without parsing the body. */
+#define HTTP_EVENT_SKIP_BODY 0x100
+
 typedef int (*http_event_cb_t)(void *e);
 
 typedef enum http_event_type {

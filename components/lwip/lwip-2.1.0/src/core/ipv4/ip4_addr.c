@@ -43,12 +43,9 @@
 #include "lwip/ip_addr.h"
 #include "lwip/netif.h"
 
-
-//#ifdef MPW
 /* used by IP4_ADDR_ANY and IP_ADDR_BROADCAST in ip_addr.h */
 const ip_addr_t ip_addr_any = IPADDR4_INIT(IPADDR_ANY);
 const ip_addr_t ip_addr_broadcast = IPADDR4_INIT(IPADDR_BROADCAST);
-//#endif
 
 /**
  * Determine if an address is a broadcast address on a network interface
@@ -87,7 +84,6 @@ ip4_addr_isbroadcast_u32(u32_t addr, const struct netif *netif)
   }
 }
 
-//#ifdef MPW
 /** Checks if a netmask is valid (starting with ones, then only zeros)
  *
  * @param netmask the IPv4 netmask to check (in network byte order!)
@@ -115,7 +111,6 @@ ip4_addr_netmask_valid(u32_t netmask)
   /* no one after the first zero -> valid */
   return 1;
 }
-//#endif
 
 /**
  * Ascii internet address interpretation routine.
@@ -284,9 +279,7 @@ ip4addr_ntoa(const ip4_addr_t *addr)
  * @return either pointer to buf which now holds the ASCII
  *         representation of addr or NULL if buf was too small
  */
-
-//#ifdef MPW
-char*
+char *
 ip4addr_ntoa_r(const ip4_addr_t *addr, char *buf, int buflen)
 {
   u32_t s_addr;
@@ -324,6 +317,5 @@ ip4addr_ntoa_r(const ip4_addr_t *addr, char *buf, int buflen)
   *--rp = 0;
   return buf;
 }
-//#endif
 
 #endif /* LWIP_IPV4 */

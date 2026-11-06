@@ -1,0 +1,4 @@
+config CMD_AT_FS
+	bool "AT FS command support"
+	select FATFS
+	default n

@@ -57,6 +57,10 @@ initializer that should be kept in sync
         .global_user_ctx_free_fn = NULL,                \
         .global_transport_ctx = NULL,                   \
         .global_transport_ctx_free_fn = NULL,           \
+        .keep_alive_enable = false,                     \
+        .keep_alive_idle = 0,                           \
+        .keep_alive_interval = 0,                       \
+        .keep_alive_count = 0,                          \
         .open_fn = NULL,                                \
         .close_fn = NULL,                               \
         .uri_match_fn = NULL                            \
@@ -132,6 +136,10 @@ typedef struct httpd_config {
      */
     httpd_free_ctx_fn_t global_user_ctx_free_fn;
 
+    bool keep_alive_enable; /*!< Enable keep-alive timeout */
+    int keep_alive_idle;    /*!< Keep-alive idle time. Default is 5 (second) */
+    int keep_alive_interval;/*!< Keep-alive interval time. Default is 5 (second) */
+    int keep_alive_count;   /*!< Keep-alive packet retry send count. Default is 3 counts */
     /**
      * Global transport context.
      *
@@ -194,11 +202,17 @@ typedef struct httpd_config {
 } httpd_config_t;
 
 int  httpd_start(httpd_handle_t *handle, const httpd_config_t *config);
+/* On failure the handle and contexts remain owned by the server; retry stop
+ * from the same caller after the active request finishes. Do not free them. */
 int httpd_stop(httpd_handle_t handle);
 #define HTTPD_MAX_REQ_HDR_LEN CONFIG_HTTPD_MAX_REQ_HDR_LEN
 
 /* Max supported HTTP request URI length */
+#ifdef CONFIG_HTTPD_MAX_URI_LEN
 #define HTTPD_MAX_URI_LEN CONFIG_HTTPD_MAX_URI_LEN
+#else
+#define HTTPD_MAX_URI_LEN 1024
+#endif
 typedef struct httpd_req {
     httpd_handle_t  handle;                     /*!< Handle to server instance */
     int             method;                     /*!< The type of HTTP request, -1 if unsupported method */

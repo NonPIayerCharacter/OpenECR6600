@@ -23,14 +23,16 @@ OUTPUTDIR_LIB:=$(OUTPUTDIR)/libs
 ###########################################
 ASRCS	:=
 CSRCS	:=
+CPPSRCS	:=
+CCSRCS	:=
 INCPATHS:=
 MAKEDEFS:=
 
-INCPATHS += $(TOPDIR)/include/components/cli
-
 $(foreach dir, $(SUBDIRS), $(eval $(call MAKEDEFS_template,$(dir))))
 
-CFLAGS := $(foreach incpath, $(INCPATHS), -I "$(incpath)") $(CFLAGS)
+CFLAGS := $(foreach incpath, $(INCPATHS), -I "$(incpath)") $(foreach incpath, $(TOP_INCPATHS), -I "$(incpath)") $(CFLAGS)
+CPPFLAGS := $(foreach incpath, $(INCPATHS), -I "$(incpath)") $(foreach incpath, $(TOP_INCPATHS), -I "$(incpath)") $(CPPFLAGS)
+VPATH += :.
 
 ###########################################
 #
@@ -41,11 +43,15 @@ CFLAGS := $(foreach incpath, $(INCPATHS), -I "$(incpath)") $(CFLAGS)
 LIBTARGET = libcomponents.a
 ASRCS	:= $(wildcard $(foreach SRC, $(ASRCS), $(addsuffix /$(SRC), $(subst :, ,$(VPATH)))))
 CSRCS	:= $(wildcard $(foreach SRC, $(CSRCS), $(addsuffix /$(SRC), $(subst :, ,$(VPATH)))))
+CPPSRCS	:= $(wildcard $(foreach SRC, $(CPPSRCS), $(addsuffix /$(SRC), $(subst :, ,$(VPATH)))))
+CCSRCS	:= $(wildcard $(foreach SRC, $(CCSRCS), $(addsuffix /$(SRC), $(subst :, ,$(VPATH)))))
 AOBJS = $(addprefix $(OUTPUTDIR_OBJS)/,$(ASRCS:.S=.o))
 COBJS = $(addprefix $(OUTPUTDIR_OBJS)/,$(CSRCS:.c=.o))
-OBJS = $(AOBJS) $(COBJS)
+CPPOBJS = $(addprefix $(OUTPUTDIR_OBJS)/,$(CPPSRCS:.cpp=.o))
+CCOBJS = $(addprefix $(OUTPUTDIR_OBJS)/,$(CCSRCS:.cc=.o))
+OBJS = $(AOBJS) $(COBJS) $(CPPOBJS) $(CCOBJS)
 HDEPS:=$(OBJS:.o=.d)
-DEPS = $(addprefix $(OUTPUTDIR_DEPS)/,$(CSRCS:.c=.deps))
+DEPS += $(addprefix $(OUTPUTDIR_DEPS)/,$(CSRCS:.c=.deps))
 all: $(OUTPUTDIR_LIB)/$(LIBTARGET)
 
 depend: $(DEPS)
@@ -75,12 +81,19 @@ $(COBJS): $(OUTPUTDIR_OBJS)/%.o: %.c
 	$(Q) -mkdir -p $(dir $@)
 	$(call COMPILE, $<, $@)
 
+$(CPPOBJS): $(OUTPUTDIR_OBJS)/%.o: %.cpp
+	$(Q) -mkdir -p $(dir $@)
+	$(call COMPILE_CPP, $<, $@)
+
+$(CCOBJS): $(OUTPUTDIR_OBJS)/%.o: %.cc
+	$(Q) -mkdir -p $(dir $@)
+	$(call COMPILE_CPP, $<, $@)
 ###########################################
 #
 #		generate deps
 #
 ###########################################
-$(DEPS):$(OUTPUTDIR_DEPS)/%.deps: %.c
+$(DEPS):$(OUTPUTDIR_DEPS)/%.deps: %.c %.cpp %.cc
 	$(Q) -mkdir -p $(dir $@)
 	$(call DEPEND, $<, $@)
 

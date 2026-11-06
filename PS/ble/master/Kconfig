@@ -1,0 +1,120 @@
+config ECR_BLE
+      bool
+      default y
+
+config BLE_APP_ECR
+      bool
+      default y
+
+config BLE_APP
+      bool
+      default y
+
+config COMP_AES
+      bool
+      default y
+
+config COMP_DEBUG_BLE
+      bool
+      default y
+
+config COMP_ECC_P256
+      bool
+      default y
+
+config COMP_H4TL
+      bool
+      default y
+
+config COMP_RF
+      bool
+      default y
+
+config COMP_RWIP
+      bool
+      default y
+
+config BLE_RF_EXTRC
+      bool
+      default y
+
+config BLE_PRODUCT_BLEFULL
+      bool
+      default y
+
+config BLE_PRODUCT
+      string
+      default "ble-full"
+
+config BLE_BUBBLE
+      bool
+      default y
+
+config BLE_ROLE_ALL
+      bool
+      default y
+
+config BLE_ROLE
+      string
+      default "all"
+
+config LE_ACT
+      int
+      default 3
+
+config LE_CONN
+      int
+      default 1
+
+config BLE_HCITL
+      bool
+      default y
+
+config MULTIPLEX_UART
+      bool
+      default y
+
+config BLE_ATTC
+      bool
+      default y
+
+config BLE_ATTS
+      bool
+      default y
+
+config BLE_SEC_CON
+      int
+      default 32
+
+config BLE_NBPRF
+      int
+      default 1
+
+config BLE_PROFILES
+      bool
+      default y
+
+config BLE_WLCOEX
+      bool
+      default y
+
+config BLE_RAL
+      int
+      default 1
+
+config BLE_EMB_PRESENT
+      bool
+      default y
+
+config BLE_HOST_PRESENT
+      bool
+      default y
+
+config BLE_AHI_PRESENT
+      bool
+      default y
+
+config BLE_SCH_PRESENT
+      bool
+      default y
+

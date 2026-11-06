@@ -1,0 +1,5 @@
+ifeq ($(CONFIG_WIFI_NETCFG),y)
+	CSRCS += wifi_netcfg/wifi_netcfg_manager.c
+	CSRCS += wifi_netcfg/wifi_netcfg_adapter.c
+	INCPATHS += wifi_netcfg/include
+endif

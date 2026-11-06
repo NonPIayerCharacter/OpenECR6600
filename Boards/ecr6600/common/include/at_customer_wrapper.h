@@ -1,6 +1,8 @@
 #ifndef __CUSTOMER_CMD
 #define __CUSTOMER_CMD
 
+#if 0
+
 #define AT_TEST     1
 #define AT_EXEC     2
 #define AT_WRITE    4
@@ -91,5 +93,7 @@ void AT_command_data_callback(char* buff, size_t size);
 //     {"CUSTOMER_TEST"     , &at_handle_CUSTOMER_TEST   , AT_TEST| AT_EXEC |AT_WRITE | AT_READ},
 // };
 // at_register_commands(CUS_commands, 1);
+
+#endif
 
 #endif

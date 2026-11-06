@@ -1,3 +1,4 @@
+#define MBEDTLS_ALLOW_PRIVATE_ACCESS
 #include "mbedtls/bignum.h"
 
 #include "utils/includes.h"
@@ -892,7 +893,9 @@ int crypto_ec_point_cmp(const struct crypto_ec *e,
 }
 int crypto_key_compare(struct crypto_key *key1, struct crypto_key *key2)
 {
-	if (mbedtls_pk_check_pair((mbedtls_pk_context *)key1, (mbedtls_pk_context *)key2) < 0)
+    mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_ctr_drbg_init( &ctr_drbg );
+	if (mbedtls_pk_check_pair((mbedtls_pk_context *)key1, (mbedtls_pk_context *)key2, mbedtls_ctr_drbg_random, &ctr_drbg) < 0)
 		return 0;
 
 	return 1;
@@ -1079,13 +1082,16 @@ int crypto_write_pubkey_der(struct crypto_key *key, unsigned char **key_buf)
 struct crypto_key *crypto_ec_get_key(const u8 *privkey, size_t privkey_len)
 {
 	int ret;
+	mbedtls_ctr_drbg_context ctr_drbg;
+
+	mbedtls_ctr_drbg_init( &ctr_drbg );
 	mbedtls_pk_context *kctx = (mbedtls_pk_context *)crypto_alloc_key();
 
 	if (!kctx) {
 		wpa_printf_error(MSG_ERROR, "memory allocation failed\n");
 		return NULL;
 	}
-	ret = mbedtls_pk_parse_key(kctx, privkey, privkey_len, NULL, 0);
+	ret = mbedtls_pk_parse_key(kctx, privkey, privkey_len, NULL, 0, mbedtls_ctr_drbg_random, &ctr_drbg);
 
 	if (ret < 0) {
 		//crypto_print_error_string(ret);

@@ -7,7 +7,7 @@
 #include "oshal.h"
 #include "hal_efuse.h"
 
-static int utest_efuse_read(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_efuse_read( int argc, char *argv[])
 {
  	unsigned int addr = strtoul(argv[1], NULL, 0);
 	unsigned int length = strtoul(argv[2], NULL, 0);
@@ -41,7 +41,7 @@ static int utest_efuse_read(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_efuse, read, utest_efuse_read, "unit test efuse read", "ut_efuse read [address] [length]");
 
 
-static int utest_efuse_write(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_efuse_write( int argc, char *argv[])
 {
  	unsigned int addr;
 	unsigned int value;

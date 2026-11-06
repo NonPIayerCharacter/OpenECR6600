@@ -1,15 +1,17 @@
 ifeq ($(CONFIG_MQTT),y)
 	INCPATHS += lwip/lwip-2.1.0/src/include/lwip
 	INCPATHS += mbedtls/mbedtls/include
+	
 
 	CSRCS += mqtt_client.c \
 			 mqtt_msg.c \
 			 mqtt_outbox.c \
-			 platform_tr6600.c \
-			 transport.c \
-			 transport_ssl.c \
-			 transport_tcp.c \
-			 transport_ws.c
+			 platform_tr6600.c
+
+	ifeq ($(CONFIG_MQTT_PROTOCOL_5),y)
+	CSRCS += mqtt5_client.c \
+			 mqtt5_msg.c
+	endif
 
 	VPATH += :mqtt
 	INCPATHS += mqtt

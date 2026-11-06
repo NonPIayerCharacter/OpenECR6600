@@ -17,6 +17,8 @@
 #include "notify.h"
 #include "scan.h"
 #include "bss.h"
+#include "eap_peer/eap.h"
+#include "driver_i.h"
 
 
 #define WPA_BSS_FREQ_CHANGED_FLAG	BIT(0)
@@ -425,6 +427,32 @@ static struct wpa_bss * wpa_bss_add(struct wpa_supplicant *wpa_s,
 				    struct os_reltime *fetch_time)
 {
 	struct wpa_bss *bss;
+    struct wpa_ssid* conf_ssid;
+    int is_known = 0;
+
+    /* Memory optimization: Only add BSS entries for configured networks */
+    for (conf_ssid = wpa_s->conf->ssid; conf_ssid; conf_ssid = conf_ssid->next)
+    {
+        if (conf_ssid->ssid == NULL || conf_ssid->ssid_len == 0)
+            continue;
+        if (conf_ssid->ssid_len == ssid_len && os_memcmp(conf_ssid->ssid, ssid, ssid_len) == 0)
+        {
+            is_known = 1;
+            break;
+        }
+    }
+
+    if (!is_known)
+    {
+        wpa_dbg(
+            wpa_s,
+            MSG_DEBUG,
+            "BSS: Skip adding unknown SSID '%s' "
+            "BSSID " MACSTR " to save memory",
+            wpa_ssid_txt(ssid, ssid_len),
+            MAC2STR(res->bssid));
+        return NULL;
+    }
 
 	bss = os_zalloc(sizeof(*bss) + res->ie_len + res->beacon_ie_len);
 	if (bss == NULL)
@@ -910,6 +938,8 @@ int wpa_bss_init(struct wpa_supplicant *wpa_s)
 void wpa_bss_flush(struct wpa_supplicant *wpa_s)
 {
 	struct wpa_bss *bss, *n;
+
+	wpa_drv_flush_glance_scan_results2(wpa_s);
 
 	wpa_s->clear_driver_scan_cache = 1;
 

@@ -320,7 +320,11 @@ ping_thread(void *arg)
 	iface.ifr_name[0] = netif->name[0];
 	iface.ifr_name[1] = netif->name[1];
 	iface.ifr_name[2] = '0' + netif->num;
-	
+
+	int tos_opt = ping_info->tos;
+	lwip_setsockopt(s, IPPROTO_IPV6, IPV6_TCLASS, &tos_opt, sizeof(tos_opt));
+	int ttl_opt = ping_info->ttl;
+	lwip_setsockopt(s, IPPROTO_IPV6, IPV6_UNICAST_HOPS, &ttl_opt, sizeof(ttl_opt));
 	lwip_setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 	lwip_setsockopt(s, SOL_SOCKET, SO_BINDTODEVICE, &iface, sizeof(iface));
 	ping_parameters_init(ping_info);
@@ -454,6 +458,21 @@ int ping6_once(ping_parm_t* ping_info)
 		return -1;
 	}
 
+	/* link locak ipv6 address ap & sta FE80::/10 */
+	/* ip6_route cannot get correct netif with LL */
+	/* vif_id is STATION_IF or SOFTAP_IF */
+	/* AT+PING just support STA, so vif_id = STATION_IF */
+	struct ifreq iface;
+	struct netif *netif = netif_get_by_index(ping_info->vif_id + 1);
+	iface.ifr_name[0] = netif->name[0];
+	iface.ifr_name[1] = netif->name[1];
+	iface.ifr_name[2] = '0' + netif->num;
+
+	int tos_opt = ping_info->tos;
+	lwip_setsockopt(socket_tmp, IPPROTO_IPV6, IPV6_TCLASS, &tos_opt, sizeof(tos_opt));
+	int ttl_opt = ping_info->ttl;
+	lwip_setsockopt(socket_tmp, IPPROTO_IPV6, IPV6_UNICAST_HOPS, &ttl_opt, sizeof(ttl_opt));
+	lwip_setsockopt(socket_tmp, SOL_SOCKET, SO_BINDTODEVICE, &iface, sizeof(iface));
 	lwip_setsockopt(socket_tmp, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 	ping_parameters_init(ping_info);
 

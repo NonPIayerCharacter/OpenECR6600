@@ -39,6 +39,8 @@
 extern "C" {
 #endif
 
+#include "mqtt_queue.h"
+
 /*
  * This file defines four types of data structures: singly-linked lists,
  * singly-linked tail queues, lists and tail queues.
@@ -105,6 +107,7 @@ extern "C" {
  * _REMOVE			+	+	+	+
  *
  */
+#if 0
 #ifdef QUEUE_MACRO_DEBUG
 /* Store the last 2 places the queue element or head was altered */
 struct qm_trace {
@@ -139,6 +142,7 @@ struct qm_trace {
 #define	TRACEBUF
 #define	TRASHIT(x)
 #endif	/* QUEUE_MACRO_DEBUG */
+#endif
 
 /*
  * Singly-linked List declarations.
@@ -217,6 +221,7 @@ struct {								\
 	SLIST_FIRST((head)) = SLIST_NEXT(SLIST_FIRST((head)), field);	\
 } while (0)
 
+#if 0
 /*
  * Singly-linked Tail queue declarations.
  */
@@ -336,7 +341,7 @@ struct {								\
     }                                                                      \
     STAILQ_FIRST(head) = (elm_chead);                                    \
 } while (0)
-
+#endif
 
 /*
  * List declarations.

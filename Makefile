@@ -3,6 +3,7 @@
 .PHONY: pass1 pass1dep
 .PHONY: pass2 pass2dep
 .PHONY: depend
+.PHONY: setup_environment
 
 ###########################################
 #
@@ -12,6 +13,7 @@
 TOPDIR				:= $(shell echo $(CURDIR) | sed -e 's/ /\\ /g')
 export BOARD_DIR	:= $(BOARD_DIR)
 export APP_NAME		:= $(APP_NAME)
+export BOARD_TOOL_DIR := $(if $(BOARD_TOOL_DIR),$(BOARD_TOOL_DIR),$(BOARD_DIR))
 
 
 ###########################################
@@ -44,6 +46,7 @@ $(shell if [ ! -e $(KCONFIG_CONFIG) ];then cp $(BOARD_DIR)/defconfig $(KCONFIG_C
 ###########################################
 TOPDIR_ABSPATH			:= $(TOPDIR)
 BOARD_DIR_ABSPATH		:= $(BOARD_DIR)
+BOARD_TOOL_DIR_ABSPATH		:= $(BOARD_TOOL_DIR)
 OUTPUTDIR_ABSPATH		:= $(OUTPUTDIR)
 GENERATED_DIR_ABSPATH	:= $(GENERATED_DIR)
 include $(TOPDIR)/Make.defs
@@ -108,8 +111,8 @@ $(KCONFIG_AUTOHEADER): $(KCONFIG_CONFIG) $(SCRIPTSDIR)/Config.mk $(SCRIPTSDIR)/C
 #		target
 #
 ###########################################
-all: pass1
-	$(Q) make BOARD_DIR=$(BOARD_DIR) STEP_PASS2=y pass2
+all: setup_environment pass1
+	$(Q) make BOARD_DIR=$(BOARD_DIR) BOARD_TOOL_DIR=$(BOARD_TOOL_DIR) STEP_PASS2=y pass2
 
 clean:
 	$(Q) -rm -rf $(OUTPUTDIR)
@@ -117,6 +120,14 @@ clean:
 distclean:
 	$(Q) -rm -rf $(TOPDIR)/build
 	$(Q) -rm -rf $(GENERATED_DIR)
+ifneq ($(strip $(EXAMPLES_FILE_DIR)),)
+# Example wrappers copy standalone files locally; keep them on clean and drop them on distclean.
+	$(Q) -rm -rf $(EXAMPLES_FILE_DIR)/ref_bin
+	$(Q) -rm -rf $(EXAMPLES_FILE_DIR)/defconfig
+	$(Q) -rm -rf $(EXAMPLES_FILE_DIR)/Kconfig
+	$(Q) -rm -rf $(EXAMPLES_FILE_DIR)/main.c
+	$(Q) -rm -rf $(EXAMPLES_FILE_DIR)/pincfg.h
+endif
 	
 	
 ###########################################
@@ -141,6 +152,79 @@ ifeq ($(if_lib32_support), "")
 endif
 endif
 
+COMMON_BIN_DIR := $(TOPDIR)/Boards/ecr6600/common/common_bin
+# Select common_bin resources from the chosen profile directory.
+COMMON_BIN_PROFILE ?= master
+# common_bin 始终从 profile 子目录选择资源，根目录只保留当前构建投影。
+COMMON_BIN_PROFILE := master
+COMMON_BIN_PROFILE_DIR := $(COMMON_BIN_DIR)/$(COMMON_BIN_PROFILE)
+COMMON_BIN_PROFILE_STUB := $(wildcard $(COMMON_BIN_PROFILE_DIR)/*stub*.bin)
+COMMON_BIN_PROFILE_UBOOT := $(wildcard $(COMMON_BIN_PROFILE_DIR)/*uboot*.bin)
+include $(TOPDIR)/Boards/ecr6600/common/ps_resource_rules.mk
+
+empty :=
+space := $(empty) $(empty)
+PS_RESOURCE_PROFILE ?= auto
+PS_RESOURCE_PROFILE_ACTIVE := $(wildcard $(TOPDIR)/libs/master)
+PS_RESOURCE_CURRENT_VALUES := $(foreach feature,$(PS_RESOURCE_FEATURES),$(if $(filter y,$($(feature))),y,n))
+PS_RESOURCE_CURRENT_KEY := $(subst $(space),:,$(strip $(PS_RESOURCE_CURRENT_VALUES)))
+
+ifeq ($(PS_RESOURCE_PROFILE),auto)
+ifeq ($(strip $(PS_RESOURCE_PROFILE_ACTIVE)),)
+PS_RESOURCE_PROFILE_RESOLVED :=
+else
+PS_RESOURCE_PROFILE_RESOLVED := $(firstword $(foreach group,$(PS_RESOURCE_GROUPS),$(if $(filter $(PS_RESOURCE_CURRENT_KEY),$(PS_RESOURCE_RULE_$(group))),$(group),)))
+endif
+else
+PS_RESOURCE_PROFILE_RESOLVED := $(PS_RESOURCE_PROFILE)
+endif
+
+PS_RESOURCE_GROUP_VALID := $(filter $(PS_RESOURCE_PROFILE_RESOLVED),$(PS_RESOURCE_GROUPS))
+PS_RESOURCE_PROFILE_DIR_LIBS := $(PS_RESOURCE_SRC_DIR_libs)/$(PS_RESOURCE_PROFILE_RESOLVED)
+PS_RESOURCE_PROFILE_DIR_PS := $(PS_RESOURCE_SRC_DIR_ps_kconfig)/$(PS_RESOURCE_PROFILE_RESOLVED)
+PS_RESOURCE_PROFILE_DIR_PS_BLE := $(PS_RESOURCE_SRC_DIR_ps_ble_kconfig)/$(PS_RESOURCE_PROFILE_RESOLVED)
+PS_RESOURCE_PROFILE_DIR_BOARD_PSM := $(PS_RESOURCE_SRC_DIR_board_psm_kconfig)/$(PS_RESOURCE_PROFILE_RESOLVED)
+PS_RESOURCE_PROFILE_LIBS := $(wildcard $(PS_RESOURCE_PROFILE_DIR_LIBS)/$(PS_RESOURCE_SRC_PATTERN_libs))
+PS_RESOURCE_PROFILE_PS := $(wildcard $(PS_RESOURCE_PROFILE_DIR_PS)/$(PS_RESOURCE_SRC_PATTERN_ps_kconfig))
+PS_RESOURCE_PROFILE_PS_BLE := $(wildcard $(PS_RESOURCE_PROFILE_DIR_PS_BLE)/$(PS_RESOURCE_SRC_PATTERN_ps_ble_kconfig))
+PS_RESOURCE_PROFILE_BOARD_PSM := $(wildcard $(PS_RESOURCE_PROFILE_DIR_BOARD_PSM)/$(PS_RESOURCE_SRC_PATTERN_board_psm_kconfig))
+
+setup_environment:
+	$(Q) if [ ! -d $(COMMON_BIN_PROFILE_DIR) ]; then \
+		echo "common_bin profile $(COMMON_BIN_PROFILE) not found: $(COMMON_BIN_PROFILE_DIR)"; \
+		exit 1; \
+	fi
+	$(Q) if [ -z "$(COMMON_BIN_PROFILE_STUB)" ] || [ -z "$(COMMON_BIN_PROFILE_UBOOT)" ]; then \
+		echo "common_bin profile $(COMMON_BIN_PROFILE) has no stub/uboot bin"; \
+		exit 1; \
+	fi
+	$(Q) echo "common_bin profile: $(COMMON_BIN_PROFILE)"
+	$(Q) rm -rf $(COMMON_BIN_DIR)/*stub*
+	$(Q) rm -rf $(COMMON_BIN_DIR)/*uboot*
+	$(Q) cp -rf $(COMMON_BIN_PROFILE_DIR)/*.bin $(COMMON_BIN_DIR)
+
+	$(Q) if [ -z "$(PS_RESOURCE_PROFILE_RESOLVED)" ]; then \
+		echo "ps resource profile: inactive (active tree mode)"; \
+	elif [ -z "$(PS_RESOURCE_GROUP_VALID)" ]; then \
+		echo "invalid ps resource profile: $(PS_RESOURCE_PROFILE_RESOLVED)"; \
+		exit 1; \
+	else \
+		if [ ! -d "$(PS_RESOURCE_PROFILE_DIR_LIBS)" ] || [ ! -d "$(PS_RESOURCE_PROFILE_DIR_PS)" ] || [ ! -d "$(PS_RESOURCE_PROFILE_DIR_PS_BLE)" ] || [ ! -d "$(PS_RESOURCE_PROFILE_DIR_BOARD_PSM)" ]; then \
+			echo "ps resource profile $(PS_RESOURCE_PROFILE_RESOLVED) missing resource directories"; \
+			exit 1; \
+		fi; \
+		if [ -z "$(PS_RESOURCE_PROFILE_LIBS)" ] || [ -z "$(PS_RESOURCE_PROFILE_PS)" ] || [ -z "$(PS_RESOURCE_PROFILE_PS_BLE)" ] || [ -z "$(PS_RESOURCE_PROFILE_BOARD_PSM)" ]; then \
+			echo "ps resource profile $(PS_RESOURCE_PROFILE_RESOLVED) missing libs/PS/PS-ble/psm resources"; \
+			exit 1; \
+		fi; \
+		echo "ps resource profile: $(PS_RESOURCE_PROFILE_RESOLVED)"; \
+		rm -rf $(PS_RESOURCE_CLEAN_libs); \
+		cp -rf $(PS_RESOURCE_PROFILE_DIR_LIBS)/$(PS_RESOURCE_SRC_PATTERN_libs) $(PS_RESOURCE_DST_libs); \
+		cp -rf $(PS_RESOURCE_PROFILE_DIR_PS)/$(PS_RESOURCE_SRC_PATTERN_ps_kconfig) $(PS_RESOURCE_DST_ps_kconfig); \
+		cp -rf $(PS_RESOURCE_PROFILE_DIR_PS_BLE)/$(PS_RESOURCE_SRC_PATTERN_ps_ble_kconfig) $(PS_RESOURCE_DST_ps_ble_kconfig); \
+		cp -rf $(PS_RESOURCE_PROFILE_DIR_BOARD_PSM)/$(PS_RESOURCE_SRC_PATTERN_board_psm_kconfig) $(PS_RESOURCE_DST_board_psm_kconfig); \
+	fi
+
 ###########################################
 #
 #			extra objs and libs 
@@ -152,8 +236,16 @@ EXTRA_OBJS:=$(wildcard $(EXTRA_OBJ_LIB_PATH)/*.o)
 
 EXTRA_LIBS:=$(notdir $(wildcard $(EXTRA_OBJ_LIB_PATH)/*.a))
 EXTRA_LIBS:=$(filter-out libandes.a,$(EXTRA_LIBS))
+EXTRA_LIBS:=$(filter-out libstdc++.a,$(EXTRA_LIBS))
 EXTRA_LINK_LIBGROUPS 	:= $(patsubst lib%.a,-l%,$(EXTRA_LIBS))
 
+
+# 在Makefile中添加
+ifneq ($(wildcard lib_a-memcpy.o),)
+    LOCAL_OBJS := $(TOPDIR)/lib_a-memcpy.o
+else
+    LOCAL_OBJS := 
+endif
 
 ###########################################
 #
@@ -194,7 +286,7 @@ pass2:$(TARGET)$(OUTPUT_EXT)
 	$(Q) echo "######################################generate $(TARGET).bin######################################"
 $(TARGET)$(OUTPUT_EXT): FORCE
 ifeq ($(CONFIG_OUTPUT_FORMAT_ELF),y)
-	$(CC)  -nostartfiles -nostdlib -L$(LIBPATHS) -L$(EXTRA_OBJ_LIB_PATH) -o $@ $(LINK_OBJS) $(EXTRA_OBJS) $(LDSTARTGROUP) $(LINK_LIBGROUPS) $(EXTRA_LINK_LIBGROUPS) $(LDENDGROUP) $(ARCHSCRIPT) $(LDFLAGS) -landes -Wl,-Map=$(TARGET).map
+	$(Q) if $(CC)  -nostartfiles -nostdlib -L$(LIBPATHS) -L$(EXTRA_OBJ_LIB_PATH) -o $@ $(LINK_OBJS) $(EXTRA_OBJS) $(LOCAL_OBJS) $(LDSTARTGROUP) $(LINK_LIBGROUPS) $(EXTRA_LINK_LIBGROUPS) $(LDENDGROUP) $(ARCHSCRIPT) $(LDFLAGS) -Wl,--wrap=vApplicationIdleHook -lstdc++ -landes -ldsp -mext-dsp -Wl,-Map=$(TARGET).map 2>&1 | tee tmp.log | (grep IFC); then  echo  "\nIFC error Found!!\n"; exit 1;  fi; cat tmp.log; rm tmp.log
 #	$(Q) $(OBJCOPY) -O binary -R .lpus_bss $@ $(TARGET).bin
 #	$(Q) $(OBJCOPY) -O binary -j .xip $@ $(OUTPUTDIR)/xip.bin
 	$(Q) $(OBJDUMP) -d $@ > $(TARGET).lst
@@ -202,10 +294,18 @@ ifeq ($(CONFIG_OUTPUT_FORMAT_ELF),y)
 	$(Q) $(READELF) -e -g -t $@ > $(TARGET).readelf
 ifeq ($(CONFIG_OUTPUT_VERSION_STANDALONE_ELF),y)
 	$(Q) echo "######################################generate standalone elf:$@######################################"
-	$(Q) $(TOPDIR)/scripts/bin/trstool/trstool$(HOSTEXEEXT) elf2image $@ --keyfile $(TOPDIR)/scripts//bin/trstool/key.pem --crc_enable False --image_type XIP --ota_type $(OTA_CONFIG_TYPE) --release_version $(REL_V) -b $(BOARD_DIR_ABSPATH) $(OUTPUTDIR)/ECR6600F_$(notdir $(APP_NAME))_cpu_$(XIP_ADDR).bin
-	$(Q) $(TOPDIR)/scripts/bin/makeone_tool/makeone$(HOSTEXEEXT) -b $(BOARD_DIR_ABSPATH) -o $(OUTPUTDIR) -a $(notdir $(APP_NAME))
+ifeq ($(CONFIG_CUSTOM_LD),y)
+	$(Q) $(TOPDIR)/scripts/bin/trstool/trstool$(HOSTEXEEXT) elf2image $@ --keyfile $(TOPDIR)/scripts//bin/trstool/key.pem --crc_enable False --SECDed_width 0 --image_type XIP --ota_type $(OTA_CONFIG_TYPE) --release_version $(REL_V) -b $(BOARD_TOOL_DIR_ABSPATH) $(OUTPUTDIR)/ECR6600F_$(notdir $(APP_NAME))_cpu_$(XIP_ADDR).bin
+else
+	$(Q) $(TOPDIR)/scripts/bin/trstool/trstool$(HOSTEXEEXT) elf2image $@ --keyfile $(TOPDIR)/scripts//bin/trstool/key.pem --crc_enable True --SECDed_width 0 --image_type XIP --ota_type $(OTA_CONFIG_TYPE) --release_version $(REL_V) -b $(BOARD_TOOL_DIR_ABSPATH) $(OUTPUTDIR)/ECR6600F_$(notdir $(APP_NAME))_cpu_$(XIP_ADDR).bin
+endif
+#	python $(TOPDIR)/dbg_tools/Dev_Tools/python/trstool.py elf2image $@ --keyfile $(TOPDIR)/scripts//bin/trstool/key.pem --crc_enable True --SECDed_width 0 --image_type XIP --ota_type $(OTA_CONFIG_TYPE) --release_version $(REL_V) -b $(BOARD_TOOL_DIR_ABSPATH) $(OUTPUTDIR)/ECR6600F_$(notdir $(APP_NAME))_cpu_$(XIP_ADDR).bin
 ifeq ("$(OTA_CONFIG_TYPE)","OTA_COMPRESSION_UPDATE")
-	$(Q) $(TOPDIR)/scripts/bin/ota_tool/ota_tool$(HOSTEXEEXT) cmz $(BOARD_DIR)/ref_bin/*Partition*.bin $(OUTPUTDIR)/ECR6600F_$(notdir $(APP_NAME))_cpu_$(XIP_ADDR).bin $(OUTPUTDIR)/ECR6600F_$(notdir $(APP_NAME))_Compress_ota_packeg.bin
+#	$(Q) $(TOPDIR)/scripts/bin/ota_tool/ota_tool$(HOSTEXEEXT) cmz $(BOARD_DIR)/ref_bin/*Partition*.bin $(OUTPUTDIR)/ECR6600F_$(notdir $(APP_NAME))_cpu_$(XIP_ADDR).bin $(OUTPUTDIR)/ECR6600F_$(notdir $(APP_NAME))_Compress_ota_packeg_$(REL_V).bin
+	$(Q) $(TOPDIR)/scripts/bin/ota_tool/ota_tool$(HOSTEXEEXT) -m cmz -p $(BOARD_DIR)/ref_bin/*Partition*.bin --new $(OUTPUTDIR)/ECR6600F_$(notdir $(APP_NAME))_cpu_$(XIP_ADDR).bin -o $(OUTPUTDIR)/ECR6600F_$(notdir $(APP_NAME))_Compress_ota_packeg_$(REL_V).bin || true
+	$(TOPDIR)/scripts/bin/makeone_tool/makeone$(HOSTEXEEXT) -b $(BOARD_TOOL_DIR_ABSPATH) -o $(OUTPUTDIR) -a $(notdir $(APP_NAME)) -e cpu:4096:$(OUTPUTDIR)/ECR6600F_$(notdir $(APP_NAME))_Compress_ota_packeg.bin
+else
+	$(TOPDIR)/scripts/bin/makeone_tool/makeone$(HOSTEXEEXT) -b $(BOARD_TOOL_DIR_ABSPATH) -o $(OUTPUTDIR) -a $(notdir $(APP_NAME))
 endif
 else ifeq ($(CONFIG_OUTPUT_VERSION_TRANSPORT_ELF),y)
 	$(Q) echo "######################################generate transport elf:$@######################################"
@@ -230,17 +330,8 @@ endif
 endif
 
 allinone:
-	python makeone.py -b $(BOARD_DIR_ABSPATH) -o $(OUTPUTDIR_ABSPATH)
+	python makeone.py -b $(BOARD_TOOL_DIR_ABSPATH) -o $(OUTPUTDIR_ABSPATH)
 
-# just used for cacl module size, the elf cannot be run 
-size: pass1
-	$(Q) $(BOARD_DIR)/../common/mdl_size/gen_mdl_ld.sh $(BOARD_DIR)/../common/mdl_size $(OUTPUTDIR)/objs
-ifeq ($(CONFIG_LD_SCRIPT_XIP),y)	
-	$(CC) -E -nostdinc -P $(AFLAGS) $(BOARD_DIR)/../common/mdl_size/ld_xip.script.S -o $(GENERATED_DIR)/ld.script
-else
-	$(CC) -E -nostdinc -P $(AFLAGS) $(BOARD_DIR)/../common/mdl_size/ld_ram.script.S -o $(GENERATED_DIR)/ld.script
-endif	
-	$(Q) make BOARD_DIR=$(BOARD_DIR) STEP_PASS2=y pass2
 
 ###########################################
 #
@@ -276,3 +367,4 @@ help:
 	@echo  ''
 	@echo  '  Execute "make all" to build all targets marked with [*] '
 	@echo  ''
+

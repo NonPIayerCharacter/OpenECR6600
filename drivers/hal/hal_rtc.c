@@ -5,9 +5,6 @@
 #include <string.h>
 #include "cli.h"
 #include "oshal.h"
-#ifdef CONFIG_SNTP
-#include "sntp_tr.h"
-#endif
 
 #ifndef NULL
 #define NULL ((void *)0)
@@ -22,7 +19,7 @@
 #define	FEBRUARY_OF_LEAPEYEAR	29
 const char month_days[13] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 const char *week[7] = {"Sun", "Mon", "Tues", "Wed", "Thur", "Fri", "Sat"};
-DATE_RTC g_date;
+DATE_RTC g_date __attribute__((section("SHAREDRAMIPC")));;
 
 /**    @brief		set hal time function .利用基姆拉尔森计算日期公式  w=(d+2*m+3*(m+1)/5+y+y/4-y/100+y/400)
 *	   @param[in]	year    current year
@@ -92,6 +89,11 @@ int hal_rtc_init()
 	drv_rtc_init();
 	drv_rtc_isr_register(DRV_RTC_DAY, hal_rtc_callback);
 	return 0;
+}
+
+void hal_rtc_restore(void)
+{
+	drv_rtc_isr_register(DRV_RTC_DAY, hal_rtc_callback);
 }
 
 /**    @brief		set hal time function .
@@ -208,47 +210,50 @@ int hal_rtc_utctime_to_date(int utc_time, DATE_RTC * date) //sec --struct
 *	   @param[out]	utc_time    the point of Total seconds since January 1, 1970
 *	   @return  	0-- succeed 	-1-- failed
 */
-int hal_rtc_date_to_utctime(DATE_RTC date, int * utc_time)	//struct --> sec
+int hal_rtc_date_to_utctime(DATE_RTC date, int * utc_time)
 {
-	int total_sec = 0;
-	unsigned int num;
-	DATE_RTC *cur_time =&date;
-	if( cur_time->year	<ORIGIN_YEAR || \
-		cur_time->month > MONTON_MAX || \
-		cur_time->day	> DAYS_MAX || \
-		cur_time->hour	> HOUR_MAX|| \
-		cur_time->min	> MIN_MAX || \
-		cur_time->sec	> SEC_MAX || \
-		utc_time == NULL)
-	{
-		return -1;
-	}
-	for(num=ORIGIN_YEAR; num<cur_time->year; num++)
-	{
-		if(IS_LEAP_YEAR(num))
-			total_sec += SEC_NUM_LEAR_YEAR;
-		else
-			total_sec += SEC_NUM_YEAR;
-	}
+    int total_sec = 0;
+    unsigned int num;
+    DATE_RTC *cur_time = &date;
+    
+    if (cur_time->year < ORIGIN_YEAR || 
+        cur_time->month > MONTON_MAX || 
+        cur_time->day > DAYS_MAX || 
+        cur_time->hour >= HOUR_MAX ||
+        cur_time->min >= MIN_MAX ||
+        cur_time->sec >= SEC_MAX ||
+        utc_time == NULL)
+    {
+        return -1;
+    }
 
-	for(num=1; num<cur_time->month; num++)
-	{
-		total_sec += month_days[num]*SEC_NUM_DAY;
-	}
+    for (num = ORIGIN_YEAR; num < cur_time->year; num++)
+    {
+        if (IS_LEAP_YEAR(num))
+            total_sec += SEC_NUM_LEAR_YEAR;
+        else
+            total_sec += SEC_NUM_YEAR;
+    }
 
-	if(IS_LEAP_YEAR(cur_time->year) && cur_time->month>2)
-		total_sec += SEC_NUM_DAY;
+    for (num = 1; num < cur_time->month; num++)
+    {
+        total_sec += month_days[num] * SEC_NUM_DAY;
+    }
 
-	total_sec += (cur_time->day-1)*SEC_NUM_DAY;
-	total_sec += cur_time->hour*ONE_HOUR2SEC;
-    total_sec += cur_time->min*MIN_TO_SEC;
+    if (IS_LEAP_YEAR(cur_time->year) && cur_time->month > LEAP_MONTH)  // 使用LEAP_MONTH宏
+        total_sec += SEC_NUM_DAY;
+
+    total_sec += (cur_time->day - 1) * SEC_NUM_DAY;
+    total_sec += cur_time->hour * ONE_HOUR2SEC;
+    total_sec += cur_time->min * MIN_TO_SEC;  // 确保MIN_TO_SEC定义正确（应为60）
     total_sec += cur_time->sec;
-	*utc_time = total_sec;
-	return 0;
+
+    *utc_time = total_sec;
+    return 0;
 }
 
 #if 0
-int cmd_hal_rtc_op(cmd_tbl_t *t, int argc, char *argv[])
+int cmd_hal_rtc_op( int argc, char *argv[])
 {
 	int res=0;
 	int value = 0;

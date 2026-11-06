@@ -85,7 +85,7 @@ static int hostapd_ctrl_iface_sta_mib(struct hostapd_data *hapd,
 				      char *buf, size_t buflen)
 {
 	//int len, res, ret, i;
-	int len, res, ret;
+	int len, ret;
 
 	if (!sta)
 		return 0;
@@ -143,6 +143,7 @@ static int hostapd_ctrl_iface_sta_mib(struct hostapd_data *hapd,
 	len += hostapd_get_sta_conn_time(sta, buf + len, buflen - len);
 
 #ifdef CONFIG_SAE
+    int res;
 	if (sta->sae && sta->sae->state == SAE_ACCEPTED) {
 		res = os_snprintf(buf + len, buflen - len, "sae_group=%d\n",
 				  sta->sae->group);
@@ -223,7 +224,6 @@ int hostapd_ctrl_iface_sta(struct hostapd_data *hapd, const char *txtaddr,
 	char *pos, *end;
 	int ret;
 	struct sta_info *sta;
-	unsigned int ip;
 	struct os_reltime now;
 
 	pos = buf;
@@ -237,6 +237,8 @@ int hostapd_ctrl_iface_sta(struct hostapd_data *hapd, const char *txtaddr,
 
 	for(sta=hapd->sta_list; sta!=NULL; sta=sta->next)
 	{
+	    #ifndef CONFIG_CUSTOM_LXW
+	    unsigned int ip;
 		extern unsigned int wifi_get_sta_ip_from_mac(unsigned char *mac);
 		ip = wifi_get_sta_ip_from_mac(sta->addr);
 		ret = os_snprintf(pos, end - pos, "%d\t"MACSTR"\t%d.%d.%d.%d\t%d\t%ds\n", sta->aid,
@@ -245,6 +247,7 @@ int hostapd_ctrl_iface_sta(struct hostapd_data *hapd, const char *txtaddr,
 		if (os_snprintf_error(end - pos, ret))
 			return pos - buf;
 		pos += ret;
+		#endif
 	}
 
 	return (pos-buf);

@@ -1,0 +1,6 @@
+/ref_bin/
+/generated/
+/defconfig
+/Kconfig
+/main.c
+/pincfg.h

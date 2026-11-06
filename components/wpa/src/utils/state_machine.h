@@ -46,7 +46,7 @@ static void sm_ ## machine ## _ ## state ## _Enter(STATE_MACHINE_DATA *sm, \
 #define SM_ENTRY(machine, state) \
 if (!global || sm->machine ## _state != machine ## _ ## state) { \
 	sm->changed = TRUE; \
-	wpa_printf(MSG_DEBUG, STATE_MACHINE_DEBUG_PREFIX ": " #machine \
+	wpa_printf_error(MSG_ERROR,STATE_MACHINE_DEBUG_PREFIX ": " #machine \
 		   " entering state " #state); \
 } \
 sm->machine ## _state = machine ## _ ## state;

@@ -11,7 +11,7 @@
 
 #include "common/defs.h"
 #include "utils/list.h"
-
+#include "eap_peer/eap_config.h"
 
 #define DEFAULT_EAP_WORKAROUND ((unsigned int) -1)
 #define DEFAULT_EAPOL_FLAGS (EAPOL_FLAG_REQUIRE_KEY_UNICAST | \
@@ -149,6 +149,11 @@ struct wpa_ssid {
 	int bssid_set;
 
 	/**
+	 * p2p_group - Network generated as a P2P group (used internally)
+	 */
+	int p2p_group;
+
+	/**
 	 * go_p2p_dev_addr - GO's P2P Device Address or all zeros if not set
 	 */
 	//u8 go_p2p_dev_addr[ETH_ALEN];
@@ -283,7 +288,7 @@ struct wpa_ssid {
 	 * was not specified in the configuration (i.e., default behavior is
 	 * followed).
 	 */
-	//int proactive_key_caching;
+	int proactive_key_caching;
 
 	/**
 	 * mixed_cell - Whether mixed cells are allowed
@@ -325,7 +330,7 @@ struct wpa_ssid {
 	 * Strict EAP conformance mode can be configured by disabling
 	 * workarounds with eap_workaround = 0.
 	 */
-	//unsigned int eap_workaround;
+	unsigned int eap_workaround;
 
 #endif /* IEEE8021X_EAPOL */
 
@@ -373,7 +378,7 @@ struct wpa_ssid {
 	 * specify 2 (don't care) meaning connect to either AP or PCP.
 	 * P2P_GO and P2P_GROUP_FORMATION modes must use PBSS in DMG network.
 	 */
-	//int pbss;
+	int pbss;
 
 	/**
 	 * disabled - Whether this network is currently disabled
@@ -392,7 +397,7 @@ struct wpa_ssid {
 	 * This flag is used to reenable all the temporarily disabled networks
 	 * after either the success or failure of a WPS connection.
 	 */
-	//int disabled_for_connect;
+	int disabled_for_connect;
 
 	/**
 	 * peerkey -  Whether PeerKey handshake for direct links is allowed
@@ -403,7 +408,7 @@ struct wpa_ssid {
 	 * 0 = disabled (default)
 	 * 1 = enabled
 	 */
-	//int peerkey;
+	int peerkey;
 
 	/**
 	 * id_str - Network identifier string for external scripts
@@ -567,7 +572,7 @@ struct wpa_ssid {
 	/**
 	 * temporary - Whether this network is temporary and not to be saved
 	 */
-	//int temporary;
+	int temporary;
 
 	/**
 	 * export_keys - Whether keys may be exported
@@ -575,7 +580,7 @@ struct wpa_ssid {
 	 * This attribute will be set when keys are determined through
 	 * WPS or similar so that they may be exported.
 	 */
-	//int export_keys;
+	int export_keys;
 
 #ifdef CONFIG_HT_OVERRIDES
 	/**
@@ -697,12 +702,12 @@ struct wpa_ssid {
 	/**
 	 * auth_failures - Number of consecutive authentication failures
 	 */
-	//unsigned int auth_failures;
+	unsigned int auth_failures;
 
 	/**
 	 * disabled_until - Network block disabled until this time if non-zero
 	 */
-	//struct os_reltime disabled_until;
+	struct os_reltime disabled_until;
 
 	/**
 	 * parent_cred - Pointer to parent wpa_cred entry
@@ -728,7 +733,7 @@ struct wpa_ssid {
 	int update_identifier;
 #endif /* CONFIG_HS20 */
 
-	//unsigned int wps_run;
+	unsigned int wps_run;
 
 	/**
 	 * no_auto_peer - Do not automatically peer with compatible mesh peers
@@ -744,7 +749,7 @@ struct wpa_ssid {
 	 * 0 = WPS enabled and configured (default)
 	 * 1 = WPS disabled
 	 */
-	//int wps_disabled;
+	int wps_disabled;
 };
 
 #endif /* CONFIG_SSID_H */

@@ -56,6 +56,7 @@
 #include "hal/hal_system.h"
 #include <ota/ota.h>
 #include "ecr_qcloud_iot.h"
+#include "eswin_sdk_version.h"
 
 /****************************************************************************
  * Private Types
@@ -207,7 +208,7 @@ bool is_fw_downloading(void)
 int ecr_qcloud_ota_ctrl(Qcloud_IoT_Template *client_chan)
 {
     int             rc = 0;
-    rc = enable_ota_task(&sg_devInfo, IOT_Template_Get_MQTT_Client(client_chan), __RELEASE_VERSION);
+    rc = enable_ota_task(&sg_devInfo, IOT_Template_Get_MQTT_Client(client_chan), RELEASE_VERSION);
     if (rc)
     {
         Log_e("Start OTA task failed!\n");

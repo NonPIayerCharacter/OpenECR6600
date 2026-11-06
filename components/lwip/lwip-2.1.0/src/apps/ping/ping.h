@@ -40,9 +40,12 @@ struct _ping_parm
 	u32_t total_delay;
 	u32_t time_delay;
 	u16_t seq_num;
+	u16_t ping_id;
 	u8_t vif_id;
 	u8_t force_stop;
 	u32_t rec_timeout;
+	u8_t ttl;
+	u8_t tos;
 	xTaskHandle task_handle;
 	ip_addr_t addr;
 	ping_parm_t* next;

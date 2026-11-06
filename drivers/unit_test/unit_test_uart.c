@@ -14,7 +14,7 @@ void utest_uart_isr(void * data)
 	os_printf(LM_CMD,LL_INFO,"unit test uart, uart-isr comes!\r\n");
 }
 
-static int utest_uart_open(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_uart_open( int argc, char *argv[])
 {
 	int uart_baudrate, tx_mode, rx_mode;
 	chip_uart1_pinmux_cfg(0);
@@ -62,7 +62,7 @@ static int utest_uart_open(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_uart, open, utest_uart_open, "unit test uart open", "ut_uart open [uart-baudrate] [tx_mode] [rx_mode]");
 
 
-static int utest_uart_read(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_uart_read( int argc, char *argv[])
 {
     int  uart_len;
 
@@ -101,7 +101,7 @@ static int utest_uart_read(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_uart, read, utest_uart_read, "unit test uart read", "ut_uart read [uart-len]");
 
 
-static int utest_uart_write(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_uart_write( int argc, char *argv[])
 {
     int uart_len;
 
@@ -137,7 +137,7 @@ CLI_SUBCMD(ut_uart, write, utest_uart_write, "unit test uart write", "ut_uart wr
 
 
 
-static int utest_uart_close(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_uart_close( int argc, char *argv[])
 {
 	if (hal_uart_close(1) == 0)
 	{
@@ -275,7 +275,7 @@ void task_pt11(void *arg)  // flash
     }
 }
 
-static int pt_cmd(cmd_tbl_t *h, int argc, char *argv[])
+static int pt_cmd(int argc, char *argv[])
 {
 	if (argc >= 2)
 	{

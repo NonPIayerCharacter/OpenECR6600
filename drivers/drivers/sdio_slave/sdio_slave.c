@@ -1086,7 +1086,7 @@ restart:
 }
 
 #if 0
-static int cmd_sdio_test(cmd_tbl_t *t, int argc, char *argv[])
+static int cmd_sdio_test( int argc, char *argv[])
 {
     unsigned int len, total_len = 0, i;
     unsigned char *p;
@@ -1125,7 +1125,7 @@ static int cmd_sdio_test(cmd_tbl_t *t, int argc, char *argv[])
 CMD(sdiot,   cmd_sdio_test);
 
 
-static int cmd_sdio_alt(cmd_tbl_t *t, int argc, char *argv[])
+static int cmd_sdio_alt( int argc, char *argv[])
 {
     struct sdio_priv *priv = &m_priv;
 

@@ -32,6 +32,9 @@
 #include <easyflash.h>
 #include "flash.h"
 #include "chip_memmap.h"
+#ifdef CONFIG_MATTER_CUSTOMER_LFS
+#include "customer_lfs.h"
+#endif
 
 
 
@@ -67,7 +70,7 @@
 
 /* the string ENV value buffer size for legacy ef_get_env() function */
 #ifndef EF_STR_ENV_VALUE_MAX_SIZE
-#define EF_STR_ENV_VALUE_MAX_SIZE                1024
+#define EF_STR_ENV_VALUE_MAX_SIZE                2048
 #endif
 
 /* the sector remain threshold before full status */
@@ -246,7 +249,8 @@ struct _partion_info
 struct _partion_dev
 {
 	unsigned int num;
-	unsigned int index_cfg;
+    unsigned int index_cfg;
+	unsigned int index_nv_mcfg;
 	unsigned int index_nv_customer;
 	unsigned int index_nv_develop;
 	unsigned int index_nv_amt;
@@ -385,6 +389,73 @@ static uint32_t get_next_env_addr(sector_meta_data_t sector, env_meta_data_t pre
     }
 }
 
+/* 判断 addr 处是否像一个合法的 ENV 节点头（非全 FF） */
+static bool is_valid_env_head(uint32_t addr, uint32_t sector_end)
+{
+    struct env_hdr_data hdr;
+    int i;
+
+    if (addr + ENV_HDR_DATA_SIZE > sector_end) {
+        return false;
+    }
+    if (ef_port_read(addr, (uint32_t *)&hdr, sizeof(hdr)) != EF_NO_ERR) {
+        return false;
+    }
+    /* status_table 编码：非 0xFF 必须是 0x00 且在 4 字节边界；全 FF 视为 UNUSED，不算有效节点 */
+    for (i = 0; i < ENV_STATUS_TABLE_SIZE; i++) {
+        if (hdr.status_table[i] != 0xFF) {
+            if (hdr.status_table[i] != 0x00 || (i % 4) != 0) {
+                return false;
+            }
+        }
+    }
+    if (hdr.name_len > EF_ENV_NAME_MAX) {
+        return false;
+    }
+    if (hdr.value_len > (SECTOR_SIZE - SECTOR_HDR_DATA_SIZE)) {
+        /* value_len 异常（可能 uint32 溢出），避免 len 自洽检查回绕误判 */
+        return false;
+    }
+    if (hdr.len != ENV_HDR_DATA_SIZE + EF_WG_ALIGN(hdr.name_len) + EF_WG_ALIGN(hdr.value_len)) {
+        return false;
+    }
+    return true;
+}
+
+/* 从 cur_addr 向后每 4 字节扫描，反推当前节点真实 len */
+static bool resolve_env_len(uint32_t cur_addr, uint32_t sector_end, uint32_t *out_len)
+{
+    uint32_t scan;
+
+    /* 第一遍：优先找下一个有效节点头（当前不是最后一个节点） */
+    for (scan = cur_addr + ENV_HDR_DATA_SIZE; scan + ENV_HDR_DATA_SIZE <= sector_end; scan += 4) {
+        if (is_valid_env_head(scan, sector_end)) {
+            *out_len = scan - cur_addr;
+            return true;
+        }
+    }
+    /* 第二遍：未找到有效节点，找第一个空白区（全 FF）作为当前节点结束位置 */
+    for (scan = cur_addr + ENV_HDR_DATA_SIZE; scan + ENV_STATUS_TABLE_SIZE <= sector_end; scan += 4) {
+        uint8_t st[ENV_STATUS_TABLE_SIZE];
+        bool all_ff = true;
+        int i;
+        if (ef_port_read(scan, (uint32_t *)st, sizeof(st)) != EF_NO_ERR) {
+            return false;
+        }
+        for (i = 0; i < ENV_STATUS_TABLE_SIZE; i++) {
+            if (st[i] != 0xFF) {
+                all_ff = false;
+                break;
+            }
+        }
+        if (all_ff) {
+            *out_len = scan - cur_addr;
+            return true;
+        }
+    }
+    return false;
+}
+
 static EfErrCode read_env(env_meta_data_t env)
 {
     struct env_hdr_data env_hdr;
@@ -412,7 +483,44 @@ static EfErrCode read_env(env_meta_data_t env)
         return EF_READ_ERR;
     } else if (env->len > SECTOR_SIZE - SECTOR_HDR_DATA_SIZE && env->len < env_total_len) {
         //TODO 扇区连续模式，或者写入长度没有写入完整
-        EF_ASSERT(0);
+        /* len 跨 sector：视为异常，交由下方分级校验重算/反推，避免 EF_ASSERT 死机 */
+        EF_INFO("Warning: ENV length crosses sector, env_addr=0x%08X, len=0x%08X, sector_size=0x%08X.\n",
+                env->addr.start, env->len, SECTOR_SIZE);
+    }
+
+    /* === len 分级校验 === */
+    {
+        uint32_t expect_len = 0;
+
+        /* 级别1：正向自洽重算 */
+        if (env_hdr.name_len <= EF_ENV_NAME_MAX
+                && env_hdr.value_len <= (SECTOR_SIZE - SECTOR_HDR_DATA_SIZE)) {
+            expect_len = ENV_HDR_DATA_SIZE + EF_WG_ALIGN(env_hdr.name_len) + EF_WG_ALIGN(env_hdr.value_len);
+            if (expect_len > SECTOR_SIZE - SECTOR_HDR_DATA_SIZE) {
+                expect_len = 0;
+            }
+        }
+
+        if (expect_len != 0 && env->len != expect_len) {
+            EF_INFO("Warning: ENV @0x%08X len=0x%X != expect=0x%X, use recalculated.\n",
+                    env->addr.start, env->len, expect_len);
+            env->len = expect_len;              /* 存储 len 坏，用重算值 */
+        } else if (expect_len == 0) {
+            /* 级别2：name_len/value_len 非法，扫描反推 */
+            uint32_t sector_base = EF_ALIGN_DOWN(env->addr.start, SECTOR_SIZE);
+            uint32_t resolved;
+            if (!resolve_env_len(env->addr.start, sector_base + SECTOR_SIZE, &resolved)) {
+                /* 级别3：兜底，标记 ERR_HDR，返回错误 */
+                env->len = ENV_HDR_DATA_SIZE;
+                if (env->status != ENV_ERR_HDR) {
+                    env->status = ENV_ERR_HDR;
+                    write_status(env->addr.start, env_hdr.status_table, ENV_STATUS_NUM, ENV_ERR_HDR);
+                }
+                env->crc_is_ok = false;
+                return EF_READ_ERR;
+            }
+            env->len = resolved;
+        }
     }
 
     /* CRC32 data len(header.name_len + header.value_len + name + value) */
@@ -433,6 +541,15 @@ static EfErrCode read_env(env_meta_data_t env)
     }
     /* check CRC32 */
     if (calc_crc32 != env_hdr.crc32) {
+        EF_INFO("Warning: ENV CRC32 mismatch, env_addr=0x%08X, stored=0x%08X, calc=0x%08X, len=0x%08X.\n",
+                env->addr.start, env_hdr.crc32, calc_crc32, env->len);
+        env->crc_is_ok = false;
+        result = EF_READ_ERR;
+    } else if (env_hdr.name_len > EF_ENV_NAME_MAX
+               || env_hdr.value_len > (SECTOR_SIZE - SECTOR_HDR_DATA_SIZE)) {
+        /* name_len/value_len 非法（级别2反推 len 后 CRC 偶发匹配），不读 name/value 防止溢出 */
+        EF_INFO("Error: ENV name_len/value_len invalid, env_addr=0x%08X, name_len=%d, value_len=0x%08X.\n",
+                env->addr.start, env_hdr.name_len, env_hdr.value_len);
         env->crc_is_ok = false;
         result = EF_READ_ERR;
     } else {
@@ -498,12 +615,18 @@ static EfErrCode read_sector_meta_data(uint32_t addr, sector_meta_data_t sector,
             while ((env_meta.addr.start = get_next_env_addr(sector, &env_meta)) != FAILED_ADDR) {
                 read_env(&env_meta);
                 if (!env_meta.crc_is_ok) {
-                    if (env_meta.status != ENV_PRE_WRITE && env_meta.status!= ENV_ERR_HDR) {
-                        EF_INFO("Error: The ENV (@0x%08X) CRC32 check failed!\n", env_meta.addr.start);
+                    if (env_meta.status == ENV_ERR_HDR || env_meta.status == ENV_PRE_WRITE) {
+                        /* len 不可靠（或写入未完成）：保守停止该 sector，交给 GC 擦除 */
+                        EF_INFO("Warning: ENV @0x%08X len unreliable, stop traverse this sector.\n",
+                                env_meta.addr.start);
                         sector->remain = 0;
-                        result = EF_READ_ERR;
+                        gc_request = true;
                         break;
                     }
+                    /* status==WRITE 且 len 可靠：仅 value 坏，继续用 len 推进，标记待 GC 清理 */
+                    EF_INFO("Warning: ENV @0x%08X CRC32 failed, treat as invalid node.\n",
+                            env_meta.addr.start);
+                    gc_request = true;
                 }
                 sector->empty_env += env_meta.len;
                 sector->remain -= env_meta.len;
@@ -648,6 +771,10 @@ static signed int get_env(const char *key, void *value_buf, signed int buf_len, 
 //#if SUPPORT_NV_PARTION
 signed int ef_get_env_blob_partion(int partion_index, const char *key, void *value_buf, signed int buf_len, signed int *value_len)
 {
+#ifdef CONFIG_MATTER_CUSTOMER_LFS
+    if (partion_index == partionDev.index_nv_customer) { return customer_lfs_get(key, value_buf, buf_len, value_len); }
+#endif
+
     signed int read_len = 0;
 
     if (!init_ok) {
@@ -669,9 +796,11 @@ signed int ef_get_env_blob_partion(int partion_index, const char *key, void *val
     return read_len;
 }
 
-
 signed int customer_get_env_blob(const char *key, void *value_buf, signed int buf_len, signed int *value_len)
 {
+#ifdef CONFIG_MATTER_CUSTOMER_LFS
+    return customer_lfs_get(key, value_buf, buf_len, value_len);
+#else
 	if(partionDev.index_nv_customer == 0)
 	{
         EF_INFO("partition table no customer partition.\n");
@@ -680,6 +809,7 @@ signed int customer_get_env_blob(const char *key, void *value_buf, signed int bu
 	}
 
     return ef_get_env_blob_partion(partionDev.index_nv_customer, key, value_buf, buf_len, value_len);
+#endif
 }
 
 
@@ -706,17 +836,17 @@ signed int amt_get_env_blob(const char *key, void *value_buf, signed int buf_len
     return ef_get_env_blob_partion(partionDev.index_nv_amt, key, value_buf, buf_len, value_len);
 }
 
-
-signed int obk_get_env_blob(const char *key, void *value_buf, signed int buf_len, signed int *value_len)
+signed int obk_get_env_blob(const char* key, void* value_buf, signed int buf_len, signed int* value_len)
 {
-	if(partionDev.index_cfg == 0)
-	{
+    if(partionDev.index_cfg == 0)
+    {
         EF_INFO("partition table no cfg partition.\n");
 
-		return 0xffffffff;
-	}
+        return 0xffffffff;
+    }
     return ef_get_env_blob_partion(partionDev.index_cfg, key, value_buf, buf_len, value_len);
 }
+
 
 /**
  * Get an ENV value by key name.
@@ -814,6 +944,7 @@ static EfErrCode sector_iterator(sector_meta_data_t sector, sector_store_status_
 
     /* search all sectors */
     sector->addr = FAILED_ADDR;
+    sector->combined = SECTOR_NOT_COMBINED;
     while ((sec_addr = get_next_sector_addr(sector)) != FAILED_ADDR) {
         result = read_sector_meta_data(sec_addr, sector, false);
 		if(result == EF_READ_ERR)
@@ -1114,6 +1245,27 @@ static EfErrCode align_write(uint32_t addr, const uint32_t *buf, signed int size
     return result;
 }
 
+static EfErrCode verify_env_blob(uint32_t env_addr, env_hdr_data_t env_hdr)
+{
+    uint8_t buf[32];
+    uint32_t calc_crc32 = 0;
+    signed int len, size, crc_data_len = env_hdr->len - ENV_NAME_LEN_OFFSET;
+
+    for (len = 0; len < crc_data_len; len += size) {
+        size = (len + sizeof(buf) < crc_data_len) ? sizeof(buf) : (crc_data_len - len);
+        if (ef_port_read(env_addr + ENV_NAME_LEN_OFFSET + len, (uint32_t *)buf, EF_WG_ALIGN(size)) != EF_NO_ERR) {
+            return EF_READ_ERR;
+        }
+        calc_crc32 = ef_calc_crc32(calc_crc32, buf, size);
+    }
+    if (calc_crc32 != env_hdr->crc32) {
+        EF_INFO("Error: verify ENV CRC mismatch, env_addr=0x%08X, stored=0x%08X, calc=0x%08X.\n",
+                env_addr, env_hdr->crc32, calc_crc32);
+        return EF_WRITE_ERR;
+    }
+    return EF_NO_ERR;
+}
+
 static EfErrCode create_env_blob(sector_meta_data_t sector, const char *key, const void *value, signed int len)
 {
     EfErrCode result = EF_NO_ERR;
@@ -1168,6 +1320,21 @@ static EfErrCode create_env_blob(sector_meta_data_t sector, const char *key, con
             result = align_write(env_addr + ENV_HDR_DATA_SIZE + EF_WG_ALIGN(env_hdr.name_len), value,
                     env_hdr.value_len);
         }
+        /* 写后校验：防止 value 在写入期间被篡改导致坏数据落盘 */
+        if (result == EF_NO_ERR) {
+            result = verify_env_blob(env_addr, &env_hdr);
+            if (result != EF_NO_ERR) {
+                /* 校验失败：标记 ERR_HDR，并把 sector 置 dirty + 触发 GC 回收 */
+                uint8_t dirty_status_table[ENV_STATUS_TABLE_SIZE];
+                uint32_t dirty_addr;
+                write_status(env_addr, env_hdr.status_table, ENV_STATUS_NUM, ENV_ERR_HDR);
+                dirty_addr = EF_ALIGN_DOWN(env_addr, SECTOR_SIZE) + SECTOR_DIRTY_OFFSET;
+                if (read_status(dirty_addr, dirty_status_table, SECTOR_DIRTY_STATUS_NUM) == SECTOR_DIRTY_FALSE) {
+                    write_status(dirty_addr, dirty_status_table, SECTOR_DIRTY_STATUS_NUM, SECTOR_DIRTY_TRUE);
+                }
+                gc_request = true;
+            }
+        }
         /* change the ENV status to ENV_WRITE */
         if (result == EF_NO_ERR) {
             result = write_status(env_addr, env_hdr.status_table, ENV_STATUS_NUM, ENV_WRITE);
@@ -1193,6 +1360,10 @@ static EfErrCode create_env_blob(sector_meta_data_t sector, const char *key, con
  */
 EfErrCode ef_del_env_partion(int partion_index, const char *key)
 {
+#ifdef CONFIG_MATTER_CUSTOMER_LFS
+    if (partion_index == partionDev.index_nv_customer) { return customer_lfs_del(key); }
+#endif
+
     EfErrCode result = EF_NO_ERR;
 
     if (!init_ok) {
@@ -1218,9 +1389,11 @@ EfErrCode ef_del_env_partion(int partion_index, const char *key)
     return result;
 }
 
-
 EfErrCode customer_del_env(const char *key)
 {
+#ifdef CONFIG_MATTER_CUSTOMER_LFS
+    return customer_lfs_del(key);
+#else
 	if(partionDev.index_nv_customer == 0)
 	{
         EF_INFO("partition table no customer partition.\n");
@@ -1228,6 +1401,7 @@ EfErrCode customer_del_env(const char *key)
 		return EF_WRITE_ERR;
 	}
     return ef_del_env_partion(partionDev.index_nv_customer, key);
+#endif
 }
 
 EfErrCode develop_del_env(const char *key)
@@ -1285,18 +1459,37 @@ static EfErrCode set_env(const char *key, const void *value_buf, signed int buf_
     } else {
         /* make sure the flash has enough space */
         if (new_env_by_kv(&sector, strlen(key), buf_len) == FAILED_ADDR) {
-			EF_INFO("ENV full!!!!!!!!!!!!!!!!!!!!!!! %d\n",sector.remain);
+			EF_INFO("ENV full! remain:%d key:%s\n",sector.remain, key);
             return EF_ENV_FULL;
         }
         env_is_found = find_env(key, &env);
         /* prepare to delete the old ENV */
         if (env_is_found) {
-            //wangc add: if values are equal, then do nothing
-            if(env.value_len == buf_len && \
-                memcmp((void *)(env.addr.value + MEM_BASE_XIP), value_buf, buf_len) == 0) {
-                    return result;
+            if(env.value_len)
+            {
+                uint32_t *read_buff;
+                read_buff = os_malloc(env.value_len);
+                if (read_buff == NULL) {
+                    /* 内存不足：跳过「值相等则跳过写入」的优化，继续正常写流程 */
+                    EF_INFO("Warning: os_malloc failed when compare ENV value, key=%s, value_len=%d.\n",
+                            key, env.value_len);
+                } else {
+                    //wangc add: if values are equal, then do nothing
+                    ef_port_read(env.addr.value, read_buff, env.value_len);
+                    if(env.value_len == buf_len && \
+                    memcmp((void *)(read_buff), value_buf, buf_len) == 0) {
+                        os_free(read_buff);
+                        return result;
+                    }
+                    os_free(read_buff);
+                }
             }
-            result = del_env(key, &env, false);
+            if(!(env.value_len==0 && buf_len==0)) {
+                result = del_env(key, &env, false);
+                if (result != EF_NO_ERR) {
+                    EF_INFO("Error: mark old ENV delete-before-set failed, key=%s, result=%d.\n", key, result);
+                }
+            }
         }
         /* create the new ENV */
         if (result == EF_NO_ERR) {
@@ -1330,6 +1523,10 @@ static EfErrCode set_env(const char *key, const void *value_buf, signed int buf_
 
 EfErrCode ef_set_env_blob_partion(int partion_index, const char *key, const void *value_buf, signed int buf_len)
 {
+#ifdef CONFIG_MATTER_CUSTOMER_LFS
+    if (partion_index == partionDev.index_nv_customer) { return customer_lfs_set(key, value_buf, buf_len); }
+#endif
+
     EfErrCode result = EF_NO_ERR;
 
 
@@ -1358,9 +1555,11 @@ EfErrCode ef_set_env_blob_partion(int partion_index, const char *key, const void
     return result;
 }
 
-
 EfErrCode customer_set_env_blob(const char *key, const void *value_buf, signed int buf_len)
 {
+#ifdef CONFIG_MATTER_CUSTOMER_LFS
+    return customer_lfs_set(key, value_buf, buf_len);
+#else
 	if(partionDev.index_nv_customer == 0)
 	{
         EF_INFO("partition table no customer partition.\n");
@@ -1369,6 +1568,7 @@ EfErrCode customer_set_env_blob(const char *key, const void *value_buf, signed i
 	}
 
 	return ef_set_env_blob_partion(partionDev.index_nv_customer, key, value_buf, buf_len);
+#endif
 }
 
 
@@ -1397,17 +1597,16 @@ EfErrCode amt_set_env_blob(const char *key, const void *value_buf, signed int bu
 	return ef_set_env_blob_partion(partionDev.index_nv_amt, key, value_buf, buf_len);
 }
 
-
 EfErrCode obk_set_env_blob(const char* key, const void* value_buf, signed int buf_len)
 {
-	if(partionDev.index_cfg == 0)
-	{
-		EF_INFO("partition table no cfg partition.\n");
+    if(partionDev.index_cfg == 0)
+    {
+        EF_INFO("partition table no cfg partition.\n");
 
-		return EF_WRITE_ERR;
-	}
+        return EF_WRITE_ERR;
+    }
 
-	return ef_set_env_blob_partion(partionDev.index_cfg, key, value_buf, buf_len);
+    return ef_set_env_blob_partion(partionDev.index_cfg, key, value_buf, buf_len);
 }
 
 
@@ -1484,7 +1683,7 @@ EfErrCode ef_save_env(void)
 EfErrCode ef_env_set_default(void)
 {
     EfErrCode result = EF_NO_ERR;
-    uint32_t addr, i, value_len;
+    uint32_t /*addr,*/ i, value_len;
     struct sector_meta_data sector;
 
     EF_ASSERT(default_env_set);
@@ -1495,13 +1694,6 @@ EfErrCode ef_env_set_default(void)
     /* format all sectors */
 //	partion_info_get(PARTION_NAME_NV_CUSTOMER, &env_start_addr, &env_total_len);
 
-    for (addr = env_start_addr; addr < env_start_addr + env_total_len; addr += SECTOR_SIZE) {
-        result = format_sector(addr, SECTOR_NOT_COMBINED);
-        if (result != EF_NO_ERR) {
-            goto __exit;
-        }
-    }
-	
     /* create default ENV */
     for (i = 0; i < default_env_set_size; i++) {
         /* It seems to be a string when value length is 0.
@@ -1523,6 +1715,324 @@ __exit:
 
     return result;
 }
+
+
+
+
+
+
+static bool mcfg_dele_match_cb(env_meta_data_t env, void *arg1, void *arg2)
+{
+    const char *key = arg1;
+	int fuzzy_match = (int)arg2;
+	bool ret = false;
+
+    if (env->crc_is_ok && env->status == ENV_WRITE && !strncmp(env->name, key, strlen(key)))
+	{
+		if (fuzzy_match == 0)
+		{
+			ret = true;
+		}
+
+		if (del_env(key, env, true))
+		{
+			EF_INFO("mcfg_dele_match_cb, failed!\n");
+		}
+	}
+
+	return ret;
+}
+
+
+
+static bool mcfg_match_info_cb(env_meta_data_t env, void *arg1, void *arg2)
+{
+	bool ret = false;
+
+    if (env->crc_is_ok && env->status == ENV_WRITE)
+	{
+		mcfg_iterator_key_callback cb = arg1;
+		MFG_KEY_INFO_T * key_match = arg2;
+		MFG_KEY_INFO_T key_temp = {0};
+		char * s = env->name;
+
+		//EF_INFO("mcfg_match_info_cb, name: %s\n", s);
+
+		key_temp.name_space = s;
+
+		for (; *s; s++)
+		{
+			if (*s == ',')
+			{
+				*s++ = '\0';
+
+				if (!key_temp.name_key)
+				{
+					key_temp.name_key = s;
+				}
+				else
+				{
+					key_temp.type = (MFG_KEY_TYPE_E)(*s - 0x30);
+					break;
+				}
+			}
+		}
+
+		if (key_temp.name_key == NULL)
+		{
+			// error key
+			//EF_INFO("mcfg_match_info_cb, not match for no key_name\n");
+			return ret;
+		}
+
+		if (key_temp.type < MFG_KEY_TYPE_U8 || key_temp.type > MFG_KEY_TYPE_BINARY)
+		{
+			// error key
+			//EF_INFO("mcfg_match_info_cb, not match for err type\n");
+			return ret;
+		}
+
+		if (key_match->name_space)
+		{
+			if (strcmp(key_match->name_space, key_temp.name_space) == 0)
+			{
+				if (key_match->name_key)
+				{
+					if (strcmp(key_match->name_key, key_temp.name_key) == 0)
+					{
+						ret = true;
+					}
+					else
+					{
+						// key-name mismatch
+						//EF_INFO("mcfg_match_info_cb, not match for key\n");
+						return ret;
+					}
+				}
+			}
+			else
+			{
+				// namespace mismatch
+				//EF_INFO("mcfg_match_info_cb, not match for ns\n");
+				return ret;
+			}
+		}
+
+		if (key_match->type == MFG_KEY_TYPE_UNKNOW)
+		{
+			key_match->type = key_temp.type;
+			//EF_INFO("mcfg_match_info_cb, match fuzzy\n");
+			//ret = true;
+		}
+		else if (key_match->type == key_temp.type)
+		{
+			if (key_match->name_space && key_match->name_key)
+			{				
+				//EF_INFO("mcfg_match_info_cb, match exactly\n");
+				ret = true;
+			}
+		}
+		else
+		{
+			ret = false;
+		}
+
+		if ((cb) && (cb)(&key_temp))
+		{
+			return true;
+		}
+	}
+
+	return ret;
+}
+
+
+EfErrCode mcfg_iterator_key(mcfg_iterator_key_callback cb, MFG_KEY_INFO_T * key_filtration)
+{
+    if (partionDev.index_nv_mcfg == 0)
+	{
+        EF_INFO("mcfg_iterator_key, no partion\n");
+        return 0xfffffff0;
+    }
+	else
+	{
+		struct env_meta_data env;
+
+		ef_port_env_lock();
+		
+		env_start_addr = partionDev.partion[partionDev.index_nv_mcfg].base;
+		env_total_len  = partionDev.partion[partionDev.index_nv_mcfg].length;
+
+		env_iterator(&env, (void *)cb, (void *)key_filtration, mcfg_match_info_cb);
+
+		ef_port_env_unlock();
+	}
+
+    return EF_NO_ERR;
+
+}
+
+
+EfErrCode mcfg_del_env(MFG_KEY_INFO_T * key)
+{
+    if (partionDev.index_nv_mcfg == 0)
+	{
+        EF_INFO("mcfg_del_env, no partion\n");
+        return 0xffffffff;
+    }
+
+	int fuzzy_match;
+	struct env_meta_data env;
+	char key_name[EF_ENV_NAME_MAX];
+
+	strcpy(key_name, key->name_space);
+	strcat(key_name, ",");
+
+	if (key->name_key)
+	{
+		strcat(key_name, key->name_key);
+		strcat(key_name, ",");
+		fuzzy_match = 0;	// match "ns,key,"
+	}
+	else
+	{
+		fuzzy_match = 1;	// match "ns,"
+	}
+
+	ef_port_env_lock();
+	
+	env_start_addr = partionDev.partion[partionDev.index_nv_mcfg].base;
+	env_total_len  = partionDev.partion[partionDev.index_nv_mcfg].length;
+
+	env_iterator(&env, (void *)key_name, (void *)fuzzy_match, mcfg_dele_match_cb);
+
+	ef_port_env_unlock();
+
+    return EF_NO_ERR;
+}
+
+signed int mcfg_get_env_blob(MFG_KEY_INFO_T * key, void *value_buf, signed int buf_len, signed int *value_len)
+{
+    if (partionDev.index_nv_mcfg == 0)
+    {
+        EF_INFO("mcfg_get_env_blob, no partion\n");
+        return 0xffffffff;
+    }
+
+	struct env_meta_data env;
+    signed int read_len = 0;
+    EfErrCode result;
+	MFG_KEY_TYPE_E type_cpy;
+
+	if (key->type != MFG_KEY_TYPE_UNKNOW)
+	{
+		type_cpy = key->type;
+		key->type = MFG_KEY_TYPE_UNKNOW;
+	}
+	else
+	{
+		type_cpy = MFG_KEY_TYPE_UNKNOW;
+	}
+
+	ef_port_env_lock();
+	
+	env_start_addr = partionDev.partion[partionDev.index_nv_mcfg].base;
+	env_total_len  = partionDev.partion[partionDev.index_nv_mcfg].length;
+	
+	env_iterator(&env, NULL, (void *)key, mcfg_match_info_cb);
+
+	if ((type_cpy == MFG_KEY_TYPE_UNKNOW && key->type != MFG_KEY_TYPE_UNKNOW)
+		|| (type_cpy != MFG_KEY_TYPE_UNKNOW && key->type == type_cpy))
+	{
+		//EF_INFO("mfg get type_cpy(%d).\n", type_cpy);
+		//EF_INFO("mfg get key->type(%d).\n", key->type);
+
+        if (value_len) 
+		{
+            *value_len = env.value_len;
+        }
+
+        if (buf_len > env.value_len) 
+		{
+            read_len = env.value_len;
+        } 
+		else
+		{
+            read_len = buf_len;
+        }
+
+		result = ef_port_read(env.addr.value, (uint32_t *) value_buf, read_len);
+    }
+	else
+	{
+		result = EF_ENV_NAME_EXIST;
+	}
+
+	ef_port_env_unlock();
+
+    return result;
+}
+
+
+EfErrCode mcfg_set_env_blob(MFG_KEY_INFO_T * key, const void *value_buf, signed int buf_len)
+{
+    if (partionDev.index_nv_mcfg == 0)
+    {
+        EF_INFO("mcfg_set_env_blob, no partion\n");
+        return 0xffffff00;
+    }
+
+	struct env_meta_data env;
+    EfErrCode result = EF_NO_ERR;
+	MFG_KEY_TYPE_E type_cpy;
+
+	type_cpy = key->type;
+	key->type = MFG_KEY_TYPE_UNKNOW;
+
+	ef_port_env_lock();
+
+	env_start_addr = partionDev.partion[partionDev.index_nv_mcfg].base;
+	env_total_len  = partionDev.partion[partionDev.index_nv_mcfg].length;
+
+	env_iterator(&env, NULL, (void *)key, mcfg_match_info_cb);
+
+	if (key->type == type_cpy || key->type == MFG_KEY_TYPE_UNKNOW)
+	{
+		char key_name[EF_ENV_NAME_MAX];
+		char type_str[2];
+
+		type_str[0] = (char)(type_cpy + 0x30);
+		type_str[1] = '\0';
+
+        //EF_INFO("mfg set type: %x\n", type_str[0]);
+        //EF_INFO("mfg set type: %x\n", type_cpy);
+
+		strcpy(key_name, key->name_space);
+		strcat(key_name, ",");
+		strcat(key_name, key->name_key);
+		strcat(key_name, ",");
+		strcat(key_name, type_str);
+
+        //EF_INFO("mfg set name: %s\n", key_name);
+        //EF_INFO("mfg set len: %d\n", buf_len);
+
+        result = set_env(key_name, value_buf, buf_len);
+
+        //EF_INFO("mfg set over\n");
+
+    }
+	else
+	{
+		result = EF_WRITE_ERR;
+	}
+
+	ef_port_env_unlock();
+
+	//EF_INFO("mfg set ret: %d, %x\n", result);
+
+    return result;
+}
+
 
 static bool print_env_cb(env_meta_data_t env, void *arg1, void *arg2)
 {
@@ -1584,6 +2094,9 @@ __reload:
 #if 1
 void ef_print_env_partion(int partion_index)
 {
+#ifdef CONFIG_MATTER_CUSTOMER_LFS
+    if (partion_index == partionDev.index_nv_customer) { customer_lfs_print(); return; }
+#endif
     struct env_meta_data env;
     signed int using_size = 0;
 
@@ -1625,7 +2138,13 @@ static bool recovery_env_cb(env_meta_data_t env, void *arg1, void *arg2)
 
 		env->name[env->name_len] = '\0';
 
-		if (set_env(env->name, buf, env->value_len) != EF_NO_ERR) {
+		if (
+#ifdef CONFIG_MATTER_CUSTOMER_LFS
+            customer_lfs_set(env->name, buf, env->value_len)
+#else
+            set_env(env->name, buf, env->value_len)
+#endif
+            != EF_NO_ERR) {
 		   ef_print("ef_backup_recovery error\n");
 		}
 
@@ -1668,9 +2187,24 @@ void backup_recovery(void)
 
 }
 
+void mcfg_print_env(void)
+{
+    if(partionDev.index_nv_mcfg == 0)
+    {
+        EF_INFO("partition table no mcfg partition.\n");
+    }
+    else
+    {
+        ef_print_env_partion(partionDev.index_nv_mcfg);
+    }
+}
 
 void customer_print_env(void)
 {
+#ifdef CONFIG_MATTER_CUSTOMER_LFS
+    customer_lfs_print();
+    return;
+#else
 	if(partionDev.index_nv_customer == 0)
 	{
         EF_INFO("partition table no customer partition.\n");
@@ -1680,6 +2214,7 @@ void customer_print_env(void)
 		ef_print_env_partion(partionDev.index_nv_customer);
 	}
 
+#endif
 }
 
 void develop_print_env(void)
@@ -1777,12 +2312,20 @@ static void env_auto_update(void)
 static bool check_sec_hdr_cb(sector_meta_data_t sector, void *arg1, void *arg2)
 {
     if (!sector->check_ok) {
-        EF_INFO("Warning: Sector header check failed. Set it to default.\n");
-        ef_port_env_unlock();
-        ef_env_set_default();
-        ef_port_env_lock();
-        return true;
-    } else if (sector->status.dirty == SECTOR_DIRTY_GC) {
+        size_t *failed_count = arg1;
+
+        EF_INFO("Warning: Sector header check failed, sector_addr=0x%08X, magic=0x%08X. Format this sector.\n",
+                sector->addr, sector->magic);
+        (*failed_count) ++;
+        format_sector(sector->addr, SECTOR_NOT_COMBINED);
+    }
+
+    return false;
+}
+
+static bool check_and_recovery_gc_cb(sector_meta_data_t sector, void *arg1, void *arg2)
+{
+    if (sector->check_ok && sector->status.dirty == SECTOR_DIRTY_GC) {
         /* make sure the GC request flag to true */
         gc_request = true;
         /* resume the GC operate */
@@ -1810,6 +2353,17 @@ static bool check_and_recovery_env_cb(env_meta_data_t env, void *arg1, void *arg
         //TODO 绘制异常处理的状态装换图
         write_status(env->addr.start, status_table, ENV_STATUS_NUM, ENV_ERR_HDR);
         return true;
+    } else if (!env->crc_is_ok && env->status == ENV_WRITE) {
+        /* 写入完成但数据坏：标记 DELETED + sector dirty，触发 GC 回收 */
+        uint8_t status_table[ENV_STATUS_TABLE_SIZE];
+        uint32_t dirty_addr;
+        write_status(env->addr.start, status_table, ENV_STATUS_NUM, ENV_DELETED);
+        dirty_addr = EF_ALIGN_DOWN(env->addr.start, SECTOR_SIZE) + SECTOR_DIRTY_OFFSET;
+        if (read_status(dirty_addr, status_table, SECTOR_DIRTY_STATUS_NUM) == SECTOR_DIRTY_FALSE) {
+            write_status(dirty_addr, status_table, SECTOR_DIRTY_STATUS_NUM, SECTOR_DIRTY_TRUE);
+        }
+        gc_request = true;
+        return false;
     }
 
     return false;
@@ -1825,14 +2379,37 @@ EfErrCode ef_load_env(void)
     EfErrCode result = EF_NO_ERR;
     struct env_meta_data env;
     struct sector_meta_data sector;
-	
-    /* lock the ENV cache */
-    ef_port_env_lock();
+    size_t check_failed_count = 0;
 
+	
     /* check all sector header */
-    result = sector_iterator(&sector, SECTOR_STORE_UNUSED, NULL, NULL, check_sec_hdr_cb, false);
+	
+    ef_port_env_lock();
+    result = sector_iterator(&sector, SECTOR_STORE_UNUSED, &check_failed_count, NULL, check_sec_hdr_cb, false);
 	if(result == EF_READ_ERR)
 	{
+		EF_INFO("Error: ef_load_env header scan failed, env_start=0x%08X, env_total_len=0x%08X, result=%d.\n",
+                env_start_addr, env_total_len, result);
+		EF_DEBUG("ERROR: sector_iterator result = %d.\n", result);
+		ef_port_env_unlock();
+		return result;
+	}
+	ef_port_env_unlock();
+
+	/* all sector header check failed */
+    if (check_failed_count == (env_total_len / SECTOR_SIZE)) {
+        EF_INFO("Warning: All sector header check failed. Set it to default. check_failed_count = %d\n",check_failed_count);
+        ef_env_set_default();
+    }
+
+    /* lock the ENV cache */
+    ef_port_env_lock();
+    /* check all sector header for recovery GC */
+    result = sector_iterator(&sector, SECTOR_STORE_UNUSED, NULL, NULL, check_and_recovery_gc_cb, false);
+	if(result == EF_READ_ERR)
+	{
+		EF_INFO("Error: ef_load_env GC recovery scan failed, env_start=0x%08X, env_total_len=0x%08X, result=%d.\n",
+                env_start_addr, env_total_len, result);
 		EF_DEBUG("ERROR: sector_iterator result = %d.\n", result);
 		ef_port_env_unlock();
 		return result;
@@ -1902,17 +2479,29 @@ EfErrCode ef_env_init(ef_env const *default_env, signed int default_env_size) {
         partionDev.index_nv_customer = 0;
         partionDev.partion[0].base = env_start_addr;
         partionDev.partion[0].length = env_total_len;		
+#ifdef CONFIG_MATTER_CUSTOMER_LFS
+        /* A valid partition table is required; never guess a filesystem address. */
+        return EF_PARTITION_STATUS_ERR;
+#else
         result = ef_load_env();
+#endif
     } else {
+#ifdef CONFIG_MATTER_CUSTOMER_LFS
+        result = customer_lfs_init();
+        if (result != EF_NO_ERR) { return result; }
+#else
         result = ef_env_init_index(partionDev.index_nv_customer);
+#endif
 		if(result != EF_READ_ERR)
 		{
-			if(partionDev.index_cfg != 0)
-	        	ef_env_init_index(partionDev.index_cfg);
+            if(partionDev.index_cfg != 0)
+                ef_env_init_index(partionDev.index_cfg);
 			if(partionDev.index_nv_develop != 0)
 	        	ef_env_init_index(partionDev.index_nv_develop);
 			if(partionDev.index_nv_amt != 0)
 	        	ef_env_init_index(partionDev.index_nv_amt);
+			if(partionDev.index_nv_mcfg != 0)
+	        	ef_env_init_index(partionDev.index_nv_mcfg);
 		}
     }
 
@@ -1964,7 +2553,7 @@ int partion_parser(env_meta_data_t env)
 	{
 		partionDev.index_cfg = partionDev.num - 1;
 	}
-	if (!strncmp(env->name, PARTION_NAME_NV_CUSTOMER, strlen(PARTION_NAME_NV_CUSTOMER)))
+	else if (!strncmp(env->name, PARTION_NAME_NV_CUSTOMER, strlen(PARTION_NAME_NV_CUSTOMER)))
 	{
 		partionDev.index_nv_customer = partionDev.num-1;
 	}
@@ -1975,6 +2564,10 @@ int partion_parser(env_meta_data_t env)
 	else if (!strncmp(env->name, PARTION_NAME_NV_AMT, strlen(PARTION_NAME_NV_AMT)))
 	{
 		partionDev.index_nv_amt = partionDev.num-1;
+	}
+	else if (!strncmp(env->name, PARTION_NAME_NV_MCFG, strlen(PARTION_NAME_NV_MCFG)))
+	{
+		partionDev.index_nv_mcfg = partionDev.num-1;
 	}
 
 	return EF_NO_ERR;
@@ -2038,6 +2631,7 @@ void partion_print_all(void)
 	}
 }
 
+#if 0
 void partion_get_string_part(char *buff, unsigned int len)
 {
     int i;
@@ -2060,7 +2654,24 @@ void partion_get_string_part(char *buff, unsigned int len)
         }
     }
 }
+#else
+int partion_info_get_by_index(int i, char **key, unsigned int *addr, unsigned int * length)
+{
+	struct _partion_info * pPartion;
 
+	if (i >= partionDev.num)
+	{
+		return -1;
+	}
+
+	pPartion = &partionDev.partion[i];
+	*key = pPartion->key;
+	*addr = pPartion->base;
+	*length = pPartion->length;
+
+	return 0;
+}
+#endif
 
 int partion_init(void)
 {

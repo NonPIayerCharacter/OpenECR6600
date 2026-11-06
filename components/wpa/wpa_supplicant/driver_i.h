@@ -122,6 +122,21 @@ static inline struct wpa_scan_results * wpa_drv_get_scan_results2(
 	return NULL;
 }
 
+static inline struct dl_list* wpa_drv_get_glance_scan_results2(struct wpa_supplicant* wpa_s)
+{
+    if (wpa_s->driver->get_glance_scan_results2)
+        return wpa_s->driver->get_glance_scan_results2(wpa_s->drv_priv);
+    return NULL;
+}
+
+static inline int wpa_drv_flush_glance_scan_results2(
+	struct wpa_supplicant *wpa_s)
+{
+	if (wpa_s->driver->flush_glance_scan_results2)
+		return wpa_s->driver->flush_glance_scan_results2(wpa_s->drv_priv);
+	return -1;
+}
+
 static inline int wpa_drv_get_bssid(struct wpa_supplicant *wpa_s, u8 *bssid)
 {
 	if (wpa_s->driver->get_bssid) {

@@ -30,6 +30,7 @@
 ****************************************************************************/
 typedef enum {
     SYSTEM_EVENT_WIFI_READY = 0,           /**< WiFi ready */
+    SYSTEM_EVENT_SCAN_NOT_FOUND,           /**< station scan not found */
     SYSTEM_EVENT_SCAN_DONE,                /**< finish scanning AP */
     SYSTEM_EVENT_STA_START,                /**< station start */
     SYSTEM_EVENT_STA_STOP,                 /**< station stop */
@@ -40,11 +41,10 @@ typedef enum {
     SYSTEM_EVENT_STA_GOT_IP,               /**< station got IP from connected AP */
     SYSTEM_EVENT_STA_LOST_IP,              /**< station lost IP and the IP is reset to 0 */
     SYSTEM_EVENT_STA_4WAY_HS_FAIL,         /**< station 4-Way Handshake failed, pre-shared key may be incorrect*/
-    SYSTEM_EVENT_STA_WPS_ER_SUCCESS,       /**< station wps succeeds in enrollee mode */
+    SYSTEM_EVENT_STA_WPS_ER_NODEV,         /**<station wps no scan res in enrollee mode*/
     SYSTEM_EVENT_STA_WPS_ER_FAILED,        /**< station wps fails in enrollee mode */
-    SYSTEM_EVENT_STA_WPS_ER_TIMEOUT,       /**< station wps timeout in enrollee mode */
-    SYSTEM_EVENT_STA_WPS_ER_PIN,           /**< station wps pin code in enrollee mode */
     SYSTEM_EVENT_STA_SAE_AUTH_FAIL,
+    SYSTEM_EVENT_STA_SCAN_MISMATCH,        /**< station scan found target AP but network selection mismatch */
     SYSTEM_EVENT_AP_START,                 /**< soft-AP start */
     SYSTEM_EVENT_AP_STOP,                  /**< soft-AP stop */
     SYSTEM_EVENT_AP_STACONNECTED,          /**< a station connected to soft-AP */
@@ -67,6 +67,7 @@ typedef struct {
     uint32_t status;          /**< status of scanning APs */
     uint8_t  number;
     uint8_t  scan_id;
+    uint8_t  scan_type;
 } system_event_sta_scan_done_t;
 
 typedef struct {
@@ -110,6 +111,12 @@ typedef struct {
     uint8_t in_out;           /**< sta enter(1)/exit(0) gtk rekey */
 }system_event_sta_gtk_rekey_t;
 
+typedef struct {
+    uint16_t config_error;
+    uint16_t error_indication;
+}system_event_wps_fail_t;
+
+
 typedef union {
     system_event_sta_connected_t               connected;          /**< station connected to AP */
     system_event_sta_disconnected_t            disconnected;       /**< station disconnected to AP */
@@ -119,6 +126,7 @@ typedef union {
     system_event_ap_staconnected_t             sta_connected;      /**< a station connected to soft-AP */
     system_event_ap_stadisconnected_t          sta_disconnected;   /**< a station disconnected to soft-AP */
     system_event_sta_gtk_rekey_t               in_out_rekey;       /**< station enter/exit gtk rekey */
+    system_event_wps_fail_t                    wps_fail;
 } system_event_info_t;
 
 typedef struct {
@@ -144,11 +152,12 @@ typedef sys_err_t (*system_event_cb_t)(void *ctx, system_event_t *event);
 sys_err_t sys_event_loop_init(system_event_cb_t cb, void *ctx);
 sys_err_t sys_event_process_default(system_event_t *event);
 system_event_cb_t sys_event_loop_set_cb(system_event_cb_t cb, void *ctx);
+sys_err_t sys_event_loop_clear_cb(system_event_cb_t cb);
 sys_err_t sys_event_send(system_event_t *event);
 void sys_event_set_default_wifi_handlers();
 void sys_event_reset_wifi_handlers(system_event_id_t eventid, system_event_handler_t func);
 void wifi_handle_sta_connect_event(system_event_t *event, bool nv_save);
-
-
+void wifi_event_cb_register(system_event_handler_t cb);
 #endif/*_FILENAME_H*/
+
 

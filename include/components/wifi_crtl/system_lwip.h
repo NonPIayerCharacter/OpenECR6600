@@ -324,5 +324,8 @@ uint16_t net_rx_buf_extra_size(void);
 int enable_lwip_napt(int vif, int enable);
 #endif
 
+int system_lwip_get_ipv6_enable(void);
+int system_lwip_set_ipv6_enable(int enable);
+
 #endif/*_SYSTEM_LWIP_H*/
 

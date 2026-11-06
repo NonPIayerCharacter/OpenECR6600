@@ -116,6 +116,21 @@ typedef enum {
 #define DHCP_BOOTREQUEST            1
 #define DHCP_BOOTREPLY              2
 
+#define DHCP_ACTION_STOP  1
+#define DHCP_ACTION_RELEASE 2
+
+char *g_dhcp_message[] = {
+    "invalid",
+    "discover",
+    "offesr",
+    "request",
+    "decline",
+    "ack",
+    "nak",
+    "release",
+    "inform"
+};
+
 /* DHCP message types */
 #define DHCP_DISCOVER               1
 #define DHCP_OFFER                  2

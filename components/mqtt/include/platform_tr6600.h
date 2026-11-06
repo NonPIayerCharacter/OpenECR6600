@@ -1,8 +1,3 @@
-/*
- * This file is subject to the terms and conditions defined in
- * file 'LICENSE', which is part of this source code package.
- * Tuan PM <tuanpm at live dot com>
- */
 #ifndef _PLATFORM_TR6600_H_
 #define _PLATFORM_TR6600_H_
 
@@ -36,9 +31,12 @@ void ms_to_timeval(int timeout_ms, struct timeval *tv);
 #define MEM_CHECK(a, action) do { \
                                     if (!(a)) \
                                     { \
-                                        os_printf(LM_APP, LL_INFO, "%s:%d (%s): %s", __FILE__, __LINE__, __FUNCTION__, "Memory exhausted"); \
+                                        os_printf(LM_APP, LL_INFO, "%s:%d (%s): %s\r\n", __FILE__, __LINE__, __FUNCTION__, "Memory exhausted"); \
                                         action; \
                                     } \
                                 }while (0)
-
+#define OK_CHECK(a, action) if ((a) != 0) {                                                     \
+            os_printf(LM_APP, LL_ERR, "%s(%d): %s\r\n", __FUNCTION__, __LINE__, "Failed with non 0 err code"); \
+            action;                                                                                               \
+        }
 #endif

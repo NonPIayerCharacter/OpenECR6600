@@ -4,12 +4,14 @@
 #include "lwip/ip_addr.h"
 #include "system_def.h"
 #include "system_log.h"
+#include "../../../wpa/src/utils/list.h"
 
 //#include "netinet/in.h"  //liuyong
 #define __maybe_unused __attribute__((unused))
 
 #define WIFI_SSID_MAX_LEN   (32 + 1)
-#define WIFI_PWD_MAX_LEN    (64) // pwd string support max length is 63
+#define WIFI_PWD_MAX_LEN    (64 + 1) // pwd string support max length is 63
+#define WIFI_SOFTAP_STA_HOSTNAME_MAX_LEN (64) /* includes the terminating null byte */
 
 #define MAC_STR				    "%02X:%02X:%02X:%02X:%02X:%02X"
 #define MAC_VALUE(a)			(a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5]
@@ -35,6 +37,7 @@
 typedef enum {
     STATION_IF = 0,
     SOFTAP_IF,
+    MONITOR_IF,
     MAX_IF
 } wifi_interface_e;
 
@@ -44,6 +47,7 @@ typedef enum {
     TCPIP_DHCP_STATIC,      /**static ip, don't use dhcpc to get address.**/
     TCPIP_DHCP_STARTED,     /**< DHCP client/server already been started */
     TCPIP_DHCP_STOPPED,     /**< DHCP client/server already been stopped */
+    TCPIP_DHCP_ABORD,       /**< DHCP client/server limit to start */
     TCPIP_DHCP_STATUS_MAX
 }dhcp_status_t;
 
@@ -63,6 +67,20 @@ typedef struct ip_info {
     ip_addr_t dns2;
 } ip_info_t;
 
+struct wpa_scan_res_min {
+    uint8_t bssid[6];
+    uint8_t channel;
+    int8_t rssi;
+    uint8_t auth_method;
+    uint8_t cipher;
+    uint8_t ssid_len;
+    uint8_t ssid[];
+};
+
+struct wpa_rwnx_driver_scan_res_min {
+	struct dl_list list;
+	struct wpa_scan_res_min res;
+};
 static inline int wpa_get_drv_idx_by_name(const char *name)
 {
     return name[2] - '0';

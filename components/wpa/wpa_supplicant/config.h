@@ -446,7 +446,7 @@ struct wpa_config {
 	 * re-authentication (by setting fast_reauth=0). Normally, there is no
 	 * need to disable fast re-authentication.
 	 */
-	//int fast_reauth;
+	int fast_reauth;
 
 	/**
 	 * opensc_engine_path - Path to the OpenSSL engine for opensc
@@ -454,7 +454,7 @@ struct wpa_config {
 	 * This is an OpenSSL specific configuration option for loading OpenSC
 	 * engine (engine_opensc.so); if %NULL, this engine is not loaded.
 	 */
-	//char *opensc_engine_path;
+	char *opensc_engine_path;
 
 	/**
 	 * pkcs11_engine_path - Path to the OpenSSL engine for PKCS#11
@@ -462,7 +462,7 @@ struct wpa_config {
 	 * This is an OpenSSL specific configuration option for loading PKCS#11
 	 * engine (engine_pkcs11.so); if %NULL, this engine is not loaded.
 	 */
-	//char *pkcs11_engine_path;
+	char *pkcs11_engine_path;
 
 	/**
 	 * pkcs11_module_path - Path to the OpenSSL OpenSC/PKCS#11 module
@@ -471,7 +471,7 @@ struct wpa_config {
 	 * path to OpenSC/PKCS#11 engine (opensc-pkcs11.so); if %NULL, this
 	 * module is not loaded.
 	 */
-	//char *pkcs11_module_path;
+	char *pkcs11_module_path;
 
 	/**
 	 * openssl_ciphers - OpenSSL cipher string
@@ -480,7 +480,7 @@ struct wpa_config {
 	 * default ciphers. If not set, "DEFAULT:!EXP:!LOW" is used as the
 	 * default.
 	 */
-	//char *openssl_ciphers;
+	char *openssl_ciphers;
 
 	/**
 	 * pcsc_reader - PC/SC reader name prefix
@@ -502,7 +502,7 @@ struct wpa_config {
 	/**
 	 * external_sim - Use external processing for SIM/USIM operations
 	 */
-	//int external_sim;
+	int external_sim;
 
 	/**
 	 * driver_param - Driver interface parameters
@@ -549,53 +549,53 @@ struct wpa_config {
 	 * changed. This update may replace the old configuration which can
 	 * remove comments from it in case of a text file configuration.
 	 */
-	//int update_config;
+	int update_config;
 
 	/**
 	 * blobs - Configuration blobs
 	 */
-	//struct wpa_config_blob *blobs;
+	struct wpa_config_blob *blobs;
 
 	/**
 	 * uuid - Universally Unique IDentifier (UUID; see RFC 4122) for WPS
 	 */
-	//u8 uuid[16];
+	u8 uuid[16];
 
 	/**
 	 * device_name - Device Name (WPS)
 	 * User-friendly description of device; up to 32 octets encoded in
 	 * UTF-8
 	 */
-	//char *device_name;
+	char *device_name;
 
 	/**
 	 * manufacturer - Manufacturer (WPS)
 	 * The manufacturer of the device (up to 64 ASCII characters)
 	 */
-	//char *manufacturer;
+	char *manufacturer;
 
 	/**
 	 * model_name - Model Name (WPS)
 	 * Model of the device (up to 32 ASCII characters)
 	 */
-	//char *model_name;
+	char *model_name;
 
 	/**
 	 * model_number - Model Number (WPS)
 	 * Additional device description (up to 32 ASCII characters)
 	 */
-	//char *model_number;
+	char *model_number;
 
 	/**
 	 * serial_number - Serial Number (WPS)
 	 * Serial number of the device (up to 32 characters)
 	 */
-	//char *serial_number;
+	char *serial_number;
 
 	/**
 	 * device_type - Primary Device Type (WPS)
 	 */
-	//u8 device_type[WPS_DEV_TYPE_LEN];
+	u8 device_type[WPS_DEV_TYPE_LEN];
 
 	/**
 	 * config_methods - Config Methods
@@ -608,13 +608,13 @@ struct wpa_config {
 	 * virtual_display physical_display
 	 * virtual_push_button physical_push_button.
 	 */
-	//char *config_methods;
+	char *config_methods;
 
 	/**
 	 * os_version - OS Version (WPS)
 	 * 4-octet operating system version number
 	 */
-	//u8 os_version[4];
+	u8 os_version[4];
 
 	/**
 	 * country - Country code
@@ -633,14 +633,14 @@ struct wpa_config {
 	 *   2 = process received credentials internally and pass them over
 	 *	ctrl_iface to external program(s)
 	 */
-	//int wps_cred_processing;
+	int wps_cred_processing;
 
 #define MAX_SEC_DEVICE_TYPES 5
 	/**
 	 * sec_device_types - Secondary Device Types (P2P)
 	 */
-	//u8 sec_device_type[MAX_SEC_DEVICE_TYPES][WPS_DEV_TYPE_LEN];
-	//int num_sec_device_types;
+	u8 sec_device_type[MAX_SEC_DEVICE_TYPES][WPS_DEV_TYPE_LEN];
+	int num_sec_device_types;
 
 	//int p2p_listen_reg_class;
 	//int p2p_listen_channel;
@@ -657,7 +657,7 @@ struct wpa_config {
 	//int p2p_ignore_shared_freq;
 	//int p2p_optimize_listen_chan;
 
-	//struct wpabuf *wps_vendor_ext_m1;
+	struct wpabuf *wps_vendor_ext_m1;
 
 #define MAX_WPS_VENDOR_EXT 10
 	/**
@@ -829,7 +829,7 @@ struct wpa_config {
 	 * parameter) to allow Windows 7 to use PBC instead of PIN (e.g., from
 	 * a label in the AP).
 	 */
-	//int pbc_in_m1;
+	int pbc_in_m1;
 
 	/**
 	 * autoscan - Automatic scan parameters or %NULL if none
@@ -905,7 +905,7 @@ struct wpa_config {
 	 * proactive_key_caching=1 parameter. okc=1 can be used to change this
 	 * default behavior.
 	 */
-	//int okc;
+	int okc;
 
 	/**
 	 * pmf - Whether to enable/require PMF by default
@@ -1031,7 +1031,7 @@ struct wpa_config {
 	 * during initial RSN connection, after roaming, or during a PTK
 	 * rekeying operation.
 	 */
-	//int key_mgmt_offload;
+	int key_mgmt_offload;
 
 	/**
 	 * user_mpm - MPM residency
@@ -1056,7 +1056,7 @@ struct wpa_config {
 	 * This controls whether peer certificates for authentication server and
 	 * its certificate chain are included in EAP peer certificate events.
 	 */
-	//int cert_in_cb;
+	int cert_in_cb;
 
 	/**
 	 * mesh_max_inactivity - Timeout in seconds to detect STA inactivity
@@ -1085,7 +1085,7 @@ struct wpa_config {
 	 * requirements, e.g., for finding an AP that uses hidden SSID
 	 * (scan_ssid=1) or P2P device discovery.
 	 */
-	//int passive_scan;
+	int passive_scan;
 
 	/**
 	 * reassoc_same_bss_optim - Whether to optimize reassoc-to-same-BSS
@@ -1098,7 +1098,7 @@ struct wpa_config {
 	 * This priority value will be set to each network profile that is added
 	 * by executing the WPS protocol.
 	 */
-	//int wps_priority;
+	int wps_priority;
 
 	/**
 	 * fst_group_id - FST group ID

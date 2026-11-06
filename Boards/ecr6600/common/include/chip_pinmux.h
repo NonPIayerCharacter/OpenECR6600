@@ -32,6 +32,7 @@ void chip_uart1_pinmux_cfg(int flow_ctrl_en);
 int chip_uart2_pinmux_cfg(int tx_num);
 int chip_i2c_pinmux_cfg(int scl_num, int sda_num);
 void chip_io_mode_pinmux_cfg(int io_num,int mode);
+int chip_io_mode_pinmux_get (int io_num);
 
 
 

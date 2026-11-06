@@ -106,9 +106,7 @@ typedef enum {
 #define SPI_SERVICE_MASK_EVT 0xF000
 #define SPI_SERVICE_MASK_DAT 0x0FFF
 typedef enum {
-    SPI_SERVICE_DATA_STA = 0x1000,
     SPI_SERVICE_DATA_AP = 0x2000,
-    SPI_SERVICE_DATA_INFO = 0x3000,
     SPI_SERVICE_DATA_INT = 0x9000,
     SPI_SERVICE_DATA_MSG = 0xA000,
 } spi_service_event_t;

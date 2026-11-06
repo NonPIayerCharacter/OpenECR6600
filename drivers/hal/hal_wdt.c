@@ -153,7 +153,7 @@ void wdt_feed_task(void *arg)
 
 
 static int test_task_handle = 0;
-static int cmd_hal_wdt_test(cmd_tbl_t *t, int argc, char *argv[])
+static int cmd_hal_wdt_test( int argc, char *argv[])
 {
 	if(argc > 3)
 	{

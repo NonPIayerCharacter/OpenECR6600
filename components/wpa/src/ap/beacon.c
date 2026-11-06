@@ -436,8 +436,8 @@ static u8 * hostapd_gen_probe_resp(struct hostapd_data *hapd,
 	if (hapd->iface->fst_ies)
 		buflen += wpabuf_len(hapd->iface->fst_ies);
 #endif /* CONFIG_FST */
-	//if (hapd->conf->vendor_elements)
-	//	buflen += wpabuf_len(hapd->conf->vendor_elements);
+	if (hapd->conf->vendor_elements)
+		buflen += wpabuf_len(hapd->conf->vendor_elements);
 	/*if (hapd->conf->vendor_vht) {
 		buflen += 5 + 2 + sizeof(struct ieee80211_vht_capabilities) +
 			2 + sizeof(struct ieee80211_vht_operation);
@@ -599,11 +599,11 @@ static u8 * hostapd_gen_probe_resp(struct hostapd_data *hapd,
 
 	//pos = hostapd_eid_mbo(hapd, pos, (u8 *) resp + buflen - pos);
 
-	/*if (hapd->conf->vendor_elements) {
+	if (hapd->conf->vendor_elements) {
 		os_memcpy(pos, wpabuf_head(hapd->conf->vendor_elements),
 			  wpabuf_len(hapd->conf->vendor_elements));
 		pos += wpabuf_len(hapd->conf->vendor_elements);
-	}*/
+	}
 
 	*resp_len = pos - (u8 *) resp;
 	return (u8 *) resp;
@@ -1106,8 +1106,8 @@ int ieee802_11_build_ap_params(struct hostapd_data *hapd,
 	if (hapd->iface->fst_ies)
 		tail_len += wpabuf_len(hapd->iface->fst_ies);
 #endif /* CONFIG_FST */
-	//if (hapd->conf->vendor_elements)
-	//	tail_len += wpabuf_len(hapd->conf->vendor_elements);
+	if (hapd->conf->vendor_elements)
+		tail_len += wpabuf_len(hapd->conf->vendor_elements);
 
 #ifdef CONFIG_IEEE80211AC
 	if (hapd->conf->vendor_vht) {
@@ -1295,11 +1295,11 @@ int ieee802_11_build_ap_params(struct hostapd_data *hapd,
 
 	//tailpos = hostapd_eid_mbo(hapd, tailpos, tail + tail_len - tailpos);
 
-	/*if (hapd->conf->vendor_elements) {
+	if (hapd->conf->vendor_elements) {
 		os_memcpy(tailpos, wpabuf_head(hapd->conf->vendor_elements),
 			  wpabuf_len(hapd->conf->vendor_elements));
 		tailpos += wpabuf_len(hapd->conf->vendor_elements);
-	}*/
+	}
 
 	tail_len = tailpos > tail ? tailpos - tail : 0;
 

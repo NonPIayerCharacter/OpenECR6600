@@ -37,7 +37,7 @@
 
 /* default environment variables set for user */
 static const ef_env default_env_set[] = {
-    {"nv_version","0.01"}
+    {"nv_version","0.02"}
 };
 
 QueueHandle_t ef_mutex;

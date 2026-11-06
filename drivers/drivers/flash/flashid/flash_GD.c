@@ -28,7 +28,25 @@
 #define GD25Q16E			0x1540C8
 #define GD25Q32E			0x1640C8
 #define GD25Q128E			0x1840C8
-
+/* GD25Q32E memory protect, keep QE(bit9) set when updating SR1/SR2 */
+#define GD25Q32E_PROTECT_ED_0x400000	0x021C			// all
+#define GD25Q32E_PROTECT_ED_0x3FF000	0x4244			// 1023/1024
+#define GD25Q32E_PROTECT_ED_0x3FE000	0x4248			// 511/512
+#define GD25Q32E_PROTECT_ED_0x3FC000	0x424C			// 255/256
+#define GD25Q32E_PROTECT_ED_0x3F8000	0x4250			// 127/128
+#define GD25Q32E_PROTECT_ED_0x3F0000	0x4204			// 63/64
+#define GD25Q32E_PROTECT_ED_0x3E0000	0x4208			// 31/32
+#define GD25Q32E_PROTECT_ED_0x3C0000	0x420C			// 15/16
+#define GD25Q32E_PROTECT_ED_0x380000	0x4210			// 7/8
+#define GD25Q32E_PROTECT_ED_0x300000	0x4214			// 3/4
+#define GD25Q32E_PROTECT_ED_0x200000	0x0238			// 1/2
+#define GD25Q32E_PROTECT_ED_0x100000	0x0234			// 1/4
+#define GD25Q32E_PROTECT_ED_0x80000		0x0230			// 1/8
+#define GD25Q32E_PROTECT_ED_0x40000		0x022C			// 1/16
+#define GD25Q32E_PROTECT_ED_0x20000		0x0228			// 1/32
+#define GD25Q32E_PROTECT_ED_0x10000		0x0224			// 1/64
+#define GD25Q32E_PROTECT_ED_0x00		0x0200			// none
+#define GD25Q32E_PROTECT_BIT			0x427C
 
 
 static const T_SPI_FLASH_PARAM gd_flash_params[] = 
@@ -84,7 +102,22 @@ static const T_SPI_FLASH_PARAM gd_flash_params[] =
 	},
 	
 };
+static void spiFlash_GD_write_status_reg(unsigned int status, int is_volatile)
+{
+	unsigned int sr1 = status & 0xFF;
+	unsigned int sr2 = (status >> 8) & 0xFF;
 
+	if (is_volatile)
+	{
+		spiFlash_format_wr_vol(SPIFLASH_CMD_WRSR_1, sr1, 1);
+		spiFlash_format_wr_vol(SPIFLASH_CMD_WRSR_2, sr2, 1);
+	}
+	else
+	{
+		spiFlash_format_wr(SPIFLASH_CMD_WRSR_1, sr1, 1);
+		spiFlash_format_wr(SPIFLASH_CMD_WRSR_2, sr2, 1);
+	}
+}
 
 static int spiFlash_GD_check_addr(unsigned int flash_id, int addr, int length)
 {
@@ -540,6 +573,108 @@ int spiFlash_GD_OTP_Write(struct _T_SPI_FLASH_DEV *  p_flash_dev, unsigned int a
 	return FLASH_RET_SUCCESS;	
 }
 
+
+int spiflash_GD_wr_status(unsigned int status)
+{
+	if ((Flash_ID & 0xFFFFFF) != GD25Q32E)
+	{
+		return FLASH_RET_ID_ERROR;
+	}
+
+	spiFlash_GD_write_status_reg(status, 0);
+
+	return FLASH_RET_SUCCESS;
+}
+
+
+int spiflash_GD_wr_protect(unsigned int addr)
+{
+	unsigned int protect_value = 0;
+	unsigned int rdsr = 0;
+
+	if ((Flash_ID & 0xFFFFFF) == GD25Q32E)
+	{
+		if(addr == 0x021C)
+		{
+			protect_value = GD25Q32E_PROTECT_ED_0x400000;
+		}
+		else if(addr >= 0x3FF000)
+		{
+			protect_value = GD25Q32E_PROTECT_ED_0x3FF000;
+		}
+		else if(addr >= 0x3FE000)
+		{
+			protect_value = GD25Q32E_PROTECT_ED_0x3FE000;
+		}
+		else if(addr >= 0x3FC000)
+		{
+			protect_value = GD25Q32E_PROTECT_ED_0x3FC000;
+		}
+		else if(addr >= 0x3F8000)
+		{
+			protect_value = GD25Q32E_PROTECT_ED_0x3F8000;
+		}
+		else if(addr >= 0x3F0000)
+		{
+			protect_value = GD25Q32E_PROTECT_ED_0x3F0000;
+		}
+		else if(addr >= 0x3E0000)
+		{
+			protect_value = GD25Q32E_PROTECT_ED_0x3E0000;
+		}
+		else if(addr >= 0x3C0000)
+		{
+			protect_value = GD25Q32E_PROTECT_ED_0x3C0000;
+		}
+		else if(addr >= 0x380000)
+		{
+			protect_value = GD25Q32E_PROTECT_ED_0x380000;
+		}
+		else if(addr >= 0x300000)
+		{
+			protect_value = GD25Q32E_PROTECT_ED_0x300000;
+		}
+		else if(addr >= 0x200000)
+		{
+			protect_value = GD25Q32E_PROTECT_ED_0x200000;
+		}
+		else if(addr >= 0x100000)
+		{
+			protect_value = GD25Q32E_PROTECT_ED_0x100000;
+		}
+		else if(addr >= 0x80000)
+		{
+			protect_value = GD25Q32E_PROTECT_ED_0x80000;
+		}
+		else if(addr >= 0x40000)
+		{
+			protect_value = GD25Q32E_PROTECT_ED_0x40000;
+		}
+		else if(addr >= 0x20000)
+		{
+			protect_value = GD25Q32E_PROTECT_ED_0x20000;
+		}
+		else if(addr >= 0x10000)
+		{
+			protect_value = GD25Q32E_PROTECT_ED_0x10000;
+		}
+		else
+		{
+			protect_value = GD25Q32E_PROTECT_ED_0x00;
+		}
+
+		spiFlash_GD_write_status_reg(protect_value, 1);
+
+		rdsr = (spiFlash_cmd_rdSR_1() & 0xFF) | ((spiFlash_cmd_rdSR_2() & 0xFF) << 8);
+		if((rdsr & GD25Q32E_PROTECT_BIT) != protect_value)
+		{
+			os_printf(LM_CMD,LL_INFO,"error:flash protect_value = 0x%x,rdsr = 0x%x\n ", protect_value, rdsr);
+			system_assert(0);
+		}
+	}
+
+	return protect_value;
+}
 
 
 int spiFlash_GD_probe(T_SPI_FLASH_DEV *p_flash_dev)

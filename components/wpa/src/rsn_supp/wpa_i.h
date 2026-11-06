@@ -32,6 +32,8 @@ struct wpa_sm {
 	int rx_replay_counter_set;
 	u8 request_counter[WPA_REPLAY_COUNTER_LEN];
 
+	struct rsn_pmksa_cache *pmksa; /* PMKSA cache */
+	struct eapol_sm *eapol; /* EAPOL state machine from upper level code */
 	struct l2_packet_data *l2_preauth;
 	struct l2_packet_data *l2_preauth_br;
 	struct l2_packet_data *l2_tdls;
@@ -63,9 +65,9 @@ struct wpa_sm {
 	//const char *bridge_ifname;
 	u8 bssid[ETH_ALEN];
 
-	//unsigned int dot11RSNAConfigPMKLifetime;
-	//unsigned int dot11RSNAConfigPMKReauthThreshold;
-	//unsigned int dot11RSNAConfigSATimeout;
+	unsigned int dot11RSNAConfigPMKLifetime;
+	unsigned int dot11RSNAConfigPMKReauthThreshold;
+	unsigned int dot11RSNAConfigSATimeout;
 
 	unsigned int dot11RSNA4WayHandshakeFailures;
 

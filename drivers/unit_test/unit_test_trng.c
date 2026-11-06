@@ -7,7 +7,7 @@
 #include "oshal.h"
 #include "hal_trng.h"
 
-static int utest_trng_out(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_trng_out( int argc, char *argv[])
 {
    unsigned int trng_value = 0;
    trng_value = hal_trng_get();
@@ -19,7 +19,7 @@ static int utest_trng_out(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_trng, trng, utest_trng_out, "unit test trng out", "ut_trng trng");
 
 
-static int utest_prng_out(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_prng_out( int argc, char *argv[])
 {
    unsigned int prng_value = 0;
    prng_value = hal_prng_get();

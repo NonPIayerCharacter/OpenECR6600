@@ -37,12 +37,14 @@ MAXOPTIMIZATION := $(patsubst "%",%,$(CONFIG_OPTION_ARCHOPTIMIZATION))
 #			include path
 #
 ###########################################
+BOARD_COMMON_DIR ?= $(BOARD_DIR)/../common
+
 ARCHINCLUDES += -include nds32_intrinsic.h  -include $(GENERATED_DIR)/config.h
 
-ARCHINCLUDES += -I "${TOPDIR}/arch/${CONFIG_CPU_ARCH}/include" -I "$(BOARD_DIR)/../common/include" -I "$(GENERATED_DIR)" 
+ARCHINCLUDES += -I "${TOPDIR}/arch/${CONFIG_CPU_ARCH}/include" -I "$(BOARD_COMMON_DIR)/include" -I "$(GENERATED_DIR)" 
 
 ifeq ($(CONFIG_LWIP),y)
-	ARCHINCLUDES += -I "${TOPDIR}/components/lwip/lwip-2.1.0/src/include" -I "${TOPDIR}/components/lwip/contrib/port"
+	ARCHINCLUDES += -I "${TOPDIR}/components/lwip/lwip-2.1.0/src/include" -I "${TOPDIR}/components/lwip/contrib/port" -I "${TOPDIR}/components/cjson"
 endif
 	ARCHINCLUDES += $(foreach incpath,$(shell find ${TOPDIR}/include -type d),-I "$(incpath)")
 
@@ -59,7 +61,7 @@ ifeq ($(CONFIG_ECR_BLE),y)
 endif 
 
 ifeq ($(CONFIG_ECR6600_WIFI),y)
-	ARCHINCLUDES += -I "$(BOARD_DIR)/../common/include/$(patsubst "%",%,$(CONFIG_WIFI_PLATFORM))" -I "$(BOARD_DIR)/../common/include/$(patsubst "%",%,$(CONFIG_WIFI_PLATFORM))/$(patsubst "%",%,$(CONFIG_WIFI_PHY_TYPE))"
+	ARCHINCLUDES += -I "$(BOARD_COMMON_DIR)/include/$(patsubst "%",%,$(CONFIG_WIFI_PLATFORM))" -I "$(BOARD_COMMON_DIR)/include/$(patsubst "%",%,$(CONFIG_WIFI_PLATFORM))/$(patsubst "%",%,$(CONFIG_WIFI_PHY_TYPE))"
 endif 
 
 ARCHINCLUDES += -I "${TOPDIR}/PS/wifi/ecr6600/ip/lmac/src/rwnx"
@@ -70,13 +72,37 @@ ARCHINCLUDES += -I "${TOPDIR}/PS/wifi/rf/ecr6600/src"
 #			version number
 #
 ###########################################
+ifeq ($(CONFIG_TOMCAT),y)
+REL_V ?= 1.0.2
+SDK_V ?= 1.0.2
 
-REL_V ?= v2.1.23.14
-SDK_V ?= v2.1.23.16
+CMARCODEFINES+=-D__RELEASE_VERSION='"relv$(REL_V)"'
+CMARCODEFINES+=-DSDK_VERSION='"$(SDK_V)"'
+else ifeq ($(CONFIG_YIZHI),y)
+REL_V ?= 02050105
+SDK_V ?= AIA2L500
+
+CMARCODEFINES+=-D__RELEASE_VERSION='"relv$(REL_V)"'
+CMARCODEFINES+=-DSDK_VERSION='"$(SDK_V)"'
+else ifeq ($(CONFIG_COZE),y)
+REL_V ?= 02050019
+SDK_V ?= AIA2D500
+
+CMARCODEFINES+=-D__RELEASE_VERSION='"relv$(REL_V)"'
+CMARCODEFINES+=-DSDK_VERSION='"$(SDK_V)"'
+else ifeq ($(CONFIG_QZT),y)
+REL_V ?= 1.0.0
+SDK_V ?= AIA2E500
+
+CMARCODEFINES+=-D__RELEASE_VERSION='"relv$(REL_V)"'
+CMARCODEFINES+=-DSDK_VERSION='"$(SDK_V)"'
+else
+REL_V ?= 1.0.0
+SDK_V ?= V0.0.1B01
 
 CMARCODEFINES+=-D__RELEASE_VERSION='"relv$(REL_V)"'
 CMARCODEFINES+=-DSDK_VERSION='"ECR6600F_$(SDK_V)"'
-
+endif
 ###########################################
 #
 #			default MAC
@@ -98,10 +124,25 @@ CMARCODEFINES+=-DPROMPT_SYMBOL='"$(notdir $(BOARD_DIR))"'
 ###########################################
 
 
+ifdef CONFIG_CPP
+ifdef CONFIG_CODEC
+ARCHCFLAGS = -ldsp -mext-dsp -fmessage-length=0 -mcmodel=large $(MAXOPTIMIZATION)
+else
+ARCHCFLAGS = -fmessage-length=0 -mcmodel=large $(MAXOPTIMIZATION) 
+endif
+ARCHOPTIMIZATION = -fno-jump-tables -ffunction-sections -fdata-sections -g 
 
+
+else
+ifdef CONFIG_CODEC
+ARCHCFLAGS =  -ldsp -mext-dsp  -fmessage-length=0 -mcmodel=large -std=gnu99 $(MAXOPTIMIZATION) 
+else
 ARCHCFLAGS =  -fmessage-length=0 -mcmodel=large -std=gnu99 $(MAXOPTIMIZATION) 
 # ARCHOPTIMIZATION = -fno-omit-frame-pointer -ffunction-sections -fdata-sections  -g 
+endif
 ARCHOPTIMIZATION = -ffunction-sections -fdata-sections  -g 
+
+endif
 
 ARCHWARNINGS := -Wall
 ifeq ($(CONFIG_BUILD_WARNING_NONE),y)
@@ -110,10 +151,17 @@ endif
 ARCHWARNINGS += -Werror
 ARCHWARNINGS += -Wno-strict-aliasing 
 
+ifdef CONFIG_CPP
+CFLAGS += -std=gnu99 -march=v3s ${ARCHCFLAGS} ${ARCHOPTIMIZATION} ${ARCHWARNINGS} ${ARCHINCLUDES} ${CMARCODEFINES}
+else
 CFLAGS +=  ${ARCHCFLAGS} ${ARCHOPTIMIZATION} ${ARCHWARNINGS} ${ARCHINCLUDES} ${CMARCODEFINES}
+endif
+
+CPPFLAGS += -march=v3s ${ARCHCFLAGS} ${ARCHOPTIMIZATION} ${ARCHWARNINGS} ${ARCHINCLUDES} ${CMARCODEFINES}
 
 ifeq ($(CONFIG_OPTION_SAVE_TEMPS),y)
 CFLAGS += --save-temps 
+CPPFLAGS += --save-temps 
 endif
 ###########################################
 #
@@ -121,18 +169,16 @@ endif
 #
 ###########################################
 
-AFLAGS = -I "${TOPDIR}/arch/${CONFIG_CPU_ARCH}/include" -I "$(BOARD_DIR)/../common/include" -I "$(GENERATED_DIR)" -include $(GENERATED_DIR)/config.h
+AFLAGS = -I "${TOPDIR}/arch/${CONFIG_CPU_ARCH}/include" -I "$(BOARD_COMMON_DIR)/include" -I "$(GENERATED_DIR)" -include $(GENERATED_DIR)/config.h
 
 ###########################################
 #
 #			XIP_ADDR
 #
 ###########################################
-ifdef XIP_ADDR
+
+XIP_ADDR ?= 0x7000
 AFLAGS += -DXIP_ADDR_OFFSET=$(XIP_ADDR)
-else
-XIP_ADDR = 0x7000
-endif
 
 ###########################################
 #

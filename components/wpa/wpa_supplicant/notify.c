@@ -319,17 +319,17 @@ void wpas_notify_scan_done(struct wpa_supplicant *wpa_s, int success)
 	//wpas_dbus_signal_scan_done(wpa_s, success);
 
 #ifdef INCLUDE_STANDALONE
-    if (wpa_s->last_scan_req == MANUAL_SCAN_REQ) {
-    	system_event_t evt;	
-    	os_memset(&evt, 0, sizeof(evt));
-    	evt.event_id = SYSTEM_EVENT_SCAN_DONE;
-        if (wpa_s->ifname && strlen(wpa_s->ifname) == 3 /*wlX*/) {
-            evt.vif = wpa_get_drv_idx_by_name(wpa_s->ifname);
-        }
-    	sys_event_send(&evt);	
+    // if (wpa_s->last_scan_req == MANUAL_SCAN_REQ) {
+    system_event_t evt;
+    os_memset(&evt, 0, sizeof(evt));
+    evt.event_id = SYSTEM_EVENT_SCAN_DONE;
+    evt.event_info.scan_done.scan_type = wpa_s->last_scan_req;
+    if (wpa_s->ifname && strlen(wpa_s->ifname) == 3 /*wlX*/) {
+        evt.vif = wpa_get_drv_idx_by_name(wpa_s->ifname);
     }
+    sys_event_send(&evt);
+    //}
 #endif
-
 }
 
 
@@ -353,9 +353,9 @@ void wpas_notify_wps_credential(struct wpa_supplicant *wpa_s,
 
 #ifdef CONFIG_WPS
 	/* notify the old DBus API */
-	wpa_supplicant_dbus_notify_wps_cred(wpa_s, cred);
+	//wpa_supplicant_dbus_notify_wps_cred(wpa_s, cred);
 	/* notify the new DBus API */
-	wpas_dbus_signal_wps_cred(wpa_s, cred);
+	//wpas_dbus_signal_wps_cred(wpa_s, cred);
 #endif /* CONFIG_WPS */
 }
 
@@ -367,7 +367,7 @@ void wpas_notify_wps_event_m2d(struct wpa_supplicant *wpa_s,
 	//	return;
 
 #ifdef CONFIG_WPS
-	wpas_dbus_signal_wps_event_m2d(wpa_s, m2d);
+	//wpas_dbus_signal_wps_event_m2d(wpa_s, m2d);
 #endif /* CONFIG_WPS */
 }
 
@@ -379,7 +379,12 @@ void wpas_notify_wps_event_fail(struct wpa_supplicant *wpa_s,
 	//	return;
 
 #ifdef CONFIG_WPS
-	wpas_dbus_signal_wps_event_fail(wpa_s, fail);
+    system_event_t evt; 
+    os_memset(&evt, 0, sizeof(evt));
+    evt.event_id = SYSTEM_EVENT_STA_WPS_ER_FAILED;
+    evt.event_info.wps_fail.config_error = fail->config_error;
+    evt.event_info.wps_fail.error_indication = fail->error_indication;
+    sys_event_send(&evt);
 #endif /* CONFIG_WPS */
 }
 
@@ -390,7 +395,7 @@ void wpas_notify_wps_event_success(struct wpa_supplicant *wpa_s)
 	//	return;
 
 #ifdef CONFIG_WPS
-	wpas_dbus_signal_wps_event_success(wpa_s);
+	//wpas_dbus_signal_wps_event_success(wpa_s);
 #endif /* CONFIG_WPS */
 }
 
@@ -400,7 +405,7 @@ void wpas_notify_wps_event_pbc_overlap(struct wpa_supplicant *wpa_s)
 	//	return;
 
 #ifdef CONFIG_WPS
-	wpas_dbus_signal_wps_event_pbc_overlap(wpa_s);
+	//wpas_dbus_signal_wps_event_pbc_overlap(wpa_s);
 #endif /* CONFIG_WPS */
 }
 
@@ -534,7 +539,7 @@ void wpas_notify_bss_wps_changed(struct wpa_supplicant *wpa_s,
 	//	return;
 
 #ifdef CONFIG_WPS
-	wpas_dbus_bss_signal_prop_changed(wpa_s, WPAS_DBUS_BSS_PROP_WPS, id);
+	//wpas_dbus_bss_signal_prop_changed(wpa_s, WPAS_DBUS_BSS_PROP_WPS, id);
 #endif /* CONFIG_WPS */
 }
 

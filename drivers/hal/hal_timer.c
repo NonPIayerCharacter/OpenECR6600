@@ -6,6 +6,8 @@
 #include "hal_timer.h"
 //#include "pit.h"
 
+#ifndef CONFIG_CUSTOM_LXW
+
 int hal_timer_start(int timer_handle)
 {
 	return drv_timer_ioctrl(timer_handle, DRV_TIMER_CTRL_START, NULL);;
@@ -57,5 +59,4 @@ int hal_timer_get_current_time(int timer_handle, unsigned int *us)
 {
 	return drv_timer_ioctrl(timer_handle,DRV_TIMER_CALCULATE_CURRRET_TIME, us);
 }
-
-
+#endif

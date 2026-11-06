@@ -1,0 +1,11 @@
+{
+  "default": true,
+  "line-length": false,
+  "first-heading-h1": false,
+  "first-line-heading": false,
+  "no-duplicate-heading": {
+    "siblings_only": true
+  },
+  "heading-increment": false,
+  "no-trailing-punctuation": false
+}

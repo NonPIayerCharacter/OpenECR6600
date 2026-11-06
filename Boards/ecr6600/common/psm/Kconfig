@@ -1,8 +1,8 @@
 config PSM_SURPORT
-      bool 
+      bool
       default y
 
 config WIFI_TWT
-      bool 
+      bool
       default y
 

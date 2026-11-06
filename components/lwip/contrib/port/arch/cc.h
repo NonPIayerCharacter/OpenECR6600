@@ -48,15 +48,10 @@ typedef int32_t            s32_t;
 typedef uintptr_t          mem_ptr_t;
 
 /* Plaform specific diagnostic output */
-#define LWIP_PLATFORM_DIAG(x) do{ system_printf x; } while( 0 );
+#define LWIP_PLATFORM_DIAG(x) do { system_printf x; } while(0)
 
-#ifdef CONFIG_SYSTEM_IRQ
-#define LWIP_PLATFORM_ASSERT(x) do { os_printf(LM_APP, LL_INFO, "A L:%d F:%s\n", \
-                                     __LINE__, __FILE__);    vPortEnterCritical((unsigned int)__FUNCTION__, (unsigned int)__LINE__);  for( ;; ); asm("trap 0");  for( ;; );} while(0)
-#else
-#define LWIP_PLATFORM_ASSERT(x) do { os_printf(LM_APP, LL_INFO, "A L:%d F:%s\n", \
-                                           __LINE__, __FILE__);    vPortEnterCritical(  );  for( ;; ); asm("trap 0");  for( ;; );} while(0)
-#endif
+#define LWIP_PLATFORM_ASSERT(x) do { os_printf(LM_APP, LL_INFO, "Assertion \"%s\" failed at line %d in %s\n", \
+      x, __LINE__, __FILE__);  system_assert(0); } while(0)
 
 #ifdef LWIP_DEBUG
 #define LWIP_ERROR(message, expression, handler) do { if (!(expression)) { \

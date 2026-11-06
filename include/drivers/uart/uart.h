@@ -136,6 +136,14 @@ int drv_uart_tx_ready(unsigned int uart_base);
  */
 int drv_uart_tx_fifo_and_tsr_empty();
 
+#ifdef CONFIG_CUSTOM_YED
+/**
+ * @brief Check whether one UART TX FIFO and shift register are both empty.
+ * @return 1 when physically idle, otherwise 0.
+ */
+int drv_uart_tx_fifo_and_tsr_empty_by_num(E_DRV_UART_NUM uart_num);
+#endif
+
 /**    @brief       Uart tx put.
  *     @details     Put the data into the Transmitter Holding Register and transfer it out.
  *     @param[in]   uart_base  Uart base address
@@ -220,11 +228,12 @@ int drv_uart_get_recv_len(E_DRV_UART_NUM uart_num);
 
 
 
-#define DRV_UART_CTRL_GET_REG_BASE 		0
-#define DRV_UART_CTRL_SET_BAUD_RATE     1
-#define DRV_UART_CTRL_REGISTER_RX_CALLBACK 		2
-#define DRV_UART_CTRL_RX_RESET	 		3
-//#define DRV_UART_CTRL_RX_INTR_ENABLE	 	4
+#define DRV_UART_CTRL_GET_REG_BASE 	    0
+#define DRV_UART_CTRL_SET_BAUD_RATE         1
+#define DRV_UART_CTRL_GET_RX_CALLBACK       2
+#define DRV_UART_CTRL_REGISTER_RX_CALLBACK  3
+#define DRV_UART_CTRL_RX_RESET              4
+//#define DRV_UART_CTRL_RX_INTR_ENABLE      5
 
 /**    @brief		Handle uart different events.
 *	   @details 	The events handled include reg_base, set baud, isr_register, rx_reset.

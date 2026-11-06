@@ -166,8 +166,15 @@ raw_input(struct pbuf *p, struct netif *inp)
   /* this allows multiple pcbs to match against the packet by design */
   while (pcb != NULL) {
     if ((pcb->protocol == proto) && raw_input_local_match(pcb, broadcast) &&
-        (((pcb->flags & RAW_FLAGS_CONNECTED) == 0) ||
-         ip_addr_cmp(&pcb->remote_ip, ip_current_src_addr()))) {
+        (
+#ifdef CONFIG_MATTER
+          ((pcb->intf_filter == NULL || pcb->intf_filter == inp) &&
+          (ip_addr_isany(&pcb->local_ip) ||
+           ip_addr_cmp(&(pcb->local_ip), ip_current_dest_addr()))
+           ) ||
+#endif
+         (((pcb->flags & RAW_FLAGS_CONNECTED) == 0) ||
+          ip_addr_cmp(&pcb->remote_ip, ip_current_src_addr())))) {
       if (proto == IP_PROTO_ICMP) {
         struct icmp_echo_hdr *iecho = (struct icmp_echo_hdr *)((u8_t *)p->payload + IPH_HL_BYTES((struct ip_hdr *)p->payload));
         if (iecho->id == WIFI_HEARTBEAT_PING_ID || iecho->type == ICMP_ECHO) {
@@ -369,6 +376,12 @@ raw_sendto(struct raw_pcb *pcb, struct pbuf *p, const ip_addr_t *ipaddr)
 
   LWIP_DEBUGF(RAW_DEBUG | LWIP_DBG_TRACE, ("raw_sendto\n"));
 
+#ifdef CONFIG_MATTER
+  if (pcb->intf_filter != NULL) {
+    netif = pcb->intf_filter;
+  } else 
+  #endif
+  
   if (pcb->netif_idx != NETIF_NO_INDEX) {
     netif = netif_get_by_index(pcb->netif_idx);
   } else {

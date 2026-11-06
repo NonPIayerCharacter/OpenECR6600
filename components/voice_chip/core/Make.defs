@@ -1,0 +1,8 @@
+ifeq ($(CONFIG_VOICE_CHIP),y)
+	VPATH += :voice_chip/core
+	INCPATHS += $(TOPDIR)/include/components/voice_chip
+
+	CSRCS += voice_chip_core.c voice_chip_service.c
+endif
+
+

@@ -70,6 +70,9 @@ typedef enum
 {
 	DRV_ADC_TEMP_LOW,
 	DRV_ADC_TEMP_NORMAL,
+#ifdef CONFIG_CUSTOM_YZ
+	DRV_ADC_TEMP_HIGH_ADD_MEDIUM,//hanfeng cfo add index, 50°c
+#endif
 	DRV_ADC_TEMP_HIGH,
 
 	DRV_ADC_TEMP_MAX
@@ -172,7 +175,11 @@ int temprature_sensor_get_bg();
  int get_25_tempsensor_to_volt();
  DRV_ADC_TEMP_TYPE hal_adc_get_temp_type();
  void time_check_temp();
+#if defined(CONFIG_CUSTOM_YZ) && defined(CONFIG_ADC)
+ int low_temp_check();
+#endif
 
  int drv_aux_adc_dynamic_init();
  int drv_adc_lock(void);
- int drv_adc_unlock(void); void psm_drv_adc_init(void);
+ int drv_adc_unlock(void);
+ void psm_drv_adc_init(void);

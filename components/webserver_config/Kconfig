@@ -1,0 +1,11 @@
+menuconfig WEBSERVER_CONFIG
+	bool "WEB server support"
+	select HTTPSERVER
+	default n
+	if WEBSERVER_CONFIG
+
+		config WEB_CAPTIVE_PORTAL_ENABLE
+		bool "WEB server captive portal support"
+		default n
+
+	endif

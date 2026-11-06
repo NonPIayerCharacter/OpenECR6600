@@ -21,7 +21,7 @@
 
 
 #ifdef CONFIG_FLASH_TH
-
+unsigned int g_flash_unprotect;
 
 
 /* TH */
@@ -41,6 +41,9 @@
 #define PROTECT_ED_0x1C0000			0x420C 			//7/8
 #define PROTECT_ED_0x180000			0x4210			//3/4
 #define PROTECT_ED_0x100000			0x0234			//1/2
+#define PROTECT_ED_0x80000			0x0230			//1/4
+#define PROTECT_ED_0x40000			0x022c			//1/8
+
 #define PROTECT_ED_0x200000			0x0218			//all
 
 
@@ -63,7 +66,10 @@ static const T_SPI_FLASH_PARAM th_flash_params[] =
 
 };
 
-
+void spiFlash_TH_unprotect(unsigned int unprotect)
+{
+    g_flash_unprotect = unprotect;
+}
 
 static int spiFlash_TH_check_addr(unsigned int flash_id, int addr, int length)
 {
@@ -562,21 +568,41 @@ unsigned int  spiflash_TH_wr_protect(unsigned int addr)
 		{
 //			os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x1C0000\n ");
 			protect_value = PROTECT_ED_0x1C0000;
-		}	
+		}
 		else if(addr >= 0x180000)
 		{
 //			os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x180000\n ");
 			protect_value = PROTECT_ED_0x180000;
 		}
+#if !defined(CONFIG_FIRST_2M) && !defined(CONFIG_ALL_MEMORY)
 		else if(addr >= 0x100000)
 		{
 //			os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x100000\n ");
 			protect_value = PROTECT_ED_0x100000;
 		}
+#endif
+#if !defined(CONFIG_FIRST_1M) && !defined(CONFIG_FIRST_2M) && !defined(CONFIG_ALL_MEMORY)
+		else if(addr >= 0x80000)
+		{
+//			os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x80000\n ");
+			protect_value = PROTECT_ED_0x80000;
+		}
+#endif
+#if defined(CONFIG_FIRST_256K)
+		else if(addr >= 0x40000)
+		{
+//			os_printf(LM_CMD,LL_INFO,"PROTECT_ED_0x40000\n ");
+			protect_value = PROTECT_ED_0x40000;
+		}
+#endif
 		else
 		{
-//			os_printf(LM_CMD,LL_INFO,"222PROTECT_ED_0x200000\n ");
-			protect_value = PROTECT_ED_0x200000;
+            if (g_flash_unprotect != 0) {
+                protect_value = 0x200;
+            } else {
+                // os_printf(LM_CMD,LL_INFO,"222PROTECT_ED_0x200000\n ");
+                protect_value = PROTECT_ED_0x200000;
+            }
 		}
 		
 		spiFlash_format_wr_vol(SPIFLASH_CMD_WRSR_1, protect_value , 2);

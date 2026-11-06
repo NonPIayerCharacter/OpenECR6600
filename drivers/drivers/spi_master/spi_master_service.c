@@ -361,10 +361,11 @@ static int spi_master_send_packet(spi_service_mem_t *smem)
     cfg->evt = smem->memType;
     cfg->len = smem->memLen;
     cfg->type = SPI_MASTER_TYPE_WRITE;
+    cfg->net = smem->memNet;
     spi_master_write_data((unsigned int *)cfg, sizeof(spi_service_ctrl_t));
 
     state = spi_master_read_state();
-    if ((state & 0x10000) == 0) {
+    if ((state & BIT16) == 0) {
         if (priv->funcset.txDone) {
             priv->funcset.txDone(smem);
         }
@@ -375,6 +376,7 @@ static int spi_master_send_packet(spi_service_mem_t *smem)
 
     state = state & 0xFFFF;
     if (smem->memLen != state) {
+        /* something wrong occur, stop the transfer, txDone to release the mem */
         if (state) {
             if (priv->funcset.txDone) {
                 priv->funcset.txDone(smem);
@@ -383,6 +385,7 @@ static int spi_master_send_packet(spi_service_mem_t *smem)
             os_printf(LM_OS, LL_ERR, "DMA send not match memLen %d-%d\n", smem->memLen, state);
             return -1;
         } else {
+        /* slave has no memory, retry times */
             os_sem_post(priv->spiBusSem);
             os_msleep(1);
             return -2;
@@ -409,10 +412,11 @@ void spi_master_read_info(unsigned int regaddr, unsigned int len)
     cfg->evt = regaddr;
     cfg->len = len;
     cfg->type = SPI_MASTER_TYPE_READ;
+    cfg->net = 0;
     spi_master_write_data((unsigned int *)cfg, sizeof(spi_service_ctrl_t));
 
     state = spi_master_read_state();
-    if ((state & 0x10000) == 0) {
+    if ((state & BIT16) == 0) {
         os_sem_post(priv->spiBusSem);
         os_printf(LM_OS, LL_ERR, "spi read info state timeout.\n");
         return;
@@ -446,28 +450,32 @@ static void spi_master_read_packet(void)
     cfg->evt = SPI_SERVICE_TYPE_STOH;
     cfg->len = 0;
     cfg->type = SPI_MASTER_TYPE_READ;
+    cfg->net = 0;
     spi_master_write_data((unsigned int *)cfg, sizeof(spi_service_ctrl_t));
 
     state = spi_master_read_state();
-    if ((state & 0x10000) == 0) {
+    if ((state & BIT16) == 0) {
         os_sem_post(priv->spiBusSem);
         os_printf(LM_OS, LL_ERR, "spi read state timeout.\n");
         return;
     }
 
-    if ((state & SPI_SERVICE_DATA_MSG) == SPI_SERVICE_DATA_MSG) {
+    if ((state & SPI_SERVICE_MASK_EVT) == SPI_SERVICE_DATA_MSG) {
         cfg->evt = SPI_SERVICE_TYPE_MSG;
         cfg->len = state & SPI_SERVICE_MASK_DAT;
-    } else if ((state & SPI_SERVICE_DATA_INT) == SPI_SERVICE_DATA_INT) {
+    } else if ((state & SPI_SERVICE_MASK_EVT) == SPI_SERVICE_DATA_INT) {
         cfg->evt = SPI_SERVICE_TYPE_INT;
         cfg->len = state & SPI_SERVICE_MASK_DAT;
     } else {
+        if ((state & SPI_SERVICE_MASK_EVT) == SPI_SERVICE_DATA_AP) {
+            cfg->net = SPI_SERVICE_NET_AP;
+        }
         cfg->len = state & SPI_SERVICE_MASK_DAT;
     }
 
     if (cfg->len == 0 && cfg->evt != SPI_SERVICE_TYPE_INT) {
         os_sem_post(priv->spiBusSem);
-        os_printf(LM_OS, LL_ERR, "read 0x%x may something error\n", cfg->evt);
+        os_printf(LM_OS, LL_DBG, "read 0x%x may something error\n", cfg->evt);
         return;
     }
 
@@ -497,9 +505,10 @@ static void spi_master_rx_thread(void *arg)
 {
     spi_master_priv_t *priv = (spi_master_priv_t *)arg;
     int ret;
-
+    unsigned int val = 2; 
     do {
-        priv->gpioValue = drv_gpio_read(SPI_SERVICE_GPIO_NUM(SPI_MASTER_GPIO));
+        drv_gpio_read(SPI_SERVICE_GPIO_NUM(SPI_MASTER_GPIO), &val);
+        priv->gpioValue = val ;
         if (priv->gpioValue == 0) {
             drv_gpio_ioctrl(SPI_SERVICE_GPIO_NUM(SPI_MASTER_GPIO), DRV_GPIO_CTRL_INTR_ENABLE, DRV_GPIO_CTRL_INTR_ENABLE);
             ret = os_sem_wait(priv->spiIrqSem, WAIT_FOREVER);

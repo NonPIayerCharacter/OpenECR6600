@@ -381,8 +381,8 @@ void xsl_monitor_start(void)
     wifi_set_promiscuous_rx_cb(xsl_frame_process);
     wifi_set_promiscuous(true);
 }
-#if 1
-int frame_dump(cmd_tbl_t *t, int argc, char *argv[])
+
+int frame_dump(int argc, char *argv[])
 {
     struct xsl_ap_info *temp_ap_info,*prev;
     struct xsl_sta_info *temp_sta_info;
@@ -406,7 +406,7 @@ int frame_dump(cmd_tbl_t *t, int argc, char *argv[])
     return CMD_RET_SUCCESS;
 }
 CLI_CMD(xsl_debug, frame_dump, "", "");
-int xsl_sniffer_stop(cmd_tbl_t *t, int argc, char *argv[])
+int xsl_sniffer_stop(int argc, char *argv[])
 {
     xsl_sniffer_deinit();
 
@@ -415,12 +415,11 @@ int xsl_sniffer_stop(cmd_tbl_t *t, int argc, char *argv[])
 CLI_CMD(xsl_sniffer_stop, xsl_sniffer_stop, "", "");
 
 
-int xsl_sniffer_start(cmd_tbl_t *t, int argc, char *argv[])
+int xsl_sniffer_start(int argc, char *argv[])
 {
     xsl_sniffer_init();
 
     return CMD_RET_SUCCESS;
 }
 CLI_CMD(xsl_sniffer_start, xsl_sniffer_start, "", "");
-#endif
 

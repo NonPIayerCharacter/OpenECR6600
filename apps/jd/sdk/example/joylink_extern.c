@@ -28,12 +28,13 @@
 #include "joylink_extern_ota.h"
 #include "joylink_extern_led.h"
 #include "joylink_flash.h"
-#include "sdk_version.h"
+#include "eswin_sdk_version.h"
 
 #if defined(CONFIG_JD_FREERTOS_PAL)
 #include <wifi_crtl/system_wifi.h>
 #include <wifi_crtl/system_wifi_def.h>
-#include <mbedtls/config.h>
+#include <mbedtls/mbedtls_config.h>
+#include <mbedtls/build_info.h>
 #include <mbedtls/platform.h>
 #include <mbedtls/net_sockets.h>
 #include <mbedtls/entropy.h>

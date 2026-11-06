@@ -130,8 +130,10 @@ static int _mbedtls_client_init(DTLSDataParams *pDataParams, DTLSConnectParams *
             Log_e("load client cert file failed returned -0x%x", ret);
             return QCLOUD_ERR_SSL_CERT;
         }
-
-        if ((ret = mbedtls_pk_parse_keyfile(&(pDataParams->private_key), pConnectParams->key_file, "")) != 0) {
+        
+        mbedtls_ctr_drbg_context ctr_drbg;
+        mbedtls_ctr_drbg_init( &ctr_drbg );
+        if ((ret = mbedtls_pk_parse_keyfile(&(pDataParams->private_key), pConnectParams->key_file, "",mbedtls_ctr_drbg_random, &ctr_drbg)) != 0) {
             Log_e("load client key file failed returned -0x%x", ret);
             return QCLOUD_ERR_SSL_CERT;
         }

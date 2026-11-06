@@ -81,7 +81,11 @@
 #define configTICK_RATE_HZ						( ( TickType_t ) 500 )
 #define configUSE_PREEMPTION					1
 #define configMAX_PRIORITIES					( 12 )
+#ifdef CONFIG_WIFI_MESH
+#define configMINIMAL_STACK_SIZE				( 256 )
+#else
 #define configMINIMAL_STACK_SIZE				( 202 )
+#endif
 #define configMAX_TASK_NAME_LEN					( 16 )
 #define configUSE_16_BIT_TICKS					0
 #define configIDLE_SHOULD_YIELD					1
@@ -205,6 +209,17 @@ extern void vPortCleanUpTCB ( void *pxTCB );
 #define CONFIG_FREERTOS_THREAD_LOCAL_STORAGE_POINTERS 1  //temp
 #define configNUM_THREAD_LOCAL_STORAGE_POINTERS CONFIG_FREERTOS_THREAD_LOCAL_STORAGE_POINTERS
 #define configTHREAD_LOCAL_STORAGE_DELETE_CALLBACKS 1
+
+/* Andes mculib keeps printf-family formatter state in local BSS globals.
+ * Save/restore those words on task switches so task-level preemption sees
+ * task-private formatter state. Normal hardware interrupts enter through the
+ * common interrupt_hipri_vsr path, which always calls irq_in()/irq_out(), so
+ * ISR protection is implemented there. SWI uses the task switch path; trap/
+ * exception paths are crash handling and are intentionally not covered by this
+ * normal ISR protection. */
+#define configLIBC_PRINTF_BSS_TASK_LOCAL 1
+#define configLIBC_PRINTF_BSS_IRQ_LOCAL 1
+#define configLIBC_PRINTF_BSS_IRQ_STACK_DEPTH 1
 
 #endif /* FREERTOS_CONFIG_H */
 

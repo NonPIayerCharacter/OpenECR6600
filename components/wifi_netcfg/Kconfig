@@ -1,0 +1,4 @@
+menuconfig WIFI_NETCFG
+	bool "WiFi Netcfg Component Support"
+	default n
+

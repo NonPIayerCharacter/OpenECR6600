@@ -123,6 +123,16 @@ ip6_route(const ip6_addr_t *src, const ip6_addr_t *dest)
      * as that would be a zone violation, resulting in any packets sent to
      * that netif being dropped on output. */
     return NULL;
+  } else if (ip6_addr_isany(src) && ip6_addr_has_scope(dest, IP6_UNKNOWN)) {
+    /* An unzoned scoped destination uses the default active link. */
+    if (netif_default != NULL && netif_is_up(netif_default) && netif_is_link_up(netif_default)) {
+      return netif_default;
+    }
+    NETIF_FOREACH(netif) {
+      if (netif_is_up(netif) && netif_is_link_up(netif)) {
+        return netif;
+      }
+    }
   }
 #endif /* LWIP_IPV6_SCOPES */
 
@@ -505,6 +515,7 @@ ip6_input_accept(struct netif *netif)
  * @return ERR_OK if the packet was processed (could return ERR_* if it wasn't
  *         processed, but currently always returns ERR_OK)
  */
+extern int system_lwip_get_ipv6_enable(void);
 err_t
 ip6_input(struct pbuf *p, struct netif *inp)
 {
@@ -535,6 +546,12 @@ ip6_input(struct pbuf *p, struct netif *inp)
     return ERR_OK;
   }
 
+  if (system_lwip_get_ipv6_enable() == 0) {
+     pbuf_free(p);
+     IP6_STATS_INC(ip6.err);
+     IP6_STATS_INC(ip6.drop);
+     return ERR_OK;
+  }
 #ifdef LWIP_HOOK_IP6_INPUT
   if (LWIP_HOOK_IP6_INPUT(p, inp)) {
     /* the packet has been eaten */

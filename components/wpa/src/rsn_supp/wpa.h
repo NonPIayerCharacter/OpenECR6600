@@ -43,8 +43,8 @@ struct wpa_sm_ctx {
 	void (*set_config_blob)(void *ctx, struct wpa_config_blob *blob);
 	const struct wpa_config_blob * (*get_config_blob)(void *ctx,
 							  const char *name);
-	//int (*mlme_setprotection)(void *ctx, const u8 *addr,
-	//			  int protection_type, int key_type);
+	int (*mlme_setprotection)(void *ctx, const u8 *addr,
+				  int protection_type, int key_type);
 	int (*update_ft_ies)(void *ctx, const u8 *md, const u8 *ies,
 			     size_t ies_len);
 	int (*send_ft_action)(void *ctx, u8 action, const u8 *target_ap,
@@ -73,7 +73,7 @@ struct wpa_sm_ctx {
 		const struct hostapd_freq_params *params);
 	int (*tdls_disable_channel_switch)(void *ctx, const u8 *addr);
 #endif /* CONFIG_TDLS */
-    #if 0
+    #if 1
 	void (*set_rekey_offload)(void *ctx, const u8 *kek, size_t kek_len,
 				  const u8 *kck, size_t kck_len,
 				  const u8 *replay_ctr);
@@ -99,7 +99,7 @@ struct rsn_supp_config {
 	void *network_ctx;
 	int peerkey_enabled;
 	int allowed_pairwise_cipher; /* bitfield of WPA_CIPHER_* */
-	//int proactive_key_caching;
+	int proactive_key_caching;
 	int eap_workaround;
 	void *eap_conf_ctx;
 	const u8 *ssid;
@@ -143,7 +143,7 @@ void wpa_sm_key_request(struct wpa_sm *sm, int error, int pairwise);
 
 int wpa_parse_wpa_ie(const u8 *wpa_ie, size_t wpa_ie_len,
 		     struct wpa_ie_data *data);
-
+void wpa_sm_aborted_cached(struct wpa_sm *sm);
 int wpa_sm_rx_eapol(struct wpa_sm *sm, const u8 *src_addr,
 		    const u8 *buf, size_t len);
 int wpa_sm_parse_own_wpa_ie(struct wpa_sm *sm, struct wpa_ie_data *data);

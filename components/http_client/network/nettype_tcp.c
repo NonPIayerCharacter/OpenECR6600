@@ -20,7 +20,7 @@ int nettype_tcp_write(network_t *n, unsigned char *write_buf, int len, int timeo
 
 int nettype_tcp_connect(network_t* n)
 {
-    n->socket = platform_net_socket_connect(n->host, n->port, PLATFORM_NET_PROTO_TCP);
+    n->socket = platform_net_socket_connect(n->host, n->port, PLATFORM_NET_PROTO_TCP, n->timeout_ms);
     if (n->socket < 0)
         RETURN_ERROR(n->socket);
     

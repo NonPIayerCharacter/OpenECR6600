@@ -26,8 +26,12 @@
 #include "psm_system.h"
 #endif
 #include "hal_system.h"
+#include "hal_sntp.h"
 #include "os_event.h"
 
+#ifdef CONFIG_MATTER
+void OnECR6600SystemEvent(system_event_t *system_event);
+#endif
 /****************************************************************************
 *                                                Local Macros
 ****************************************************************************/
@@ -69,22 +73,25 @@ extern void ap_cap_record_interface();
 #endif
 extern EventGroupHandle_t os_event_handle;
 extern bool is_wifi_conn;
+
 static sys_err_t system_event_sta_got_ip_default(system_event_t *event)
 {
-    struct netif *netif_temp;
+    struct netif *netif_temp = NULL;
+    netif_db_t *netdb = NULL;
+    unsigned int ipaddr = 0;
 
+#ifndef CONFIG_APP_AT_COMMAND
 #if defined(CONFIG_SNTP)
-    extern void sntp_start(void);
-    sntp_start();
+    hal_sntp_init(HAL_SNTP_SYNC_NTP);
+#endif
 #endif
 
+    netdb = get_netdb_by_index(STATION_IF);
     netif_temp = get_netif_by_index(STATION_IF);
-	#ifdef CONFIG_IPV6
-	u32_t ip_addr = ntohl(ip4_addr_get_u32(&netif_temp->ip_addr.u_addr.ip4));
-	#else
-    u32_t ip_addr = ntohl(ip4_addr_get_u32(&netif_temp->ip_addr));
-	#endif
-    os_printf(LM_APP, LL_INFO, "ip addr:%d.%d.%d.%d\n", (ip_addr>>24)&0xff, (ip_addr>>16)&0xff,(ip_addr>>8)&0xff, ip_addr&0xff);
+
+    netdb->ipconfig = event->event_info.got_ip.ip_info;
+    ipaddr = ntohl(ip4_addr_get_u32(ip_2_ip4(&netif_temp->ip_addr)));
+    os_printf(LM_APP, LL_INFO, "ip addr:%d.%d.%d.%d\n", (ipaddr>>24)&0xff, (ipaddr>>16)&0xff,(ipaddr>>8)&0xff, ipaddr&0xff);
 #ifdef CONFIG_PSM_SURPORT
 	ap_cap_record_interface();
 	psm_set_device_status(PSM_DEVICE_WIFI_STA,PSM_DEVICE_STATUS_IDLE);
@@ -96,27 +103,41 @@ static sys_err_t system_event_sta_got_ip_default(system_event_t *event)
 
     is_wifi_conn = true;
     discard_dhcp_wait_timer();
+#ifdef CONFIG_WEBSERVER_CONFIG
+    void at_web_update_sta_got_ip_flag(bool flag);
+    at_web_update_sta_got_ip_flag(true);
+#endif
+#ifdef CONFIG_APP_AT_COMMAND
+    extern unsigned char at_get_store_mode(void);
+    if (at_get_store_mode() == 1)
+    {
+        wifi_update_nv_sta_connected(NULL, -1);
+    }
+#endif
 
     xEventGroupSetBits(os_event_handle, OS_EVENT_STA_GOT_IP);
 
 	return SYS_OK;
 }
 
+static sys_err_t system_event_sta_got_ip6_default(system_event_t *event)
+{
+	return SYS_OK;
+}
+
 static sys_err_t system_event_sta_lost_ip_default(system_event_t *event)
 {
+    netif_db_t *netdb = get_netdb_by_index(STATION_IF);
+
+/* sntp not start by default, control by AT order */
+#ifndef CONFIG_APP_AT_COMMAND
 #if defined(CONFIG_SNTP)
-    extern void sntp_stop(void);
-    sntp_stop();
+    hal_sntp_stop_async();
+#endif
 #endif
 
+    memset(&netdb->ipconfig, 0, sizeof(netdb->ipconfig));
     is_wifi_conn = false;
-
-
-    if (event && (wifi_station_dhcpc_status(event->vif) == TCPIP_DHCP_STARTED))
-    {
-       wifi_request_disconnect(event->vif);
-       wifi_config_commit(event->vif);
-    }
 
     return SYS_OK;
 }
@@ -124,8 +145,9 @@ extern uint8_t csa_switch;
 sys_err_t system_event_ap_start_handle_default(system_event_t *event)
 {
     wifi_set_status(event->vif, AP_STATUS_STARTED);
+#if !defined(CONFIG_CUSTOM_LXW) && !defined(CONFIG_WIFI_MESH)
     wifi_softap_dhcps_start(event->vif);
-
+#endif
     if(csa_switch)
         wifi_softap_channel_sync();
     return SYS_OK;
@@ -134,8 +156,9 @@ sys_err_t system_event_ap_start_handle_default(system_event_t *event)
 sys_err_t system_event_ap_stop_handle_default(system_event_t *event)
 {
     wifi_set_status(event->vif, AP_STATUS_STOP);
+#if !defined(CONFIG_CUSTOM_LXW) && !defined(CONFIG_WIFI_MESH)
     wifi_softap_dhcps_stop(event->vif);
-
+#endif
     return SYS_OK;
 }
 
@@ -161,18 +184,32 @@ sys_err_t system_event_sta_connected_handle_default(system_event_t *event)
     if(csa_switch)
         wifi_softap_channel_sync();
     wifi_handle_sta_connect_event(event, true);
-    return SYS_OK;
+
+	return SYS_OK;
 }
 
 sys_err_t system_event_sta_disconnected_handle_default(system_event_t *event)
 {
     wifi_handle_sta_connect_event(event, true);
+
     return SYS_OK;
 }
 
 sys_err_t system_event_scan_done_default(system_event_t *event)
 {
-    wifi_event_scan_handler(event->vif);
+     wifi_event_scan_handler(event->vif,event->event_info.scan_done.scan_type);
+     #ifdef CONFIG_AI_VLLM
+     extern void gserver_set_scan_wifi_count(int count);
+     extern int gserver_get_scan_wifi_count();
+     gserver_set_scan_wifi_count(gserver_get_scan_wifi_count()+ 1);
+     #endif  
+    return SYS_OK;
+}
+
+sys_err_t system_event_wps_fail_default(system_event_t *event)
+{
+    os_printf(LM_APP, LL_INFO, "WPS: fail->config_error = %d\n", event->event_info.wps_fail.config_error);
+    os_printf(LM_APP, LL_INFO, "WPS: fail->error_indication = %d\n", event->event_info.wps_fail.error_indication);
     return SYS_OK;
 }
 
@@ -180,7 +217,7 @@ static sys_err_t sys_system_event_debug(system_event_t *event)
 {
 #if 0
     int vif;
-    
+
     vif = event->vif;
     switch (event->event_id) {
     case SYSTEM_EVENT_WIFI_READY:
@@ -256,6 +293,12 @@ static sys_err_t sys_system_event_debug(system_event_t *event)
     case SYSTEM_EVENT_STA_4WAY_HS_FAIL:
         SYS_LOGD("SYSTEM_EVENT_STA_4WAY_HS_FAIL[%d]", vif);
         break;
+    case SYSTEM_EVENT_SCAN_NOT_FOUND:
+        SYS_LOGD("SYSTEM_EVENT_SCAN_NOT_FOUND[%d]", vif);
+        break;
+    case SYSTEM_EVENT_STA_SCAN_MISMATCH:
+        SYS_LOGD("SYSTEM_EVENT_STA_SCAN_MISMATCH[%d]", vif);
+        break;
     default:
         SYS_LOGW("[%d]unexpected system event %d!", vif, event->event_id);
         break;
@@ -282,6 +325,11 @@ sys_err_t sys_event_process_default(system_event_t *event)
         if (default_event_handlers[event->event_id] != NULL) {
             //SYS_LOGV("enter default callback");
             default_event_handlers[event->event_id](event);
+#ifdef CONFIG_MATTER
+            if (event->event_id != SYSTEM_EVENT_WIFI_READY) {
+                OnECR6600SystemEvent(event);
+            }
+#endif
             //SYS_LOGV("exit default callback");
         }
     } else {
@@ -301,9 +349,12 @@ void sys_event_set_default_wifi_handlers()
      REGISTER_DEFAULT_HANDLER(SYSTEM_EVENT_STA_DISCONNECTED, system_event_sta_disconnected_handle_default);
      REGISTER_DEFAULT_HANDLER(SYSTEM_EVENT_STA_GOT_IP,       system_event_sta_got_ip_default);
      REGISTER_DEFAULT_HANDLER(SYSTEM_EVENT_STA_LOST_IP,      system_event_sta_lost_ip_default);
+     REGISTER_DEFAULT_HANDLER(SYSTEM_EVENT_GOT_IP6,          system_event_sta_got_ip6_default);	 
      REGISTER_DEFAULT_HANDLER(SYSTEM_EVENT_AP_START,         system_event_ap_start_handle_default);
      REGISTER_DEFAULT_HANDLER(SYSTEM_EVENT_AP_STOP,          system_event_ap_stop_handle_default);
      REGISTER_DEFAULT_HANDLER(SYSTEM_EVENT_SCAN_DONE,        system_event_scan_done_default);
+     REGISTER_DEFAULT_HANDLER(SYSTEM_EVENT_STA_WPS_ER_FAILED,        system_event_wps_fail_default);
+
 #undef REGISTER_DEFAULT_HANDLER
 }
 
@@ -313,3 +364,4 @@ void sys_event_reset_wifi_handlers(system_event_id_t eventid, system_event_handl
         default_event_handlers[eventid] = func;
     }
 }
+

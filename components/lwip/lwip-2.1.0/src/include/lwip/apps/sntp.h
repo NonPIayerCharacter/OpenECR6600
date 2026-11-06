@@ -44,6 +44,8 @@
 extern "C" {
 #endif
 
+#define SNTPINTVMIN (15)
+#define SNTPINTVMAX (1073741)
 /* SNTP operating modes: default is to poll using unicast.
    The mode has to be set before calling sntp_init(). */
 #define SNTP_OPMODE_POLL            0
@@ -72,9 +74,6 @@ void sntp_servermode_dhcp(int set_servers_from_dhcp);
 #else /* SNTP_GET_SERVERS_FROM_DHCP */
 #define sntp_servermode_dhcp(x)
 #endif /* SNTP_GET_SERVERS_FROM_DHCP */
-
-void sntp_start(void);
-void sntp_restart(void);
 
 #ifdef __cplusplus
 }

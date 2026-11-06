@@ -35,10 +35,10 @@
 #define AON_PAD_PS_REG								(MEM_BASE_SMU_AON + 0x1C)
 /*1:input enable*/
 #define AON_PAD_IE_REG								(MEM_BASE_SMU_AON + 0x20)
-/*0--from pd_core pimux £¬the IO control signals from pdcore pinmux,
-1-- gpio mode£¬the control signals form gpio module*/
+/*0--from pd_core pimux Â£Â¬the IO control signals from pdcore pinmux,
+1-- gpio modeÂ£Â¬the control signals form gpio module*/
 #define AON_PAD_MODE_REG							(MEM_BASE_SMU_AON + 0x24)
-/*IO driver strength £»0--4ma 1-8ma£» bit0--GPIO0£¬bit1--GPIO1*/
+/*IO driver strength Â£Â»0--4ma 1-8maÂ£Â» bit0--GPIO0Â£Â¬bit1--GPIO1*/
 #define AON_PAD_SR_REG								(MEM_BASE_SMU_AON + 0x28)
 /*agc_ram_sd -> dummy[31],agc_ram_ds -> dummy[30],agc_ram_iso -> dummy[29]*/
 #define AON_DUMMY_REG								(MEM_BASE_SMU_AON + 0x34)

@@ -57,10 +57,3 @@ void http_response_set_status(http_response_t *rsp, unsigned int status)
     HTTP_ROBUSTNESS_CHECK((rsp && status), HTTP_VOID);
     rsp->status = (http_response_status_t)status;
 }
-
-
-
-
-
-
-

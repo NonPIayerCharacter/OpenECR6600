@@ -44,7 +44,6 @@
 #include "lwip/stats.h"
 #include "lwip/mem.h"
 #include "lwip/debug.h"
-#include "lwip/priv/tcp_priv.h"
 
 #include <string.h>
 
@@ -167,60 +166,4 @@ stats_display(void)
 #endif /* LWIP_STATS_DISPLAY */
 
 #endif /* LWIP_STATS */
-#if 0
-u32_t lwip_debug_flags = LWIP_DBG_ON;
-
-void lwip_debug_help()
-{
-    system_printf("\tusage:\nlwip show [stats|netif|tcp [pcb]]\nlwip log [value]\n");
-}
-
-void lwip_debug(int argc, char **argv)
-{
-	unsigned char index, byte_index, value;
-	
-	if (argc <= 2) {
-		return lwip_debug_help();
-	}
-    
-	if (!strcasecmp(argv[1], "show")) {
-        if (!strcasecmp(argv[2], "stats")) {
-#if LWIP_STATS && LWIP_STATS_DISPLAY
-            if (3 >= argc)
-                return stats_display();
-            else if (!strcasecmp(argv[3], "ip"))
-                return IP_STATS_DISPLAY();
-            else if (!strcasecmp(argv[3], "icmp"))
-                return ICMP_STATS_DISPLAY();
-            else if (!strcasecmp(argv[3], "udp"))
-                return UDP_STATS_DISPLAY();
-            else if (!strcasecmp(argv[3], "tcp"))
-                return TCP_STATS_DISPLAY();
-            else if (!strcasecmp(argv[3], "link"))
-                return LINK_STATS_DISPLAY();
-            else if (!strcasecmp(argv[3], "etharp"))
-                return ETHARP_STATS_DISPLAY();            
-#else
-            return;
-#endif
-        } else if (!strcasecmp(argv[2], "netif")) {
-            extern void show_netif_status();
-            return show_netif_status();
-        } else if (!strcasecmp(argv[2], "tcp")) {
-            if (argc <= 3)
-               return lwip_debug_help(); 
-            if (!strcasecmp(argv[3], "pcb")) {
-                return tcp_debug_print_pcbs();
-            }
-        }
-	} else if (!strcasecmp(argv[1], "log")) {
-        lwip_debug_flags = strtoul(argv[2], NULL, 0) | LWIP_DBG_ON;
-        system_printf("---set lwip_debug_flags to 0x%08x.\n", lwip_debug_flags);
-        return;
-    }
-
-    return lwip_debug_help();    
-}
-#endif
-
 

@@ -85,6 +85,9 @@ struct udp_pcb {
 /* Protocol specific PCB members */
 
   struct udp_pcb *next;
+  #ifdef CONFIG_MATTER
+  struct netif *intf_filter;
+  #endif
 
   u8_t flags;
   /** ports are in host byte order */
@@ -151,6 +154,14 @@ err_t            udp_sendto_if_src_chksum(struct udp_pcb *pcb, struct pbuf *p,
                                  const ip_addr_t *dst_ip, u16_t dst_port, struct netif *netif,
                                  u8_t have_chksum, u16_t chksum, const ip_addr_t *src_ip);
 #endif /* LWIP_CHECKSUM_ON_COPY && CHECKSUM_GEN_UDP */
+
+#ifdef CONFIG_MATTER
+
+err_t            matter_udp_sendto_if(struct udp_pcb *pcb, struct pbuf *p,
+                                 const ip_addr_t *dst_ip, u16_t dst_port,
+                                 struct netif *netif);
+
+#endif
 
 #define          udp_flags(pcb) ((pcb)->flags)
 #define          udp_setflags(pcb, f)  ((pcb)->flags = (f))

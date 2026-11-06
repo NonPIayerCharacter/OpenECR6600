@@ -38,8 +38,7 @@ u32 hostapd_sta_flags_to_drv(u32 flags)
 	return res;
 }
 
-
-#ifdef COMPILE_WARNING_OPTIMIZE_WPA
+#if 0
 static int add_buf(struct wpabuf **dst, const struct wpabuf *src)
 {
 	if (!src)
@@ -49,8 +48,7 @@ static int add_buf(struct wpabuf **dst, const struct wpabuf *src)
 	wpabuf_put_buf(*dst, src);
 	return 0;
 }
-#endif /* COMPILE_WARNING_OPTIMIZE_WPA */
-
+#endif
 
 static int add_buf_data(struct wpabuf **dst, const u8 *data, size_t len)
 {
@@ -131,6 +129,7 @@ int hostapd_build_ap_extra_ies(struct hostapd_data *hapd,
 	}
 #endif /* CONFIG_P2P_MANAGER */
 
+#if 0
 #ifdef CONFIG_WPS
 	if (hapd->conf->wps_state) {
 		struct wpabuf *a = wps_build_assoc_resp_ie();
@@ -138,6 +137,7 @@ int hostapd_build_ap_extra_ies(struct hostapd_data *hapd,
 		wpabuf_free(a);
 	}
 #endif /* CONFIG_WPS */
+#endif
 
 #ifdef CONFIG_P2P_MANAGER
 	if (hapd->conf->p2p & P2P_MANAGE) {

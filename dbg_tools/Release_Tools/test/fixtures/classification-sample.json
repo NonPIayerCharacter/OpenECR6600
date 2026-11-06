@@ -1,0 +1,465 @@
+{
+  "schemaVersion": 1,
+  "evidence": "Original 51 Git subjects; Jira type IDs observed 2026-09-28. Tests synthesize issue fields; no live response bodies or personal data. Expected categories are review candidates, not customer approval.",
+  "records": [
+    {
+      "hash": "e101109f78fcbc6279a5134ae6720ff141e93f78",
+      "subject": "[ECW6700-1415]解决温补偿开启后，覆盖adc采样率配置问题",
+      "expectedLocal": "fixes",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1415": "10007"
+      }
+    },
+    {
+      "hash": "24388bf0372c0943b5f1d3dc9fed9f72e12c2701",
+      "subject": "[ECW6700-1464] 修复AT模式下IPv6 DNS服务器数量配置及越界判断",
+      "expectedLocal": "fixes",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1464": "11101"
+      }
+    },
+    {
+      "hash": "92f63525d72174180dd293b47b5fd4393913497d",
+      "subject": "[ECW6700-1249] 美的新增3个OTA-MCU分区(D85)",
+      "expectedLocal": "features",
+      "expectedJira": "features",
+      "jiraTypes": {
+        "ECW6700-1249": "10007"
+      }
+    },
+    {
+      "hash": "1568b367974e8672dece260983541dd6b1a4f6e8",
+      "subject": "[ECW6700-1279] 删除lwip 2.1.0源码，仅保留lwip 2.2.1版本",
+      "expectedLocal": "adaptations",
+      "expectedJira": "improvements",
+      "jiraTypes": {
+        "ECW6700-1279": "10100"
+      }
+    },
+    {
+      "hash": "5d553410d5d1ed875e1d1cd444a2cd0b7dafa2c5",
+      "subject": "[ECW6700-1249] 美的新增3个OTA-MCU分区",
+      "expectedLocal": "features",
+      "expectedJira": "features",
+      "jiraTypes": {
+        "ECW6700-1249": "10007"
+      }
+    },
+    {
+      "hash": "c52ec2afe63871688c3df098dcf2c5256e66d46b",
+      "subject": "[ECW6700-335]解决lmac版本不校准DCOC问题",
+      "expectedLocal": "fixes",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-335": "11100"
+      }
+    },
+    {
+      "hash": "21218ae17d6bc083d673f534ded90788d538d74d",
+      "subject": "[ECW6700-1415]txstop后恢复频偏默认值，改为恢复校准默认值",
+      "expectedLocal": "improvements",
+      "expectedJira": "improvements",
+      "jiraTypes": {
+        "ECW6700-1415": "10007"
+      }
+    },
+    {
+      "hash": "942e039bb58b0bbfe4a63181ef03e49c4b0b9c5d",
+      "subject": "[ECW6700-1494] 删除 Boards/ecw6700 目录，仅保留 ecw6700f",
+      "expectedLocal": "adaptations",
+      "expectedJira": "improvements",
+      "jiraTypes": {
+        "ECW6700-1494": "10100"
+      }
+    },
+    {
+      "hash": "da25fc036ca267aa914564715fba640c0c736777",
+      "subject": "[ECW6700-1263] Work around SDIO controller DMA address boundary issue",
+      "expectedLocal": "fixes",
+      "expectedJira": "improvements",
+      "jiraTypes": {
+        "ECW6700-1263": "10100"
+      }
+    },
+    {
+      "hash": "61c0ec9c62324179a60b3c2ce90c1203274c93f4",
+      "subject": "[ECW6700-1451] 修复启动期AMT标志读取及HTTP服务停止与DHCP VIF映射问题",
+      "expectedLocal": "fixes",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1451": "11101"
+      }
+    },
+    {
+      "hash": "ab3323fe037fe7bc48ffd3616e50e4cb04e484f1",
+      "subject": "[ECW6700-743] 解决6700 standlone_la版本上电会死机问题",
+      "expectedLocal": "fixes",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-743": "10604"
+      }
+    },
+    {
+      "hash": "6842e4fba1e9b4329b919e48c7ff2ca85fd7a539",
+      "subject": "[ECW6700-1475] opt iperf udp ul",
+      "expectedLocal": "improvements",
+      "expectedJira": "improvements",
+      "jiraTypes": {
+        "ECW6700-1475": "10604"
+      }
+    },
+    {
+      "hash": "3f8e4a6f7f946e64eb6ef707890319289e1a8cdc",
+      "subject": "[ECW6700-1492] 将 ECW6700F 标准 C 断言接入本地 system_assert，避免进入 ROM 终止死循环",
+      "expectedLocal": "fixes",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1492": "11101"
+      }
+    },
+    {
+      "hash": "e7fd565dd71090e65eb4f8f13b086656352e06f4",
+      "subject": "[ECW6700-1493] ai_rules: 修复test_handoff_doc技能描述把任务完成当作触发条件导致每次任务结束自动生成交接文档的问题",
+      "expectedLocal": "fixes",
+      "expectedJira": "improvements",
+      "jiraTypes": {
+        "ECW6700-1493": "10100"
+      }
+    },
+    {
+      "hash": "5514892fa29409d81fb259c819d177a26524959a",
+      "subject": "[ECW6700-1472] update 6700 build script",
+      "expectedLocal": "adaptations",
+      "expectedJira": "adaptations",
+      "jiraTypes": {
+        "ECW6700-1472": "10604"
+      }
+    },
+    {
+      "hash": "0144347bd82b7f7a7776283b06b94544f5c8c8ae",
+      "subject": "[ECW6700-1474] 开启ARP队列并增加队列长度，避免UDP大数据分片丢包",
+      "expectedLocal": "fixes",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1474": "11101"
+      }
+    },
+    {
+      "hash": "3ac7d0b65ad6dd3b5a33e143e0fbc4c4c855bb2e",
+      "subject": "[ECW6700-1449] 修复AT listen_interval参数下发及省电模式周期选择",
+      "expectedLocal": "fixes",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1449": "11101"
+      }
+    },
+    {
+      "hash": "d2ff00d799f6f8a01103902b4769bfa0e6ce0e9d",
+      "subject": "[ECW6700-1488] fix 6280 complier error",
+      "expectedLocal": "fixes",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1488": "10604"
+      }
+    },
+    {
+      "hash": "5502143e3d9b8414352d63e5febb2182740725d7",
+      "subject": "[ECW6700-1490] 重构HTTP重定向与GETSIZE处理逻辑，默认开启重定向支持",
+      "expectedLocal": "improvements",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1490": "11101"
+      }
+    },
+    {
+      "hash": "41504c0168e30dd9bc7c21b09ffa3ebf7bb1376f",
+      "subject": "[ECW6630-2402] fix 6630 lightsleep can't into sometime",
+      "expectedLocal": "fixes",
+      "expectedJira": "improvements",
+      "jiraTypes": {
+        "ECW6630-2402": "10100"
+      }
+    },
+    {
+      "hash": "9c51ea42eb8ce3b66ea3047c3fe956ffd902a02a",
+      "subject": "[ECW6700-1482] add pinmux cfg for uart at",
+      "expectedLocal": "features",
+      "expectedJira": "features",
+      "jiraTypes": {
+        "ECW6700-1482": "10604"
+      }
+    },
+    {
+      "hash": "acbf3448e085feb7a434239bf79db317a7c487ab",
+      "subject": "[ECW6700-1486] 【ECW6700F_V1.0.0B01P08】【V3】【AT】AT+SYSMSG?默认值确认，恢复出厂后AT+SYSMSG?默认值为84，文档中最大值为7，乐鑫默认值为0",
+      "expectedLocal": "unclassified",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1486": "11101"
+      }
+    },
+    {
+      "hash": "e4c97f6c0819637e2321c4f1a67a4385a3ff7c60",
+      "subject": "[ECW6700-1458]close ble tx power cal printf",
+      "expectedLocal": "adaptations",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1458": "11101"
+      }
+    },
+    {
+      "hash": "44a1895d45d3fd21a2faf65b9b8c0d58407859c9",
+      "subject": "[ECW6700-1484]: return when alloc ch_switch fail, expand CHAN_SWITCH_CNT to 6",
+      "expectedLocal": "unclassified",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1484": "11101"
+      }
+    },
+    {
+      "hash": "4138059556feba708b8ee740841204d4774cfcab",
+      "subject": "[ECW6700-1488] move ble amt cmd to component/cmd",
+      "expectedLocal": "adaptations",
+      "expectedJira": "adaptations",
+      "jiraTypes": {
+        "ECW6700-1488": "10604"
+      }
+    },
+    {
+      "hash": "f8888cb8925f80aaa099687fbbecbd26c44bac59",
+      "subject": "[ECW6700-1448] 修复CIPSEND在server透传模式下的参数校验逻辑",
+      "expectedLocal": "fixes",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1448": "11101"
+      }
+    },
+    {
+      "hash": "b0730214c573cc77847890f891525a2127205817",
+      "subject": "[ECW6700-780] add api-guide of lowpower for customer",
+      "expectedLocal": "adaptations",
+      "expectedJira": "adaptations",
+      "jiraTypes": {
+        "ECW6700-780": "10007"
+      }
+    },
+    {
+      "hash": "8c218b95cbdf82827658481c59655064cdd2380c",
+      "subject": "[ECW6700-1249] 给美的新增加三个amt串口命令",
+      "expectedLocal": "features",
+      "expectedJira": "features",
+      "jiraTypes": {
+        "ECW6700-1249": "10007"
+      }
+    },
+    {
+      "hash": "8898422c55b655355643214705d2582890874a11",
+      "subject": "[ECW6700-1456] 将被动接收模式标志由连接级改为客户端级，修复多连接下接收通知",
+      "expectedLocal": "fixes",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1456": "11101"
+      }
+    },
+    {
+      "hash": "16ce77f48b974b441eb20348ab6c04024d6e3572",
+      "subject": "[ECW6700-1479] mbedTLS增加时间与PSK配置，修复AT SSL PSK命令及TLS1.3会话票处理",
+      "expectedLocal": "unclassified",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1479": "11101"
+      }
+    },
+    {
+      "hash": "f26389c4a004fb073e4807931d813f15df1bbbd0",
+      "subject": "[ECW6700-1479] 修复AT TCPIP命令错误日志及返回码处理",
+      "expectedLocal": "fixes",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1479": "11101"
+      }
+    },
+    {
+      "hash": "30fcc539a535dfacec1a097c72b72e5be673bd5d",
+      "subject": "[ECW6700-743] 美的d85版本增加初始化未使用IO状态为输入拉低",
+      "expectedLocal": "adaptations",
+      "expectedJira": "adaptations",
+      "jiraTypes": {
+        "ECW6700-743": "10604"
+      }
+    },
+    {
+      "hash": "0dc369b01b746eecf7af86f33fa1aa6012883bd6",
+      "subject": "[ECW6700-1320]fix ble rx continue crc error",
+      "expectedLocal": "fixes",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1320": "11101"
+      }
+    },
+    {
+      "hash": "33f65587c1ddd6e7fc0cf3a734f5a7b36b8b47e9",
+      "subject": "[ECW6700-1472] update shangsong of 6700 build script",
+      "expectedLocal": "adaptations",
+      "expectedJira": "adaptations",
+      "jiraTypes": {
+        "ECW6700-1472": "10604"
+      }
+    },
+    {
+      "hash": "e10f720894c5d762da6590c452b380dace3d86f9",
+      "subject": "[ECW6700-1457] 修复 AT+SLEEPWKCFG 双边沿查询误报为上升沿，并检查底层配置返回值",
+      "expectedLocal": "fixes",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1457": "11101"
+      }
+    },
+    {
+      "hash": "7b09a25531f35a8bcd350f73c2d46d104e3dc2a8",
+      "subject": "[ECW6700-1460] 优化AT命令DNS服务器配置及默认DNS设置",
+      "expectedLocal": "improvements",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1460": "11101"
+      }
+    },
+    {
+      "hash": "48b8aa2cc42e2cf6f5682fdb0cab97b5dd5a10a2",
+      "subject": "[ECW6700-1472] update shangsong macro",
+      "expectedLocal": "adaptations",
+      "expectedJira": "adaptations",
+      "jiraTypes": {
+        "ECW6700-1472": "10604"
+      }
+    },
+    {
+      "hash": "b2d371a9e7875d63710862a3751bd5573b6fe2e4",
+      "subject": "[ECW6700-342]: lmactest should use noRom",
+      "expectedLocal": "unclassified",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-342": "11100"
+      }
+    },
+    {
+      "hash": "040f3b8b9904b35b0a5313cc490b492877ad7a62",
+      "subject": "[ECW6700-868] iperf udp断开使用控制链路keep-alive实现",
+      "expectedLocal": "improvements",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-868": "11101"
+      }
+    },
+    {
+      "hash": "7544c6a5be9e378ed483d1e6d905a5b6d6768c8b",
+      "subject": "[ECW6700-1472] adapt shangsong api",
+      "expectedLocal": "unclassified",
+      "expectedJira": "features",
+      "jiraTypes": {
+        "ECW6700-1472": "10604"
+      }
+    },
+    {
+      "hash": "d952ec8ae37048180fb29abc519f97b075c70ce6",
+      "subject": "[ECW6700-1427]fix ble set static key error",
+      "expectedLocal": "fixes",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1427": "11101"
+      }
+    },
+    {
+      "hash": "3b0e61224ae6305ff98b8b29dbe59cc6608ae3e4",
+      "subject": "[ECW6700-1407] sync qzt code",
+      "expectedLocal": "unclassified",
+      "expectedJira": "improvements",
+      "jiraTypes": {
+        "ECW6700-1407": "10100"
+      }
+    },
+    {
+      "hash": "e6e075d6c51316b3a1dbed5ee8ac1a79d57feb14",
+      "subject": "[ECW6700-1470] 【ECW6700F_V1.0.0B01P08】【V3】【AT】【driver】【I2C】I2C初始化失败，I2C功能未合入",
+      "expectedLocal": "unclassified",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1470": "11101"
+      }
+    },
+    {
+      "hash": "dde19b6f2b9c1a2420fde5a56ec3f5884080372b",
+      "subject": "[ECW6700-1432] AT 初始化时显式开启 SYSSTORE 配置保存",
+      "expectedLocal": "improvements",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1432": "11101"
+      }
+    },
+    {
+      "hash": "b9f343326d48c8920fc606f0ab2184f090c64d9a",
+      "subject": "[ECW6700-1465] 修复 CIPTCPOPT 默认值及网络配置恢复时序",
+      "expectedLocal": "fixes",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1465": "11101"
+      }
+    },
+    {
+      "hash": "97a5fec675f1a5517cdea116e2d0dbb21f29533c",
+      "subject": "[ECW6700-1434] 修复 CIPCLOSE=5 重复上报 0,CLOSED",
+      "expectedLocal": "fixes",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1434": "11101"
+      }
+    },
+    {
+      "hash": "ccc26c9dce0fd879482a6bd98d0a423202f4d6ef",
+      "subject": "[ECW6700-1475] 重构 Wi-Fi TX/RX 和 lwIP 热代码 RAM 优化机制，适配各芯片链接脚本并新增 ECW6700F high/mid/low 吞吐配置目标",
+      "expectedLocal": "unclassified",
+      "expectedJira": "features",
+      "jiraTypes": {
+        "ECW6700-1475": "10604"
+      }
+    },
+    {
+      "hash": "b824bb8bf9f925ce572fb6d17f437b6435125b5b",
+      "subject": "[ECW6630-2434] transport: ble_wifi_dbg.o 迁入 IRAM 释放 ITCM 空间",
+      "expectedLocal": "improvements",
+      "expectedJira": "improvements",
+      "jiraTypes": {
+        "ECW6630-2434": "10100"
+      }
+    },
+    {
+      "hash": "5c3b166944c1ed5b79bc51e4715b62173bc02200",
+      "subject": "[ECW6700-1430] device close socketfd then select get EBADF should recreate fdsets",
+      "expectedLocal": "fixes",
+      "expectedJira": "fixes",
+      "jiraTypes": {
+        "ECW6700-1430": "11101"
+      }
+    },
+    {
+      "hash": "44a3a2dfb13019110db756724b6ad304e35e3c52",
+      "subject": "[ECW6280-1] rom_gen: 固化ECW6280 ROM v5.0.1发布内容(libsplit/ABI/测试/适配)",
+      "expectedLocal": "adaptations",
+      "expectedJira": "improvements",
+      "jiraTypes": {
+        "ECW6280-1": "10100"
+      }
+    },
+    {
+      "hash": "0eb5a03c7a9c122f09755f26e85db2870436d422",
+      "subject": "[ECW6280-9] wifi: synchronous WIM object lifecycle with invalid-frame cancel",
+      "expectedLocal": "unclassified",
+      "expectedJira": "improvements",
+      "jiraTypes": {
+        "ECW6280-9": "10100"
+      }
+    }
+  ]
+}

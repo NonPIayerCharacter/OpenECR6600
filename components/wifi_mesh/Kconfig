@@ -1,0 +1,28 @@
+
+menuconfig WIFI_MESH
+	bool "Wifi mesh Component Support"
+	default n
+	select LWIP_NAPT
+	select IPV6
+
+if WIFI_MESH
+	choice
+	prompt "set wifi mesh log level"
+	default WIFI_MESH_LOG_LEVEL_DEBUG
+
+	config WIFI_MESH_LOG_LEVEL_DEBUG
+	bool "debug"
+	
+	config WIFI_MESH_LOG_LEVEL_INFO
+	bool "info"
+
+	config WIFI_MESH_LOG_LEVEL_WARN
+	bool "warnning"
+
+	config WIFI_MESH_LOG_LEVEL_ERROR
+	bool "error"
+
+	config WIFI_MESH_LOG_LEVEL_NONE
+	bool "none"
+	endchoice
+endif

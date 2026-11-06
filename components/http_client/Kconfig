@@ -1,3 +1,9 @@
 menuconfig HTTP_CLIENT
 	bool "HTTP Client Support"
 	default n
+
+if HTTP_CLIENT
+	config HTTP_REDIRECT_BUILD
+	bool "HTTP REDIRECT BUILD"
+	default y
+endif

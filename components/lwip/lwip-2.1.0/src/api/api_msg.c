@@ -585,6 +585,9 @@ accept_function(void *arg, struct tcp_pcb *newpcb, err_t err)
     tcp_err(pcb, NULL);
     /* remove reference from to the pcb from this netconn */
     newconn->pcb.tcp = NULL;
+#if LWIP_NETCONN_FULLDUPLEX
+    newconn->flags |= NETCONN_FLAG_MBOXINVALID;
+#endif /* LWIP_NETCONN_FULLDUPLEX */
     /* no need to drain since we know the recvmbox is empty. */
     sys_mbox_free(&newconn->recvmbox);
     sys_mbox_set_invalid(&newconn->recvmbox);
@@ -872,6 +875,9 @@ netconn_drain(struct netconn *conn)
           /* Only tcp pcbs have an acceptmbox, so no need to check conn->type */
           /* pcb might be set to NULL already by err_tcp() */
           /* drain recvmbox */
+#if LWIP_NETCONN_FULLDUPLEX
+          newconn->flags |= NETCONN_FLAG_MBOXINVALID;
+#endif /* LWIP_NETCONN_FULLDUPLEX */
           netconn_drain(newconn);
           if (newconn->pcb.tcp != NULL) {
             tcp_abort(newconn->pcb.tcp);

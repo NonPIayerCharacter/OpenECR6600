@@ -57,6 +57,7 @@ int drv_pwm_stop(unsigned int chn_pwm);
 *	   @return  	0--Config reload values succeed, -1--Config reload values failed
 */
 int drv_pwm_config(unsigned int chn_pwm, unsigned int freq, unsigned int duty_ratio);
+int drv_pwm_config_AT(unsigned int chn_pwm, unsigned int freq, unsigned int duty_ratio,unsigned int duty_res);
 
 /**    @brief		Close pwm.
 *	   @details 	Close the pwm channel and release the pit channel.
@@ -75,6 +76,7 @@ int drv_pwm_update(unsigned int chn_pwm);
 
 #define hal_pwm_init(pwm_ch)		drv_pwm_open(pwm_ch)
 #define hal_pwm_config(pwm_ch, freq, ratio)		drv_pwm_config(pwm_ch, freq, ratio)
+#define hal_pwm_config_at(pwm_ch, freq, ratio,duty_res)		drv_pwm_config_AT(pwm_ch, freq, ratio,duty_res)
 #define hal_pwm_start(pwm_ch)		drv_pwm_start(pwm_ch)
 #define hal_pwm_stop(pwm_ch)		drv_pwm_stop(pwm_ch)
 #define hal_pwm_close(pwm_ch)		drv_pwm_close(pwm_ch)

@@ -9,7 +9,6 @@
 #include "platform_net_socket.h"
 #include "platform_memory.h"
 #include "platform_timer.h"
-#include "http_random.h"
 
 #ifndef HTTP_NETWORK_TYPE_NO_TLS
 #define MBEDTLS_PLATFORM_MEMORY
@@ -24,6 +23,13 @@
 #include "mbedtls/x509_crt.h"
 #include "mbedtls/pk.h"
 
+#if defined(MBEDTLS_DEBUG_C)
+static void ssl_client_debug(void *ctx, int level, const char *file, int line, const char *str)
+{
+    HTTP_LOG_E("mbedtls: %s:%d %s\n", file, line, str);
+}
+#endif
+
 #if defined(MBEDTLS_X509_CRT_PARSE_C)
 static int server_certificate_verify(void *hostname, mbedtls_x509_crt *crt, int depth, uint32_t *flags)
 {
@@ -37,7 +43,8 @@ static int nettype_tls_entropy_source(void *data, uint8_t *output, size_t len, s
 {
     uint32_t seed;
     (void) data;
-    seed = random_number();
+
+    seed = os_random();
 
     if (len > sizeof(seed)) {
         len = sizeof(seed);
@@ -53,6 +60,14 @@ static int nettype_tls_init(network_t* n, nettype_tls_params_t* nettype_tls_para
 {
     int rc = HTTP_SUCCESS_ERROR;
 
+#ifdef MBEDTLS_SSL_PROTO_TLS1_3
+    psa_status_t status = psa_crypto_init();
+    if (status != PSA_SUCCESS) {
+        HTTP_LOG_E("Failed to initialize PSA crypto, returned %d", (int) status);
+        return -1;
+    }
+#endif // MBEDTLS_SSL_PROTO_TLS1_3
+
     //mbedtls_platform_set_calloc_free(platform_memory_calloc_mbedtls, platform_memory_free_mbedtls);
     mbedtls_net_init(&(nettype_tls_params->socket_fd));
     mbedtls_ssl_init(&(nettype_tls_params->ssl));
@@ -62,6 +77,10 @@ static int nettype_tls_init(network_t* n, nettype_tls_params_t* nettype_tls_para
     mbedtls_x509_crt_init(&(nettype_tls_params->ca_cert));
     mbedtls_x509_crt_init(&(nettype_tls_params->client_cert));
     mbedtls_pk_init(&(nettype_tls_params->private_key));
+#endif
+#if defined(MBEDTLS_DEBUG_C)
+    mbedtls_debug_set_threshold(CONFIG_MBEDTLS_DEBUG_LEVEL);
+    mbedtls_ssl_conf_dbg(&(nettype_tls_params->ssl_conf), ssl_client_debug, NULL);
 #endif
 
     mbedtls_entropy_init(&(nettype_tls_params->entropy));
@@ -158,10 +177,10 @@ int nettype_tls_connect(network_t* n)
         }
     }
 
-    if ((rc = mbedtls_ssl_get_verify_result(&(nettype_tls_params->ssl))) != 0) {
-        HTTP_LOG_E("%s:%d %s()...mbedtls_ssl_get_verify_result returned 0x%04x", __FILE__, __LINE__, __FUNCTION__, (rc < 0 )? -rc : rc);
-        goto exit;
-    }
+    // if ((rc = mbedtls_ssl_get_verify_result(&(nettype_tls_params->ssl))) != 0) {
+    //     HTTP_LOG_E("%s:%d %s()...mbedtls_ssl_get_verify_result returned 0x%04x", __FILE__, __LINE__, __FUNCTION__, (rc < 0 )? -rc : rc);
+    //     goto exit;
+    // }
 
     n->nettype_tls_params = nettype_tls_params;
     n->socket = nettype_tls_params->socket_fd.fd;
@@ -264,13 +283,28 @@ int nettype_tls_read(network_t *n, unsigned char *buf, int len, int timeout)
     
     do {
         rc = mbedtls_ssl_read(&(nettype_tls_params->ssl), (unsigned char *)(buf + read_len), len - read_len);
+#if defined MBEDTLS_SSL_SESSION_TICKETS
+    // If a post-handshake message is received, connection state is changed to `MBEDTLS_SSL_TLS1_3_NEW_SESSION_TICKET`
+    // Call mbedtls_ssl_read() till state is `MBEDTLS_SSL_TLS1_3_NEW_SESSION_TICKET` or return code is `MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET`
+    // to process session tickets in TLS 1.3 connection
+    if (mbedtls_ssl_get_version_number(&(nettype_tls_params->ssl)) == MBEDTLS_SSL_VERSION_TLS1_3) {
+        while (rc == MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET || nettype_tls_params->ssl.MBEDTLS_PRIVATE(state) == MBEDTLS_SSL_TLS1_3_NEW_SESSION_TICKET) {
+            HTTP_LOG_E("got session ticket in TLS 1.3 connection, retry read\r\n");
+            rc = mbedtls_ssl_read(&(nettype_tls_params->ssl), (unsigned char *)(buf + read_len), len - read_len);
+        }
+    }
+#endif // MBEDTLS_SSL_SESSION_TICKETS
 
         if (rc > 0) {
             read_len += rc;
         } else if ((rc == 0) || ((rc != MBEDTLS_ERR_SSL_WANT_WRITE) && (rc != MBEDTLS_ERR_SSL_WANT_READ) && (rc != MBEDTLS_ERR_SSL_TIMEOUT))) {
             // HTTP_LOG_E("%s:%d %s()... mbedtls_ssl_read failed: 0x%04x", __FILE__, __LINE__, __FUNCTION__, (rc < 0 )? -rc : rc);
             break;
-        } 
+        }
+
+        if (mbedtls_ssl_get_bytes_avail(&(nettype_tls_params->ssl)) == 0) {
+            break;
+        }
     } while((!platform_timer_is_expired(&timer)) && (read_len < len));
 
     return read_len;

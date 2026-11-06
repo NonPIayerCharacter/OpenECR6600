@@ -819,3 +819,33 @@ CJSON_PUBLIC(cJSON_bool) cJSON_IsObject(const cJSON * const item)
 
     return (item->type & 0xFF) == cJSON_Object;
 }
+
+CJSON_PUBLIC(cJSON_bool) cJSON_IsBool(const cJSON * const item) {
+    if (!item) return cJSON_False;
+    return (item->type == cJSON_True || item->type == cJSON_False);
+}
+
+CJSON_PUBLIC(cJSON_bool) cJSON_IsTrue(const cJSON * const item) {
+    if (!item) return cJSON_False;
+    if(item->type == cJSON_True){
+		return cJSON_True;
+	}else{
+		return cJSON_False;
+	}
+}
+
+
+char *cJSON_GetStringValue(cJSON *item) 
+{
+    if (item && cJSON_IsString(item)) {
+        return item->valuestring;
+    }
+    return NULL;
+}
+int cJSON_GetNumberValue(const cJSON *item) {
+    if (item && cJSON_IsNumber(item)) {
+        return item->valueint;
+    }
+    return 0; 
+}
+

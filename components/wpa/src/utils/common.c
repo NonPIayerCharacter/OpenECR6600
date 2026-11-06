@@ -42,6 +42,7 @@ int hex2byte(const char *hex)
 }
 
 
+
 static const char * hwaddr_parse(const char *txt, u8 *addr)
 {
 	size_t i;

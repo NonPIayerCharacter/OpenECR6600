@@ -43,6 +43,23 @@ choice
 		bool "FREQ_DIV_10"
 endchoice
 
+choice
+	prompt "flash write_protect area"
+	default FIRST_1M
+	
+	config FIRST_256K
+		bool "protect 256k [0x00-0x40000]"
+
+	config FIRST_512K
+		bool "protect 512k [0x00-0x80000]"
+	config FIRST_1M
+		bool "protect 1M [0x00-0x100000]"
+	config FIRST_2M
+		bool "protect 2M [0x00-0x200000]"
+	config ALL_MEMORY
+		bool "protect all memory"
+endchoice
+
 menu "FLASH Manufacturer's Support"
 
 config FLASH_ALL_COMPATIBILITY
@@ -109,6 +126,12 @@ config FLASH_GT
 config FLASH_KH
 	bool "FLASH_KH"
 	#KH25L128,KH25L64
+
+if FLASH_BOYA
+config OPEN_BOYA_FT
+	bool "OPEN_BOYA_FT"
+endif
+
 	
 endmenu # menu "FLASH Manufacturer's Support"
 

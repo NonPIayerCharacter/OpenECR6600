@@ -45,6 +45,7 @@ static void wpa_supplicant_gen_assoc_event(struct wpa_supplicant *wpa_s)
 
 
 #ifdef CONFIG_WPS
+#ifdef COMPILE_WARNING_OPTIMIZE_WPA
 static int wpas_wps_in_use(struct wpa_supplicant *wpa_s,
 			   enum wps_request_type *req_type)
 {
@@ -74,6 +75,7 @@ static int wpas_wps_in_use(struct wpa_supplicant *wpa_s,
 
 	return wps;
 }
+#endif
 #endif /* CONFIG_WPS */
 
 
@@ -89,7 +91,7 @@ static int wpas_wps_in_use(struct wpa_supplicant *wpa_s,
 int wpa_supplicant_enabled_networks(struct wpa_supplicant *wpa_s)
 {
 	struct wpa_ssid *ssid = wpa_s->conf->ssid;
-#if 0    
+#if 1    
 	int count = 0, disabled = 0;
 
 	//if (wpa_s->p2p_mgmt)
@@ -873,17 +875,35 @@ static void wpa_supplicant_scan(void *eloop_ctx, void *timeout_ctx)
             if (wpa_s->manual_scan_cfg->passive)
                 params.passive = 1;
             if (wpa_s->manual_scan_cfg->scan_time)
-                params.scan_time = wpa_s->manual_scan_cfg->scan_time;                
-        }        
+                params.scan_time = wpa_s->manual_scan_cfg->scan_time;
+            if (wpa_s->manual_scan_cfg->glance)
+                params.glance = 1;
+        }
     } else {
         if (ssid && WPAS_MODE_INFRA == ssid->mode) {
-			params.ssids[params.num_ssids].ssid =
-				ssid->ssid;
-			params.ssids[params.num_ssids].ssid_len =
-				ssid->ssid_len;
-			params.num_ssids++;
+            struct wpa_ssid *start = wpa_s->conf->ssid;
+            struct wpa_ssid *ssid_temp = wpa_s->conf->ssid;
+            while (ssid_temp) {
+                if (!wpas_network_disabled(wpa_s, ssid_temp)) {
+                    wpa_dbg(wpa_s, MSG_DEBUG, "add scan ssid:  %s", ssid_temp->ssid);
+                    params.ssids[params.num_ssids].ssid =
+                        ssid_temp->ssid;
+                    params.ssids[params.num_ssids].ssid_len =
+                        ssid_temp->ssid_len;
+                    params.num_ssids++;
+                    if (params.num_ssids + 1 > max_ssids)
+                        break;
+                }
+                ssid_temp = ssid_temp->next;
+                if (ssid_temp == start)
+                    break;
+            }
+#if !defined(CONFIG_WIFI_MESH)
             if (wpa_s->normal_scans < 2) {
-#if (defined(CONFIG_PSM_SUPER_LOWPOWER) || defined(CONFIG_FAST_CONNECT))
+#else
+            if (wpa_s->normal_scans < 4) {
+#endif
+#ifdef CONFIG_PSM_SUPER_LOWPOWER
     extern unsigned int fast_reconnect_freq;
     if (ssid->frequency ||fast_reconnect_freq) {
         params.freqs = os_malloc(sizeof(int) * 2);
@@ -909,8 +929,8 @@ static void wpa_supplicant_scan(void *eloop_ctx, void *timeout_ctx)
             }
         }
     }
-    
-	if (params.num_ssids < max_ssids) {
+
+    if (params.num_ssids == 0) {
         params.ssids[params.num_ssids].ssid_len = 0;
         params.num_ssids++;
     }
@@ -1006,8 +1026,12 @@ static void wpa_supplicant_scan(void *eloop_ctx, void *timeout_ctx)
 	}*/
     params.max_num = wpa_s->conf->bss_max_count;
 	scan_params = &params;
-
-	ret = wpa_supplicant_trigger_scan(wpa_s, scan_params);
+    
+    if (wpa_s->conf->passive_scan) {
+        params.passive = 1;
+    }
+	
+    ret = wpa_supplicant_trigger_scan(wpa_s, scan_params);
 
 #if 0
 	if (ret && wpa_s->last_scan_req == MANUAL_SCAN_REQ && params.freqs &&
@@ -1543,7 +1567,7 @@ struct wpabuf * wpa_scan_get_vendor_ie_multi(const struct wpa_scan_res *res,
 
 /* Compare function for sorting scan results. Return >0 if @b is considered
  * better. */
- #ifdef COMPILE_WARNING_OPTIMIZE_WPA
+ #ifdef CONFIG_WPS
 static int wpa_scan_result_compar(const void *a, const void *b)
 {
 //#define MIN(a,b) a < b ? a : b
@@ -1602,10 +1626,8 @@ static int wpa_scan_result_compar(const void *a, const void *b)
 	return snr_b_full - snr_a_full;
 #undef MIN
 }
-#endif /* COMPILE_WARNING_OPTIMIZE_WPA */
 
 
-#ifdef CONFIG_WPS
 /* Compare function for sorting scan results when searching a WPS AP for
  * provisioning. Return >0 if @b is considered better. */
 static int wpa_scan_result_wps_compar(const void *a, const void *b)
@@ -1896,7 +1918,9 @@ wpa_supplicant_get_scan_results(struct wpa_supplicant *wpa_s,
 {
 	struct wpa_scan_results *scan_res;
 	size_t i;
-	//int (*compar)(const void *, const void *) = wpa_scan_result_compar;
+#ifdef CONFIG_WPS
+	int (*compar)(const void *, const void *) = wpa_scan_result_compar;
+#endif /* CONFIG_WPS */
 
 	scan_res = wpa_drv_get_scan_results2(wpa_s);
 	if (scan_res == NULL) {
@@ -2052,6 +2076,7 @@ wpa_scan_clone_params(const struct wpa_driver_scan_params *src)
     params->passive = src->passive;
     params->scan_time = src->scan_time;
     params->max_num = src->max_num;
+	params->glance = src->glance;
 
 	return params;
 
@@ -2078,23 +2103,41 @@ void wpa_scan_free_params(struct wpa_driver_scan_params *params)
 	os_free(params);
 }
 
-
-int wpas_abort_ongoing_scan(struct wpa_supplicant *wpa_s)
+int wpas_abort_ongoing_scan(struct wpa_supplicant* wpa_s)
 {
-	int scan_work = !!wpa_s->scan_work;
+    struct wpa_radio_work* work;
+    struct wpa_radio* radio = wpa_s->radio;
 
-#ifdef CONFIG_P2P
-	scan_work |= !!wpa_s->p2p_scan_work;
-#endif /* CONFIG_P2P */
+    dl_list_for_each(work, &radio->work, struct wpa_radio_work, list)
+    {
+        if (work->wpa_s != wpa_s || !work->started || (os_strcmp(work->type, "scan") != 0 && os_strcmp(work->type, "p2p-scan") != 0))
+            continue;
+        wpa_dbg(wpa_s, MSG_DEBUG, "Abort an ongoing scan");
 
-	if (scan_work && wpa_s->own_scan_running) {
-		wpa_dbg(wpa_s, MSG_DEBUG, "Abort an ongoing scan");
-		return wpa_drv_abort_scan(wpa_s);
-	}
+        /* Abort the driver scan */
+        int ret = wpa_drv_abort_scan(wpa_s);
 
-	return 0;
+        /* Complete the radio work to clean up scan state */
+        if (wpa_s->scan_work)
+        {
+            struct wpa_radio_work* scan_work = wpa_s->scan_work;
+            wpa_s->scan_work = NULL;
+            radio_work_done(scan_work);
+        }
+
+        /* Send scan done notification for aborted scan */
+		wpa_supplicant_notify_scanning(wpa_s, 0);
+
+        /* Reset scanning state if needed */
+        if (wpa_s->wpa_state == WPA_SCANNING)
+            wpa_supplicant_set_state(wpa_s, wpa_s->scan_prev_wpa_state);
+
+        return ret;
+    }
+
+    wpa_dbg(wpa_s, MSG_DEBUG, "No ongoing scan/p2p-scan found to abort");
+    return -1;
 }
-
 
 int wpas_sched_scan_plans_set(struct wpa_supplicant *wpa_s, const char *cmd)
 {

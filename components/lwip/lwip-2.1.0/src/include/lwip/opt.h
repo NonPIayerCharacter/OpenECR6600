@@ -547,7 +547,7 @@
  * (only needed if you use tcpip.c)
  */
 #if !defined MEMP_NUM_TCPIP_MSG_API || defined __DOXYGEN__
-#define MEMP_NUM_TCPIP_MSG_API          8
+#define MEMP_NUM_TCPIP_MSG_API          16
 #endif
 
 /**
@@ -556,7 +556,7 @@
  * (only needed if you use tcpip.c)
  */
 #if !defined MEMP_NUM_TCPIP_MSG_INPKT || defined __DOXYGEN__
-#define MEMP_NUM_TCPIP_MSG_INPKT        32
+#define MEMP_NUM_TCPIP_MSG_INPKT        64
 #endif
 
 /**
@@ -1119,7 +1119,11 @@
  * DNS_SERVER_ADDRESS(ipaddr), where 'ipaddr' is an 'ip_addr_t*'
  */
 #if !defined DNS_MAX_SERVERS || defined __DOXYGEN__
+#ifndef CONFIG_AI_VLLM
 #define DNS_MAX_SERVERS                 6	/*2--->6*/
+#else
+#define DNS_MAX_SERVERS                 12	/*2--->6--->12(3v4+6default+3v6*/
+#endif
 #endif
 
 /** DNS maximum number of retries when asking for a name, before "timeout". */
@@ -1166,7 +1170,7 @@
 /** Set this to 1 to enable querying ".local" names via mDNS
  *  using a One-Shot Multicast DNS Query */
 #if !defined LWIP_DNS_SUPPORT_MDNS_QUERIES || defined __DOXYGEN__
-#define LWIP_DNS_SUPPORT_MDNS_QUERIES   0
+#define LWIP_DNS_SUPPORT_MDNS_QUERIES   1
 #endif
 /**
  * @}
@@ -1672,7 +1676,7 @@
  * data in client_data member array of struct netif (max. 256).
  */
 #if !defined LWIP_NUM_NETIF_CLIENT_DATA || defined __DOXYGEN__
-#define LWIP_NUM_NETIF_CLIENT_DATA      0
+#define LWIP_NUM_NETIF_CLIENT_DATA      1
 #endif
 /**
  * @}
@@ -1928,7 +1932,7 @@
  *   and prevent a task pending on this during/after deletion
  */
 #if !defined LWIP_NETCONN_FULLDUPLEX || defined __DOXYGEN__
-#define LWIP_NETCONN_FULLDUPLEX         0
+#define LWIP_NETCONN_FULLDUPLEX         1
 #endif
 /**
  * @}
@@ -2025,7 +2029,7 @@
  * LWIP_SO_LINGER==1: Enable SO_LINGER processing.
  */
 #if !defined LWIP_SO_LINGER || defined __DOXYGEN__
-#define LWIP_SO_LINGER                  0
+#define LWIP_SO_LINGER                  1
 #endif
 
 /**
@@ -2730,7 +2734,11 @@
  * (up to the maximum limit defined here).
  */
 #if !defined LWIP_DHCP6_MAX_DNS_SERVERS || defined __DOXYGEN__
+#ifndef CONFIG_AI_VLLM
 #define LWIP_DHCP6_MAX_DNS_SERVERS      3	/*DNS_MAX_SERVERS*/
+#else
+#define LWIP_DHCP6_MAX_DNS_SERVERS      9	/*DNS_MAX_SERVERS*/
+#endif
 #endif
 
 #if LWIP_DNS && LWIP_DHCP6_MAX_DNS_SERVERS

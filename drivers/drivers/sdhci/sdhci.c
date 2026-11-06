@@ -11,7 +11,10 @@
 #include "chip_pinmux.h"
 
 #include "gpio.h"
-
+#ifdef CONFIG_FREERTOS
+#include "FreeRTOS.h"
+#include "semphr.h"
+#endif
 
 //#define RCV_DATA_DEBUG
 
@@ -230,7 +233,7 @@
 #define UNSTUFF_BITS(resp,start,size)					\
 	({								\
 		const int __size = size;				\
-		const unsigned int __mask = (__size < 32 ? 1 << __size : 0) - 1;	\
+		const unsigned int __mask = (__size < 32 ? (1U << __size) - 1 : 0xFFFFFFFFU);	\
 		const int __off = 3 - ((start) / 32);			\
 		const int __shft = (start) & 31;			\
 		unsigned int __res;						\
@@ -378,7 +381,10 @@ static ADMA2 sd_adma_desc[MAX_BUF_BLOCK]  __attribute__((section(".dma.data"),al
 volatile unsigned int cmd_busy=0;
 volatile unsigned int data_busy=0;
 volatile unsigned int completed_per=1;
-
+#ifdef CONFIG_FREERTOS
+os_sem_handle_t cmd_semaphore;
+os_sem_handle_t data_semaphore;
+#endif
 
 
 
@@ -595,6 +601,9 @@ void sdhci_isr(void)
 		{
 		OUT16(SDHCI_INT_STATUS, intmask & SDHCI_INT_DATA_MASK);
 		sdhci_data_irq(&sdhci_host.data,&sdhci_host.cmd,intmask);
+        #ifdef CONFIG_FREERTOS
+        os_sem_post(data_semaphore);
+        #endif
 		}
 
 	if(intmask & SDHCI_INT_CARD_INT)
@@ -742,7 +751,12 @@ void sdhci_init(void)
 	//OUT8(SDHCI_HOST_CONTROL, IN8(SDHCI_HOST_CONTROL)|0x80);
 
 	sdhci_set_ctrl(MMC_BUS_WIDTH_1); // set 1 bit width
-	
+
+    #ifdef CONFIG_FREERTOS
+    cmd_semaphore = os_sem_create(1, 0);
+    data_semaphore = os_sem_create(1, 0);
+    #endif
+    
 	arch_irq_clean(VECTOR_NUM_SDIO_HOST);
 	arch_irq_unmask(VECTOR_NUM_SDIO_HOST);
 	arch_irq_register(VECTOR_NUM_SDIO_HOST, sdhci_isr);
@@ -846,10 +860,12 @@ static int sdhci_command_complete(struct mmc_data *data,struct mmc_command *cmd)
 		}
 
 	cmd_busy=0;//command finished.
-
+	
+    #ifdef CONFIG_FREERTOS
+    os_sem_post(cmd_semaphore);
+    #endif
 	return 0;
 }
-
 
 static void sdhci_set_transfer_irqs(struct mmc_data *data)
 {
@@ -975,7 +991,7 @@ int sdhci_send_command(struct mmc_data *data, struct mmc_command *cmd)
 	//commamd issuse	
 	OUT16(SDHCI_COMMAND, SDHCI_MAKE_CMD(cmd->opcode, flags));
 
-
+#if 0
 	//command 
 	if((flags & SDHCI_CMD_RESP_MASK))//if command wait resp
 		{
@@ -997,7 +1013,19 @@ int sdhci_send_command(struct mmc_data *data, struct mmc_command *cmd)
 		//no need wait response
 		cmd_busy = 0;
 		}
-
+#endif
+#ifdef CONFIG_FREERTOS
+    os_sem_wait(cmd_semaphore, WAIT_FOREVER);
+#else
+    while (cmd_busy);//wait cmd complete
+#endif
+    if (cmd->data != NULL) {
+#ifdef CONFIG_FREERTOS
+        os_sem_wait(data_semaphore, WAIT_FOREVER);
+#else
+        while (data_busy);//wait data complete
+#endif
+    }
 	return ret;
 }
 
@@ -1331,11 +1359,11 @@ static int mmc_send_app_op_cond(unsigned int ocr)
 	//29:UHS-II
 	//24:S18A
 
-	if ( sdhci_host.cmd.resp[0] & 1<<31)
+	if ( sdhci_host.cmd.resp[0] & (1U<<31))
 		{
 		//os_printf(LM_OS, LL_INFO, "sd card is ready\r\n");
 
-		if(sdhci_host.cmd.resp[0] & 1<<30)
+		if(sdhci_host.cmd.resp[0] & (1U<<30))
 			{
 			sdhci_host.sdcard.ccs=1;
 			}
@@ -1647,7 +1675,7 @@ int sdhci_init_sdcard(void)
 		ocr |= 1<<30 | 1<<28 | 1<<24;	
 	else
 		return -8;
-	
+
 	//31:busy	30:ccs(card capacity status)	29:UHS-II card	24:S18A(switching to 1.8v accepted)
 	//According physical layer document
 	
@@ -1811,9 +1839,9 @@ int sdhci_test_sdio_write(unsigned int transtype,unsigned int blocks,unsigned in
 		}
 	else
 		blk_pad = sdhci_host.data.blksz;
-	
 
-	sdhci_host.cmd.arg = 1<<31 | 1<<28 | 1<<26 | card_addr<<9;
+
+	sdhci_host.cmd.arg = (1U<<31) | (1U<<28) | (1U<<26) | (card_addr<<9);
 	sdhci_host.cmd.flags = MMC_RSP_SPI_R5 | MMC_RSP_R5 | MMC_CMD_ADTC;
 
 

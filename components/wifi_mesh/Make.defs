@@ -1,0 +1,23 @@
+ifeq ($(CONFIG_WIFI_MESH),y)
+MESH_SRC_DIR = $(TOPDIR)/components/wifi_mesh
+	CSRCS += $(MESH_SRC_DIR)/mesh_timer.c \
+		$(MESH_SRC_DIR)/mesh_aes.c \
+		$(MESH_SRC_DIR)/mesh_tx.c \
+		$(MESH_SRC_DIR)/mesh_rx.c \
+		$(MESH_SRC_DIR)/mesh_utils.c \
+		$(MESH_SRC_DIR)/mesh_table.c  \
+		$(MESH_SRC_DIR)/mesh_storage.c \
+		$(MESH_SRC_DIR)/mesh_main.c  \
+		$(MESH_SRC_DIR)/mesh_net_cfg.c \
+		$(MESH_SRC_DIR)/mesh_config.c \
+		$(MESH_SRC_DIR)/mesh_vote.c
+	
+	INCPATHS += $(MESH_SRC_DIR)
+	CFLAGS += -DCONFIG_WIFI_MESH
+	INCPATHS += $(TOPDIR)/include/components/wifi_crtl \
+				$(TOPDIR)/components/lwip/lwip-2.1.0/src \
+				$(TOPDIR)/components/lwip/lwip-2.1.0/src/include \
+				$(TOPDIR)/components/lwip/lwip-2.1.0/src/include/compat/posix \
+				$(TOPDIR)/components/wpa/src \
+				$(TOPDIR)/components/wpa/src/common
+endif

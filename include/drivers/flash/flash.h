@@ -55,6 +55,8 @@
 #define FLASH_RET_READ_ERROR			-8
 #define FLASH_RET_NULL_POINT			-9
 #define FLASH_RET_PARTITION_ERROR		-10
+#define FLASH_RET_MALLOC_ERROR			-11
+#define FLASH_RET_CRC_ERROR				-12
 
 #define AES_BYTE_MAX 					16
 
@@ -92,6 +94,8 @@ void spiFlash_format_wr_vol(int cmd, int data, int wr_len);
 
 unsigned int spiFlash_format_rd(int cmd, int rd_len);
 int spiFlash_format_none(int cmd);
+void spiFlash_cmd_wrSR_0(int data);
+
 void spiFlash_cmd_wrSR_1(int data);
 void spiFlash_cmd_wrSR_2(int data);
 void spiFlash_cmd_otpmode_wrSR_1(int data);
@@ -132,5 +136,5 @@ int drv_spiflash_write_dma(unsigned int addr, const unsigned char * buf, unsigne
 int spiFlash_EDP(void);
 int spiFlash_RDP(void);
 int spiflash_TH_FT(void);
-
-
+void spiFlash_TH_unprotect(unsigned int unprotect);
+unsigned int spiflash_ZB_wr_protect(unsigned int addr);

@@ -453,7 +453,7 @@ void qiot_set_adv_scanRes_data(adv_info_s *my_adv_info)
 
 void qiot_start_advertising(void)
 {
-	ECR_BLE_GAP_ADV_PARAMS_T adv_param;
+	ECR_BLE_GAP_ADV_PARAMS_T adv_param={0};
 	adv_param.adv_type=ECR_BLE_GAP_ADV_TYPE_CONN_SCANNABLE_UNDIRECTED;
 	memset(&(adv_param.direct_addr),0,sizeof(ECR_BLE_GAP_ADDR_T));
 	adv_param.adv_interval_min=64;//64*0.625=40ms;

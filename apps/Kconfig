@@ -1,3 +1,12 @@
 source "apps/ble_apps/Kconfig"
-source "apps/spi_service/Kconfig"
+#source "apps/spi_service/Kconfig"
 source "apps/xsl/Kconfig"
+source "apps/jd/Kconfig"
+source "apps/tencent/Kconfig"
+#source "apps/qthsdk/Kconfig"
+#source "apps/ai_sys/gx8006/Kconfig"
+#source "apps/ai_sys/joyinside/Kconfig"
+#source "apps/ai_sys/coze/Kconfig"
+#source "apps/ai_sys/qzt/Kconfig"
+#source "apps/aws/Kconfig"
+

@@ -77,6 +77,8 @@
 #define ATE_CHIP_TYPE_OFFSET                 27
 #define ATE_FT_VER_MASK                      0xf
 #define ATE_FT_VER_OFFSET                    22
+#define ATE_FT_VER_MASK_EXTRA                0x7
+#define ATE_FT_VER_OFFSET_EXTRA              29
 #define ATE_TXGAIN_11_MASK                   0xf
 #define ATE_TXGAIN_11_OFFSET                 18
 #define ATE_TXGAIN_6_MASK                    0xf                 
@@ -130,47 +132,47 @@ void dump_ate_efuse_info(void);
 
 static inline unsigned char chip_bgm_tune_r_cal(void)
 {
-    return ((ate_efuse_info.data[2] & ((unsigned int)ATE_BGM_TUNE_R_MASK << ATE_BGM_TUNE_R_OFFSET)) >> ATE_BGM_TUNE_R_OFFSET);
+    return ((unsigned char)((ate_efuse_info.data[2] & ((unsigned int)ATE_BGM_TUNE_R_MASK << ATE_BGM_TUNE_R_OFFSET)) >> ATE_BGM_TUNE_R_OFFSET));
 }
 
 static inline unsigned char chip_bgm_buck_ana_cal(void)
 {
-    return ((ate_efuse_info.data[2] & ((unsigned int)ATE_BGM_ANA_MASK << ATE_BGM_ANA_OFFSET)) >> ATE_BGM_ANA_OFFSET);
+    return ((unsigned char)((ate_efuse_info.data[2] & ((unsigned int)ATE_BGM_ANA_MASK << ATE_BGM_ANA_OFFSET)) >> ATE_BGM_ANA_OFFSET));
 }
 
 static inline unsigned char chip_bgm_buck_dig_cal(void)
 {
-    return ((ate_efuse_info.data[2] & ((unsigned int)ATE_BGM_DIG_MASK << ATE_BGM_DIG_OFFSET)) >> ATE_BGM_DIG_OFFSET);
+    return ((unsigned char)((ate_efuse_info.data[2] & ((unsigned int)ATE_BGM_DIG_MASK << ATE_BGM_DIG_OFFSET)) >> ATE_BGM_DIG_OFFSET));
 }
 
 static inline unsigned char chip_bgm_op8_trim_cal(void)
 {
-    return ((ate_efuse_info.data[2] & ((unsigned int)ATE_BGM_0P8_TRIM_MASK << ATE_BGM_0P8_TRIM_OFFSET)) >> ATE_BGM_0P8_TRIM_OFFSET);
+    return ((unsigned char)((ate_efuse_info.data[2] & ((unsigned int)ATE_BGM_0P8_TRIM_MASK << ATE_BGM_0P8_TRIM_OFFSET)) >> ATE_BGM_0P8_TRIM_OFFSET));
 }
 
 static inline unsigned char chip_bgm_op6_trim_cal(void)
 {
-    return ((ate_efuse_info.data[2] & ((unsigned int)ATE_BGM_0P6_TRIM_MASK << ATE_BGM_0P6_TRIM_OFFSET)) >> ATE_BGM_0P6_TRIM_OFFSET);
+    return ((unsigned char)((ate_efuse_info.data[2] & ((unsigned int)ATE_BGM_0P6_TRIM_MASK << ATE_BGM_0P6_TRIM_OFFSET)) >> ATE_BGM_0P6_TRIM_OFFSET));
 }
 
 static inline unsigned char chip_bgm_iztc_trim_cal(void)
 {
-    return ((ate_efuse_info.data[2] & ((unsigned int)ATE_BGM_IZTC_TRIM_MASK << ATE_BGM_IZTC_TRIM_OFFSET)) >> ATE_BGM_IZTC_TRIM_OFFSET);
+    return ((unsigned char)((ate_efuse_info.data[2] & ((unsigned int)ATE_BGM_IZTC_TRIM_MASK << ATE_BGM_IZTC_TRIM_OFFSET)) >> ATE_BGM_IZTC_TRIM_OFFSET));
 }
 
 static inline unsigned char chip_bgm_ipta_trim_cal(void)
 {
-    return ((ate_efuse_info.data[2] & ((unsigned int)ATE_BGM_IPTATCAL_MASK << ATE_BGM_IPTATCAL_OFFSET)) >> ATE_BGM_IPTATCAL_OFFSET);
+    return ((unsigned char)((ate_efuse_info.data[2] & ((unsigned int)ATE_BGM_IPTATCAL_MASK << ATE_BGM_IPTATCAL_OFFSET)) >> ATE_BGM_IPTATCAL_OFFSET));
 }
 
 static inline unsigned char chip_lpldo_vtrim_func_cal(void)
 {
-    return ((ate_efuse_info.data[3] & ((unsigned int)ATE_LPLDO_VTRIM_FUNC_MASK << ATE_LPLDO_VTRIM_FUNC_OFFSET)) >> ATE_LPLDO_VTRIM_FUNC_OFFSET);
+    return ((unsigned char)((ate_efuse_info.data[3] & ((unsigned int)ATE_LPLDO_VTRIM_FUNC_MASK << ATE_LPLDO_VTRIM_FUNC_OFFSET)) >> ATE_LPLDO_VTRIM_FUNC_OFFSET));
 }
 
 static inline unsigned char chip_lpldo_vtrim_sleep_cal(void)
 {
-    return ((ate_efuse_info.data[3] & ((unsigned int)ATE_LPLDO_VTRIM_SLEEP_MASK << ATE_LPLDO_VTRIM_SLEEP_OFFSET)) >> ATE_LPLDO_VTRIM_SLEEP_OFFSET);
+    return ((unsigned char)((ate_efuse_info.data[3] & ((unsigned int)ATE_LPLDO_VTRIM_SLEEP_MASK << ATE_LPLDO_VTRIM_SLEEP_OFFSET)) >> ATE_LPLDO_VTRIM_SLEEP_OFFSET));
 }
 
 static inline unsigned int chip_ate_chip_type(void)
@@ -181,6 +183,12 @@ static inline unsigned int chip_ate_chip_type(void)
 static inline unsigned int chip_ate_ft_ver(void)
 {
     return ((ate_efuse_info.data[4] & ((unsigned int)ATE_FT_VER_MASK << ATE_FT_VER_OFFSET)) >> ATE_FT_VER_OFFSET);
+}
+
+static inline unsigned int chip_ate_ft_ver_extra(void)
+{
+    return ((ate_efuse_info.data[4] & ((unsigned int)ATE_FT_VER_MASK_EXTRA << ATE_FT_VER_OFFSET_EXTRA)) >> ATE_FT_VER_OFFSET_EXTRA);
+    
 }
 
 static inline unsigned int chip_ate_irr_trim(void)

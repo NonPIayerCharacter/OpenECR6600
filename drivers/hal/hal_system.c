@@ -79,11 +79,6 @@ void hal_system_reset(RST_TYPE type)
 
 	hal_system_reset_handlers_process();
 
-#if  defined(CONFIG_FAST_CONNECT)
-	wifi_stop_station();
-	os_msleep(50);
-#endif
-
 	if(type <= RST_TYPE_UNKOWN)
 	{
 		hal_set_reset_type(type);
@@ -249,6 +244,7 @@ int hal_system_register_reset_handler(reset_handler_t handle, void *arg)
 
 	return -1;
 }
+
 int hal_system_unregister_reset_handler(reset_handler_t handle)
 {
 	int idx;
@@ -266,3 +262,7 @@ int hal_system_unregister_reset_handler(reset_handler_t handle)
 	return -1;
 }
 
+void hal_system_cleanall_reset_handler(void)
+{
+    memset(reset_handlers, 0, sizeof(reset_handlers));
+}

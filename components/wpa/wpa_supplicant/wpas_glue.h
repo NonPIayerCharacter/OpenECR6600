@@ -11,6 +11,7 @@
 
 enum wpa_ctrl_req_type;
 
+int wpa_supplicant_init_eapol(struct wpa_supplicant *wpa_s);
 int wpa_supplicant_init_wpa(struct wpa_supplicant *wpa_s);
 void wpa_supplicant_rsn_supp_set_config(struct wpa_supplicant *wpa_s,
 					struct wpa_ssid *ssid);

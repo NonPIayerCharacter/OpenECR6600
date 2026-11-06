@@ -61,11 +61,19 @@ typedef struct sys_mbox{
 	uint8_t      working;
 }* sys_mbox_t;
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 void sys_arch_msleep(int ms);
 sys_sem_t* sys_thread_sem_init(void);
 void sys_thread_sem_deinit(void);
 sys_sem_t* sys_thread_sem_get(void);
 uint32_t sys_random(void);
 uint32_t sys_now( void );
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __SYS_ARCH_H__ */

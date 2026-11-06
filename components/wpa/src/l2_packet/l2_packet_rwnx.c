@@ -125,7 +125,7 @@ void l2_packet_deinit(struct l2_packet_data *l2)
 		return;
 
     l2_list[l2->idx % FHOST_VIF_NUM_MAX] = NULL;
-    os_queue_destory(l2->pkt_queue);
+    os_queue_destroy(l2->pkt_queue);
 	os_free(l2);
 }
 

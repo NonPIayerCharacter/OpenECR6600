@@ -220,6 +220,10 @@ int spiFlash_format_addr(int cmd, unsigned int addr, unsigned int param);
 unsigned int  spiflash_TH_wr_protect(unsigned int addr);
 
 int spiflash_TH_FT(void);
+int spiFlash_BOYA_FT(void);
+int  spiflash_GD_wr_status(unsigned int status);
+int  spiflash_GD_wr_protect(unsigned int addr);
+int  spiflash_BOYA_wr_protect(unsigned int addr);
 
 
 

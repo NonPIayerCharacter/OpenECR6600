@@ -28,6 +28,10 @@ http_connect_params_t *http_assign_connect_params(void)
     http_connect_params_t *connect_params = NULL;
 
     connect_params = platform_memory_alloc(len);
+    if (connect_params == NULL) {
+        HTTP_LOG_E("alloc http_connect_params_t failed");
+        return NULL;
+    }
     memset(connect_params, 0, len);
 
     return connect_params;

@@ -1,0 +1,10 @@
+CFLAGS += -DCONFIG_APP_EXAMPLE_BUILD=1
+
+VPATH += :$(TOPDIR)/examples/wifi_netcfg_multiap_example
+INCPATHS += $(TOPDIR)/examples/wifi_netcfg_multiap_example
+INCPATHS += $(TOPDIR)/components/wifi_netcfg/include
+INCPATHS += $(TOPDIR)/components/smartconfig
+INCPATHS += $(TOPDIR)/components/wpa/src/utils
+
+CSRCS += wifi_netcfg_multiap_app.c
+CSRCS += main.c

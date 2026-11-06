@@ -3873,7 +3873,7 @@ iperf_new_stream(struct iperf_test *test, int s, int sender)
     }
 #else
         if (test->settings->blksize > 4096) {
-            test->settings->blksize = 4096; //8K
+            test->settings->blksize = TCP_WND; //8K
         } else if (test->settings->blksize < 0) {
             printf("eror------%s:%d------%d----\n", __func__, __LINE__, test->settings->blksize);
             return NULL;

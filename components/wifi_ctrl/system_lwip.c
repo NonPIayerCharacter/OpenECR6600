@@ -25,8 +25,10 @@
 #include "lwip/snmp.h"
 #include "lwip/tcpip.h"
 #include "lwip/ethip6.h"
+#include "lwip/nd6.h"
 #include "netif/etharp.h"
 #include "netif/conf_wl.h"
+#include "netif/netif_dbg.h"
 #include "wifi_common.h"
 //#include "system.h"
 #include "FreeRTOS.h"
@@ -58,17 +60,69 @@ static struct pbuf_custom *net_send_cust;
 static rtos_semaphore net_send_semaphore;
 static uint8_t net_send_waiting = 0;
 
-
-
 extern void fhost_set_netif_by_idx(uint8_t idx, net_if_t *net_if);
 extern uint8_t fhost_tx_check_is_shram(void *p);
-extern void fhost_debug_dump_lwip_pbuf(void *pkt, net_if_t *net_if, uint8_t is_tx);
 extern int fhost_tx_start(void *net_if, void *net_buf, uint8_t is_raw);
 extern void fhost_tx_free(void *buf);
 extern int trap_l2_pkt(int vif_idx, void *pkt_tmp, int len);
 extern  u16_t lwip_standard_chksum(const void *dataptr, int len);
 
+int g_ipv6_enable = 1;
+
+int system_lwip_get_ipv6_enable(void)
+{
+    return g_ipv6_enable;
+}
+
+int system_lwip_set_ipv6_enable(int enable)
+{
+    if (g_ipv6_enable == enable) {
+        return 0;
+    }
+
+#ifdef CONFIG_IPV6
+    if (enable == 0) {
+        int idx;
+        nd6_cleanup_netif(&lwip_net_if[STATION_IF]);
+        netif_ip6_addr_set_state(&lwip_net_if[STATION_IF], 0, IP6_ADDR_INVALID);
+        netif_ip6_addr_set_state(&lwip_net_if[SOFTAP_IF], 0, IP6_ADDR_INVALID);
+
+        for (idx = 0; idx < LWIP_IPV6_NUM_ADDRESSES; idx++) {
+            netif_ip6_addr_set_state(&lwip_net_if[SOFTAP_IF], idx, IP6_ADDR_INVALID);
+            IP_ADDR6(&(lwip_net_if[SOFTAP_IF].ip6_addr[idx]), 0, 0, 0, 0);
+        }
+
+        for (idx = 0; idx < LWIP_IPV6_NUM_ADDRESSES; idx++) {
+            netif_ip6_addr_set_state(&lwip_net_if[STATION_IF], idx, IP6_ADDR_INVALID);
+            IP_ADDR6(&(lwip_net_if[STATION_IF].ip6_addr[idx]), 0, 0, 0, 0);
+        }
+    } else {
+        struct netif *netif = &lwip_net_if[SOFTAP_IF];
+        if (netif_is_flag_set(netif, NETIF_FLAG_UP)) {
+            netif_create_ip6_linklocal_address(&lwip_net_if[SOFTAP_IF], 1);
+        }
+
+        netif = &lwip_net_if[STATION_IF];
+        if (netif_is_flag_set(netif, NETIF_FLAG_UP)) {
+            netif_create_ip6_linklocal_address(netif, 1);
+            nd6_restart_netif(netif);
+        }
+    }
+#endif
+    g_ipv6_enable = enable;
+
+    return 0;
+}
+
+
 NETIF_DECLARE_EXT_CALLBACK(lwip_netif_ext_cb)
+
+static err_t system_lwip_tcpip_input(struct pbuf *p, struct netif *inp)
+{
+    netdbg_packet_filter_rx(p);
+
+    return tcpip_input(p, inp);
+}
 
 static void lwip_change_default_netif(void)
 {
@@ -77,10 +131,6 @@ static void lwip_change_default_netif(void)
     netif = fhost_get_netif_by_idx(STATION_IF);
     if (netif) {
         netif_set_default(netif);
-	#ifdef CONFIG_IPV6
-		netif_create_ip6_linklocal_address(netif, 1);
-		netif_ip6_addr_set_state(netif, 0, IP6_ADDR_VALID);
-	#endif
         SYS_LOGD("set sta as default netif");
         if (netif_is_flag_set(netif, NETIF_FLAG_UP)) {
             return;
@@ -92,10 +142,6 @@ static void lwip_change_default_netif(void)
         if (netif_is_flag_set(netif, NETIF_FLAG_UP)) {
             SYS_LOGD("set ap as default netif");
             netif_set_default(netif);
-#ifdef CONFIG_IPV6
-			netif_create_ip6_linklocal_address(netif, 1);
-			netif_ip6_addr_set_state(netif, 0, IP6_ADDR_VALID);
-		#endif
         }
     }
 }
@@ -115,7 +161,54 @@ static void lwip_netif_ext_callback(struct netif* netif, netif_nsc_reason_t reas
     if (reason & LWIP_NSC_STATUS_CHANGED) {
         lwip_change_default_netif();
     }
-        
+
+#ifdef CONFIG_IPV6
+    if (reason & LWIP_NSC_IPV6_ADDR_STATE_CHANGED) {
+        system_event_t evt = {0};
+
+        if (args->ipv6_addr_state_changed.old_state == 0) {
+            evt.event_id = SYSTEM_EVENT_GOT_IP6;
+            evt.vif = args->ipv6_addr_state_changed.addr_index;
+            sys_event_send(&evt);
+        }
+    }
+#endif
+
+#ifdef CONFIG_IPV6
+    /* DHCP stop handles normal teardown; also cover static IP and netif DOWN. */
+    if (vif == STATION_IF &&
+            (((reason & LWIP_NSC_STATUS_CHANGED) && args != NULL &&
+              args->status_changed.state == 0) ||
+             ((reason & LWIP_NSC_IPV4_ADDRESS_CHANGED) &&
+              ip4_addr_isany_val(*netif_ip4_addr(netif))))) {
+        int retain_ipv6 = 0;
+#ifdef CONFIG_PSM_SUPER_LOWPOWER
+        extern bool sta_remove_network_flag;
+        netif_db_t *netdb = get_netdb_by_index(vif);
+        retain_ipv6 = netdb != NULL && netdb->dhcp_stat == TCPIP_DHCP_STARTED &&
+                      !sta_remove_network_flag;
+#endif
+        if (!retain_ipv6) {
+            for (int idx = 0; idx < LWIP_IPV6_NUM_ADDRESSES; idx++) {
+                netif_ip6_addr_set_state(netif, idx, IP6_ADDR_INVALID);
+                ip_addr_set_zero_ip6(&netif->ip6_addr[idx]);
+#if LWIP_IPV6_ADDRESS_LIFETIMES
+                netif_ip6_addr_set_valid_life(netif, idx, 0);
+                netif_ip6_addr_set_pref_life(netif, idx, 0);
+#endif
+            }
+            nd6_cleanup_netif(netif);
+        }
+    } else if (vif == STATION_IF && system_lwip_get_ipv6_enable() &&
+            (reason & LWIP_NSC_IPV4_ADDRESS_CHANGED) && netif_is_up(netif) &&
+            !ip4_addr_isany_val(*netif_ip4_addr(netif)) &&
+            ip6_addr_isinvalid(netif_ip6_addr_state(netif, 0))) {
+        /* Preserve ECR6600's IPv4-before-IPv6 startup order. */
+        netif_create_ip6_linklocal_address(netif, 1);
+        nd6_restart_netif(netif);
+    }
+#endif
+
     status = wifi_get_status(vif);
     if (status == AP_STATUS_STOP || status == AP_STATUS_STARTED) {
         return; // not care.
@@ -186,7 +279,7 @@ static err_t low_level_output(struct netif *net_if, struct pbuf *p_buf)
     // until it is actually sent over the WiFi interface
     pbuf_ref(p_buf);
 
-	fhost_debug_dump_lwip_pbuf(p_buf, net_if, 1);
+	netdbg_packet_filter_tx(p_buf);
 
     // Push the buffer and verify the status
     if (fhost_tx_start(net_if, p_buf, 0) == 0)
@@ -223,23 +316,28 @@ static err_t low_level_init(struct netif *net_if)
 #if LWIP_NETIF_HOSTNAME
     {
         /* Initialize interface hostname */
-        net_if->hostname = "wlan";
+        net_if->hostname = strdup("eswin");
     }
 #endif /* LWIP_NETIF_HOSTNAME */
 
     net_if->name[ 0 ] = 'w';
     net_if->name[ 1 ] = 'l';
-
+#ifndef CONFIG_CUSTOM_LXW
     net_if->output = etharp_output;
+#endif
 #if defined(CONFIG_IPV6)
 	net_if->output_ip6 = ethip6_output;
 #endif
     net_if->flags = NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP | NETIF_FLAG_LINK_UP | NETIF_FLAG_IGMP | NETIF_FLAG_MLD6;
+    #ifndef CONFIG_CUSTOM_LXW
     net_if->hwaddr_len = ETHARP_HWADDR_LEN;
+    #else
+    net_if->hwaddr_len = ETH_HWADDR_LEN;
+    #endif
     net_if->mtu = 1500;
     net_if->linkoutput = low_level_output;
 
-    os_memcpy(net_if->hwaddr, addr, ETHARP_HWADDR_LEN);
+    os_memcpy(net_if->hwaddr, addr, ETH_HWADDR_LEN);
     net_if->state = NULL;
 
     return status;
@@ -298,15 +396,24 @@ static void lwip_handle_interfaces(void * param)
     hal_system_get_sta_mac(addr);
     netif_add(&lwip_net_if[STATION_IF],
               NULL, NULL, NULL, addr,
-              low_level_init, tcpip_input);
+              low_level_init, system_lwip_tcpip_input);
     set_netif_by_index(&lwip_net_if[STATION_IF], STATION_IF);
+
+    // Monitor
+    addr[0] ^= 0x1 << 2;
+    lwip_net_if[MONITOR_IF].state = (void *)addr;
+    low_level_init(&lwip_net_if[MONITOR_IF]);
+    fhost_set_netif_by_idx(MONITOR_IF, &lwip_net_if[MONITOR_IF]);
 
     fhost_set_netif_by_idx(SOFTAP_IF, &lwip_net_if[SOFTAP_IF]);
     hal_system_get_ap_mac(addr);
     netif_add(&lwip_net_if[SOFTAP_IF],
               NULL, NULL, NULL, addr,
-              low_level_init, tcpip_input);
+              low_level_init, system_lwip_tcpip_input);
     set_netif_by_index(&lwip_net_if[SOFTAP_IF], SOFTAP_IF);
+    #ifdef ENABLE_LWIP_NAPT
+    lwip_net_if[SOFTAP_IF].napt = 1;
+    #endif
 }
 
 int wifi_net_input(void *net_buf, net_if_t *net_if, 
@@ -323,7 +430,7 @@ int wifi_net_input(void *net_buf, net_if_t *net_if,
     {
         if (memcmp(eth->da.array, net_if->hwaddr, 6) == 0)
         {
-            os_printf(LM_WIFI, LL_INFO, "rx eapol\n");
+            os_printf(LM_WIFI, LL_INFO, "rx eapol, len = %d\n", len);
 
             if (!trap_l2_pkt(fhost_get_idx_by_netif(net_if), addr, len))
             {
@@ -341,8 +448,6 @@ int wifi_net_input(void *net_buf, net_if_t *net_if,
         free_fn(buf);
         return -1;
     }
-
-	fhost_debug_dump_lwip_pbuf(p, net_if, 0);
 
 #ifndef CONFIG_CUSTOM_FHOSTAPD
     if (net_if->input(p, net_if))
@@ -571,7 +676,7 @@ int net_l2_send(void *l2_if, const uint8_t *data, int data_len, uint16_t etherty
     net_if_t *net_if = (net_if_t *)l2_if;
     struct pbuf_custom *pbuf_cust;
     struct pbuf *pbuf;
-    err_t status;
+    err_t status = 0;
     mem_size_t pbuf_data_len = data_len;
     struct mac_addr *dst_addr = (struct mac_addr *)dst_addr_para;
 
@@ -622,10 +727,8 @@ int net_l2_send(void *l2_if, const uint8_t *data, int data_len, uint16_t etherty
 
     // Concatenate the two buffers
     pbuf_cat(pbuf, &pbuf_cust->pbuf);
-
     status = ethernet_output(net_if, pbuf, (struct eth_addr*)net_if->hwaddr,
                              (struct eth_addr*)dst_addr, ethertype);
-
      // Wait for the transmission completion
     os_sem_wait(l2_semaphore, WAIT_FOREVER);
 
@@ -641,6 +744,7 @@ int net_l2_send(void *l2_if, const uint8_t *data, int data_len, uint16_t etherty
  
     return (status == ERR_OK ? 0 : -1);
 }
+
 
 static void net_packet_send_cfm(struct pbuf *p)
 {
@@ -727,4 +831,3 @@ int net_packet_send(int idx, const uint8_t *data, int data_len, uint8_t is_raw, 
 
     return (status == ERR_OK ? 0 : -1);
 }
-

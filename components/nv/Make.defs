@@ -13,3 +13,7 @@ ifeq ($(CONFIG_NV),y)
 				$(TOPDIR)/os/freertos/FreeRTOS-Kernel/portable/ThirdParty/GCC/NDS32_ECR6600 
 
 endif
+
+ifeq ($(CONFIG_MATTER_CUSTOMER_LFS),y)
+    CSRCS += customer_lfs.c
+endif

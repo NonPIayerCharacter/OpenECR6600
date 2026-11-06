@@ -26,7 +26,7 @@ void utest_timer_isr(void * data)
 }
 
 
-static int utest_timer_set_time(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_timer_set_time( int argc, char *argv[])
 {
 	int num, time;
 
@@ -56,7 +56,7 @@ static int utest_timer_set_time(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_timer, set, utest_timer_set_time, "unit test set time", "ut_timer set [timer-num] [time]");
 
 
-static int utest_timer_start(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_timer_start( int argc, char *argv[])
 {
 	int timer_num;
 
@@ -85,7 +85,7 @@ static int utest_timer_start(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_timer, start, utest_timer_start, "unit test start timer", "ut_timer start [timer-num]");
 
 
-static int utest_timer_stop(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_timer_stop( int argc, char *argv[])
 {
 	int timer_num;
 
@@ -115,7 +115,7 @@ static int utest_timer_stop(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_timer, stop, utest_timer_stop, "unit test stop timer", "ut_timer stop [timer-num]");
 
 
-static int utest_timer_create(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_timer_create( int argc, char *argv[])
 {
 	int i;
 	int one_shot;
@@ -168,7 +168,7 @@ static int utest_timer_create(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_timer, create, utest_timer_create, "unit test create timer", "ut_timer create");
 
 
-static int utest_timer_delete(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_timer_delete( int argc, char *argv[])
 {
 	int timer_num, i;
 	utest_timer_dev * dev;
@@ -225,7 +225,7 @@ void  timer_task(void *arg)
 	}
 }
 
-static int utest_timer_calculate_time(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_timer_calculate_time( int argc, char *argv[])
 {
 	if(timer_task_flag == 0)
 	{

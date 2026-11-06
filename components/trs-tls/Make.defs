@@ -1,8 +1,10 @@
 ifeq ($(CONFIG_TRS_TLS),y)
+CSRCS += trs_tls.c
+ifeq ($(CONFIG_CMD_AT),y)
+CSRCS += mbedtls_ssl_service.c
+endif
 
-CSRCS +=  trs_tls.c
-
-VPATH += trs-tls
+VPATH += :trs-tls
 INCPATHS += trs-tls
 
 endif

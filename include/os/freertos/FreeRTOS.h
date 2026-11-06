@@ -1172,6 +1172,9 @@ typedef struct xSTATIC_TCB
     #if ( configUSE_APPLICATION_TASK_TAG == 1 )
         void * pxDummy14;
     #endif
+    #if ( configLIBC_PRINTF_BSS_TASK_LOCAL == 1 )
+        uint32_t ulLibcPrintfDummy[ 4 ];
+    #endif
     #if ( configNUM_THREAD_LOCAL_STORAGE_POINTERS > 0 )
         void * pvDummy15[ configNUM_THREAD_LOCAL_STORAGE_POINTERS ];
 	#if ( configTHREAD_LOCAL_STORAGE_DELETE_CALLBACKS )

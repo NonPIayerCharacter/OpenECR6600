@@ -29,6 +29,13 @@
 static mbedtls_x509_crt *global_cacert = NULL;
 
 
+#if defined(MBEDTLS_DEBUG_C)
+static void ssl_client_debug(void *ctx, int level, const char *file, int line, const char *str)
+{
+    os_printf(LM_APP, CONFIG_MBEDTLS_DEBUG_LEVEL, "mbedtls: %s:%d %s\n", file, line, str);
+}
+#endif
+
 static struct addrinfo *resolve_host_name(const char *host, size_t hostlen)
 {
     struct addrinfo hints;
@@ -36,7 +43,7 @@ static struct addrinfo *resolve_host_name(const char *host, size_t hostlen)
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
-    char *use_host = malloc(hostlen + 1);
+    char *use_host = os_malloc(hostlen + 1);
     if (!use_host) {
         return NULL;
     }
@@ -46,10 +53,10 @@ static struct addrinfo *resolve_host_name(const char *host, size_t hostlen)
     struct addrinfo *res;
     if (getaddrinfo(use_host, NULL, &hints, &res)) {
         os_printf(LM_APP, LL_INFO, "couldn't get hostname for :%s:\n", use_host);
-        free(use_host);
+        os_free(use_host);
         return NULL;
     }
-    free(use_host);
+    os_free(use_host);
     return res;
 }
 
@@ -60,7 +67,20 @@ static ssize_t tcp_read(trs_tls_t *tls, char *data, size_t datalen)
 
 static ssize_t tls_read(trs_tls_t *tls, char *data, size_t datalen)
 {
-    ssize_t ret = mbedtls_ssl_read(&tls->ssl, (unsigned char *)data, datalen);   
+    ssize_t ret = mbedtls_ssl_read(&tls->ssl, (unsigned char *)data, datalen);  
+
+#if defined MBEDTLS_SSL_SESSION_TICKETS
+    // If a post-handshake message is received, connection state is changed to `MBEDTLS_SSL_TLS1_3_NEW_SESSION_TICKET`
+    // Call mbedtls_ssl_read() till state is `MBEDTLS_SSL_TLS1_3_NEW_SESSION_TICKET` or return code is `MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET`
+    // to process session tickets in TLS 1.3 connection
+    if (mbedtls_ssl_get_version_number(&tls->ssl) == MBEDTLS_SSL_VERSION_TLS1_3) {
+        while (ret == MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET || tls->ssl.MBEDTLS_PRIVATE(state) == MBEDTLS_SSL_TLS1_3_NEW_SESSION_TICKET) {
+            os_printf(LM_APP, LL_INFO,"got session ticket in TLS 1.3 connection, retry read");
+            ret = mbedtls_ssl_read(&tls->ssl, (unsigned char *)data, datalen);
+        }
+    }
+#endif // MBEDTLS_SSL_SESSION_TICKETS
+
     if (ret < 0) {
         if (ret == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY) {
             return 0;
@@ -72,7 +92,7 @@ static ssize_t tls_read(trs_tls_t *tls, char *data, size_t datalen)
     return ret;
 }
 
-static void ms_to_timeval(int timeout_ms, struct timeval *tv)
+void ms_to_timeval(int timeout_ms, struct timeval *tv)
 {
     tv->tv_sec = timeout_ms / 1000;
     tv->tv_usec = (timeout_ms % 1000) * 1000;
@@ -227,32 +247,52 @@ static int create_ssl_handle(trs_tls_t *tls, const char *hostname, size_t hostle
 {
     int ret;
     
+#ifdef MBEDTLS_SSL_PROTO_TLS1_3
+    psa_status_t status = psa_crypto_init();
+    if (status != PSA_SUCCESS) {
+        os_printf(LM_APP, LL_INFO, "Failed to initialize PSA crypto, returned %d", (int) status);
+        return -1;
+    }
+#endif // MBEDTLS_SSL_PROTO_TLS1_3
+
     mbedtls_net_init(&tls->server_fd);
     tls->server_fd.fd = tls->sockfd;
     mbedtls_ssl_init(&tls->ssl);
     mbedtls_ctr_drbg_init(&tls->ctr_drbg);
     mbedtls_ssl_config_init(&tls->conf);
     mbedtls_entropy_init(&tls->entropy);
-    
+#if defined(MBEDTLS_DEBUG_C)
+    mbedtls_debug_set_threshold(CONFIG_MBEDTLS_DEBUG_LEVEL);
+    mbedtls_ssl_conf_dbg(&tls->conf, ssl_client_debug, NULL);
+#endif
+
     if ((ret = mbedtls_ctr_drbg_seed(&tls->ctr_drbg, 
                     mbedtls_entropy_func, &tls->entropy, NULL, 0)) != 0) {
         os_printf(LM_APP, LL_INFO, "mbedtls_ctr_drbg_seed returned %d\n", ret);
         goto exit;        
     }
     
-    /* Hostname set here should match CN in server certificate */    
-    char *use_host = malloc(hostlen + 1);
-    if (!use_host) {
-        goto exit;
+    /* Hostname set here should match CN in server certificate */
+    if (!cfg->skip_common_name) {
+        char *use_host = NULL;
+        if (cfg->common_name != NULL) {
+            use_host = os_strdup(cfg->common_name);
+        } else {
+            use_host = os_strdup(hostname);
+        }
+
+        if (!use_host) {
+            goto exit;
+        }
+
+        /* Hostname set here should match CN in server certificate */
+        if ((ret = mbedtls_ssl_set_hostname(&tls->ssl, use_host)) != 0) {
+            os_printf(LM_APP, LL_INFO, "mbedtls_ssl_set_hostname returned -0x%x\n", -ret);
+            os_free(use_host);
+            goto exit;
+        }
+        os_free(use_host);
     }
-    strcpy(use_host, hostname);
-    
-    if ((ret = mbedtls_ssl_set_hostname(&tls->ssl, use_host)) != 0) {
-        os_printf(LM_APP, LL_INFO, "mbedtls_ssl_set_hostname returned -0x%x\n", -ret);
-        free(use_host);
-        goto exit;
-    }
-    free(use_host);
 
     if ((ret = mbedtls_ssl_config_defaults(&tls->conf,
                     MBEDTLS_SSL_IS_CLIENT,
@@ -300,8 +340,10 @@ static int create_ssl_handle(trs_tls_t *tls, const char *hostname, size_t hostle
             goto exit;
         }
 
+        mbedtls_ctr_drbg_context ctr_drbg;
+        mbedtls_ctr_drbg_init( &ctr_drbg );
         ret = mbedtls_pk_parse_key(&tls->clientkey, cfg->clientkey_pem_buf, cfg->clientkey_pem_bytes,
-                  cfg->clientkey_password, cfg->clientkey_password_len);
+                  cfg->clientkey_password, cfg->clientkey_password_len,mbedtls_ctr_drbg_random, &ctr_drbg);
         if (ret < 0) {
             os_printf(LM_APP, LL_INFO, "mbedtls_pk_parse_keyfile returned -0x%x\n", -ret);
             goto exit;
@@ -318,11 +360,6 @@ static int create_ssl_handle(trs_tls_t *tls, const char *hostname, size_t hostle
     }
 
     mbedtls_ssl_conf_rng(&tls->conf, mbedtls_ctr_drbg_random, &tls->ctr_drbg);
-
-#ifdef CONFIG_MBEDTLS_DEBUG
-    mbedtls_trs_enable_debug_log(&tls->conf, 4);
-    mbedtls_ssl_conf_dbg(&tls->conf, _ssl_debug, _ssl_debug);
-#endif
 
     if ((ret = mbedtls_ssl_setup(&tls->ssl, &tls->conf)) != 0) {
         os_printf(LM_APP, LL_INFO, "mbedtls_ssl_setup returned -0x%x\n", -ret);
@@ -347,7 +384,7 @@ void trs_tls_conn_delete(trs_tls_t *tls)
         if (tls->sockfd) {
             close(tls->sockfd);
         }
-        free(tls);
+        os_free(tls);
     }
 };
 
@@ -437,6 +474,7 @@ static int trs_tls_low_level_conn(const char *hostname, int hostlen, int port, c
             ret = mbedtls_ssl_handshake(&tls->ssl);
             if (ret == 0) {
                 tls->conn_state = TRS_TLS_DONE;
+                os_printf(LM_APP, LL_INFO, "handshake done\n");
                 return 1;
             } else {
                 if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {

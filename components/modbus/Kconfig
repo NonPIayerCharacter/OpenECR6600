@@ -1,0 +1,36 @@
+menu "MODBUS"
+
+    config MODBUS
+		bool "MODBUS Component Support"
+		depends on LWIP
+		default n
+
+	menu "MODBUS related configurations"
+		depends on MODBUS
+
+		config MODBUS_RTU
+			bool "Support MODBUS_RTU"
+			depends on MODBUS
+			default n
+
+		config MODBUS_ASSIC
+			bool "Support MODBUS_ASSIC"
+			depends on MODBUS
+			default n
+
+		config MODBUS_TCP
+			bool "Support MODBUS_TCP"
+			depends on MODBUS
+			default y
+	endmenu
+
+	menu "MODBUS DEBUG"
+		depends on MODBUS
+
+		config MODBUS_TCP_DEBUG
+			bool "Support MODBUS_TCP_DEBUG"
+			depends on MODBUS
+			default n
+	endmenu
+
+endmenu

@@ -28,10 +28,54 @@
 /* ZB */
 #define ZB25VQ80			0x14605E
 #define ZB25VQ16			0x15605E
+#define ZB25VQ16C			0x15405E
 #define ZB25VQ32			0x16405E
 #define ZB25VQ64			0x17405E
 #define ZB25VQ128			0x18405E
 
+/* Memory protect definitions for ZB series */
+#define ZB_PROTECT_TYPE_VOL			0x01
+#define ZB_PROTECT_TYPE_NOVOL		0x02
+
+/* Protection level definitions for 2MB flash (ZB25VQ16/ZB25VQ16C) */
+#define ZB_PROTECT_2MB_1FF000		0x4244		// 511/512 (protect top 4KB)
+#define ZB_PROTECT_2MB_1FE000		0x4248		// 255/256 (protect top 8KB)
+#define ZB_PROTECT_2MB_1FC000		0x424C		// 127/128 (protect top 16KB)
+#define ZB_PROTECT_2MB_1F8000		0x4250		// 63/64 (protect top 32KB)
+#define ZB_PROTECT_2MB_1F0000		0x4204		// 31/32 (protect top 64KB)
+#define ZB_PROTECT_2MB_1E0000		0x4208		// 15/16 (protect top 128KB)
+#define ZB_PROTECT_2MB_1C0000		0x420C		// 7/8 (protect top 256KB)
+#define ZB_PROTECT_2MB_180000		0x4210		// 3/4 (protect top 512KB)
+#define ZB_PROTECT_2MB_100000		0x0234		// 1/2 (protect top 1MB)
+#define ZB_PROTECT_2MB_ALL			0x0218		// Protect all 2MB
+#define ZB_PROTECT_2MB_ED_0x00		0x0200			//NULL
+
+/* Protection level definitions for 1MB flash (ZB25VQ80) */
+#define ZB_PROTECT_1MB_FF000		0x4244		// 63/64 (protect top 4KB)
+#define ZB_PROTECT_1MB_FE000		0x4248		// 31/32 (protect top 8KB)
+#define ZB_PROTECT_1MB_FC000		0x424C		// 15/16 (protect top 16KB)
+#define ZB_PROTECT_1MB_F8000		0x4250		// 7/8 (protect top 32KB)
+#define ZB_PROTECT_1MB_F0000		0x4204		// 3/4 (protect top 64KB)
+#define ZB_PROTECT_1MB_E0000		0x4208		// 1/2 (protect top 128KB)
+#define ZB_PROTECT_1MB_ALL			0x0218		// Protect all 1MB
+#define ZB_PROTECT_1MB_ED_0x00		0x0200			//NULL
+
+/* Protection level definitions for 4MB flash (ZB25VQ32) */
+#define ZB_PROTECT_4MB_3FF000		0x4244		// 1023/1024 (protect top 4KB)
+#define ZB_PROTECT_4MB_3FE000		0x4248		// 511/512 (protect top 8KB)
+#define ZB_PROTECT_4MB_3FC000		0x424C		// 255/256 (protect top 16KB)
+#define ZB_PROTECT_4MB_3F8000		0x4250		// 127/128 (protect top 32KB)
+#define ZB_PROTECT_4MB_3F0000		0x4204		// 63/64 (protect top 64KB)
+#define ZB_PROTECT_4MB_3E0000		0x4208		// 31/32 (protect top 128KB)
+#define ZB_PROTECT_4MB_3C0000		0x420C		// 15/16 (protect top 256KB)
+#define ZB_PROTECT_4MB_380000		0x4210		// 7/8 (protect top 512KB)
+#define ZB_PROTECT_4MB_300000		0x0234		// 3/4 (protect top 1MB)
+#define ZB_PROTECT_4MB_200000		0x0238		// 1/2 (protect top 2MB)
+#define ZB_PROTECT_4MB_ALL			0x0218		// Protect all 4MB
+#define ZB_PROTECT_4MB_ED_0x00		0x0200			//NULL
+
+#define ZB_BP_BIT					0x407C
+#define ZB_BP_MASK					0xBF83
 
 static const T_SPI_FLASH_PARAM zb_flash_params[] = 
 {
@@ -49,6 +93,16 @@ static const T_SPI_FLASH_PARAM zb_flash_params[] =
 		.flash_id = ZB25VQ16,
 		.flash_size = FLASH_SIZE_2_MB,
 		.flash_name = "ZB25VQ16",
+		.flash_otp_star_addr  = FLASH_OTP_START_ADDR_0x1000,
+		.flash_otp_block_size = FLASH_OTP_BLOCK_SIZE_256_BYTE,
+		.flash_otp_block_num  = FLASH_OTP_BLOCK_NUM_3,
+		.flash_otp_block_interval = FLASH_OTP_BLOCK_INTERNAL_4096_BYTE,
+	},
+
+	{
+		.flash_id = ZB25VQ16C,
+		.flash_size = FLASH_SIZE_2_MB,
+		.flash_name = "ZB25VQ16C",
 		.flash_otp_star_addr  = FLASH_OTP_START_ADDR_0x1000,
 		.flash_otp_block_size = FLASH_OTP_BLOCK_SIZE_256_BYTE,
 		.flash_otp_block_num  = FLASH_OTP_BLOCK_NUM_3,
@@ -90,7 +144,7 @@ static const T_SPI_FLASH_PARAM zb_flash_params[] =
 
 static int spiFlash_ZB_check_addr(unsigned int flash_id, int addr, int length)
 {
-	if (flash_id == ZB25VQ80 || flash_id == ZB25VQ16 || flash_id == ZB25VQ32)
+	if (flash_id == ZB25VQ80 || flash_id == ZB25VQ16 || flash_id == ZB25VQ16C || flash_id == ZB25VQ32)
 	{
 		if(!((addr>=0x001000 && addr<=0x0010FF && (addr + length -1) <= 0x0010FF)
 		   ||(addr>=0x002000 && addr<=0x0020FF && (addr + length -1) <= 0x0020FF)
@@ -245,7 +299,7 @@ int spiFlash_ZB_OTP_Lock(struct _T_SPI_FLASH_DEV *  p_flash_dev, int LB)
 	data = spiFlash_cmd_rdSR_2();
 	system_irq_restore(irq_flag);
 
-	if (flash_id == ZB25VQ80 || flash_id == ZB25VQ16 || flash_id == ZB25VQ32 || flash_id == ZB25VQ64 || flash_id == ZB25VQ128)
+	if (flash_id == ZB25VQ80 || flash_id == ZB25VQ16 || flash_id == ZB25VQ16C || flash_id == ZB25VQ32 || flash_id == ZB25VQ64 || flash_id == ZB25VQ128)
 	{		
 		switch (LB)
 		{
@@ -290,7 +344,7 @@ int spiFlash_ZB_OTP_Se(struct _T_SPI_FLASH_DEV *  p_flash_dev, unsigned int addr
 	unsigned int j, data,irq_flag;
 	unsigned int flash_id = p_flash_dev->flash_param.flash_id;
 
-	if (flash_id == ZB25VQ80 || flash_id == ZB25VQ16 || flash_id == ZB25VQ32)
+	if (flash_id == ZB25VQ80 || flash_id == ZB25VQ16 || flash_id == ZB25VQ16C || flash_id == ZB25VQ32)
 	{
 		if(!((addr>=0x001000 && addr<=0x0010FF)||(addr>=0x002000 && addr<=0x0020FF)||(addr>=0x003000 && addr<=0x0030FF )))
 		{
@@ -475,6 +529,174 @@ int spiFlash_ZB_OTP_Write(struct _T_SPI_FLASH_DEV *  p_flash_dev, unsigned int a
 	}while(length);
 
 	return FLASH_RET_SUCCESS;	
+}
+
+
+/**    @brief		ZB series Flash write protection control.
+ *	   @details 	Configures memory protection based on the address to be written.
+ *				    Protects memory from the specified address to the end of flash.
+ *				    Uses volatile write enable (WREN_VOL) to allow temporary protection changes.
+ *     @param[in]	addr - The address from which protection should start.
+ *				         Use 0x00 to protect entire flash.
+ *     @return      Protection value written to status register.
+ */
+unsigned int spiflash_ZB_wr_protect(unsigned int addr)
+{
+	unsigned int protect_value = 0;
+	unsigned int flash_id = Flash_ID;
+
+	// ZB25VQ16 and ZB25VQ16C (2MB Flash)
+	if (flash_id == ZB25VQ16 || flash_id == ZB25VQ16C)
+	{
+		if(addr == 0x021C)
+		{
+			//os_printf(LM_CMD,LL_INFO,"PROTECT_ED_ALL\n ");
+			protect_value = ZB_PROTECT_2MB_ALL;
+		}
+		else if(addr >= 0x1FF000)
+		{
+			protect_value = ZB_PROTECT_2MB_1FF000;		// Protect top 4KB
+		}
+		else if (addr >= 0x1FE000)
+		{
+			protect_value = ZB_PROTECT_2MB_1FE000;		// Protect top 8KB
+		}
+		else if (addr >= 0x1FC000)
+		{
+			protect_value = ZB_PROTECT_2MB_1FC000;		// Protect top 16KB
+		}
+		else if (addr >= 0x1F8000)
+		{
+			protect_value = ZB_PROTECT_2MB_1F8000;		// Protect top 32KB
+		}
+		else if (addr >= 0x1F0000)
+		{
+			protect_value = ZB_PROTECT_2MB_1F0000;		// Protect top 64KB
+		}
+		else if (addr >= 0x1E0000)
+		{
+			protect_value = ZB_PROTECT_2MB_1E0000;		// Protect top 128KB
+		}
+		else if (addr >= 0x1C0000)
+		{
+			protect_value = ZB_PROTECT_2MB_1C0000;		// Protect top 256KB
+		}
+		else if (addr >= 0x180000)
+		{
+			protect_value = ZB_PROTECT_2MB_180000;		// Protect top 512KB
+		}
+		else if (addr >= 0x100000)
+		{
+			protect_value = ZB_PROTECT_2MB_100000;		// Protect top 1MB
+		}
+		else
+		{
+			protect_value = ZB_PROTECT_2MB_ED_0x00;			// Protect null
+		}
+		// Write protection value to status register using volatile write enable
+		spiFlash_format_wr_vol(SPIFLASH_CMD_WRSR_1, protect_value&0xFF, 1);
+		spiFlash_format_wr_vol(SPIFLASH_CMD_WRSR_2, (protect_value>>8) & 0xff, 1);
+	}
+	// ZB25VQ80 (1MB Flash)
+	else if (flash_id == ZB25VQ80)
+	{
+		if(addr == 0x021C)
+		{
+			//os_printf(LM_CMD,LL_INFO,"PROTECT_ED_ALL\n ");
+			protect_value = ZB_PROTECT_1MB_ALL;
+		}
+		else if (addr >= 0xFF000)
+		{
+			protect_value = ZB_PROTECT_1MB_FF000;		// Protect top 4KB
+		}
+		else if (addr >= 0xFE000)
+		{
+			protect_value = ZB_PROTECT_1MB_FE000;		// Protect top 8KB
+		}
+		else if (addr >= 0xFC000)
+		{
+			protect_value = ZB_PROTECT_1MB_FC000;		// Protect top 16KB
+		}
+		else if (addr >= 0xF8000)
+		{
+			protect_value = ZB_PROTECT_1MB_F8000;		// Protect top 32KB
+		}
+		else if (addr >= 0xF0000)
+		{
+			protect_value = ZB_PROTECT_1MB_F0000;		// Protect top 64KB
+		}
+		else if (addr >= 0xE0000)
+		{
+			protect_value = ZB_PROTECT_1MB_E0000;		// Protect top 128KB
+		}
+		else
+		{
+			protect_value = ZB_PROTECT_1MB_ED_0x00;			// Protect null
+		}
+		
+		// Write protection value to status register using volatile write enable
+		spiFlash_format_wr_vol(SPIFLASH_CMD_WRSR_1, protect_value&0xFF, 1);
+		spiFlash_format_wr_vol(SPIFLASH_CMD_WRSR_2, (protect_value>>8) & 0xff, 1);
+	}
+	// ZB25VQ32 (4MB Flash)
+	else if (flash_id == ZB25VQ32)
+	{
+		if(addr == 0x021C)
+		{
+			//os_printf(LM_CMD,LL_INFO,"PROTECT_ED_ALL\n ");
+			protect_value = ZB_PROTECT_4MB_ALL;
+		}
+		else if (addr >= 0x3FF000)
+		{
+			protect_value = ZB_PROTECT_4MB_3FF000;		// Protect top 4KB
+		}
+		else if (addr >= 0x3FE000)
+		{
+			protect_value = ZB_PROTECT_4MB_3FE000;		// Protect top 8KB
+		}
+		else if (addr >= 0x3FC000)
+		{
+			protect_value = ZB_PROTECT_4MB_3FC000;		// Protect top 16KB
+		}
+		else if (addr >= 0x3F8000)
+		{
+			protect_value = ZB_PROTECT_4MB_3F8000;		// Protect top 32KB
+		}
+		else if (addr >= 0x3F0000)
+		{
+			protect_value = ZB_PROTECT_4MB_3F0000;		// Protect top 64KB
+		}
+		else if (addr >= 0x3E0000)
+		{
+			protect_value = ZB_PROTECT_4MB_3E0000;		// Protect top 128KB
+		}
+		else if (addr >= 0x3C0000)
+		{
+			protect_value = ZB_PROTECT_4MB_3C0000;		// Protect top 256KB
+		}
+		else if (addr >= 0x380000)
+		{
+			protect_value = ZB_PROTECT_4MB_380000;		// Protect top 512KB
+		}
+		else if (addr >= 0x300000)
+		{
+			protect_value = ZB_PROTECT_4MB_300000;		// Protect top 1MB
+		}
+		else if (addr >= 0x200000)
+		{
+			protect_value = ZB_PROTECT_4MB_200000;		// Protect top 2MB
+		}
+		else
+		{
+			protect_value = ZB_PROTECT_4MB_ED_0x00;			// Protect null
+		}
+		
+		// Write protection value to status register using volatile write enable
+		spiFlash_format_wr_vol(SPIFLASH_CMD_WRSR_1, protect_value&0xFF, 1);
+		spiFlash_format_wr_vol(SPIFLASH_CMD_WRSR_2, (protect_value>>8) & 0xff, 1);
+	}
+
+	return protect_value;
 }
 
 

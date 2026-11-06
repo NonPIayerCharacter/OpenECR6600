@@ -223,7 +223,7 @@ void spi_slave_tx_data_start(unsigned int addr, unsigned int len, unsigned int s
     if (len != 0) {
         value = spiReg->ctrl | SPI_CONTROL_RXDMA_EN | SPI_CONTROL_TXDMA_EN | SPI_CONTROL_TXTHRES(1);
         spiReg->ctrl = value;
-#ifdef CONFIG_SPI_REPEATER
+#if defined(CONFIG_SPI_REPEATER) && !defined(CONFIG_CUSTOM_LXW)
         int dmaLen;
         int offset = 0;
 
@@ -390,7 +390,7 @@ static int spi_slave_read_cfg()
     spi_slave_priv_t *priv = &g_spi_priv;
     int ret;
 
-    ret = spi_slave_read_data((unsigned int *)priv->spiCtlBuff, sizeof(priv->spiCtlBuff));
+    ret = spi_slave_read_data((unsigned int *)priv->spiCtlBuff, sizeof(priv->spiCtlBuff)/sizeof(unsigned int));
     SPI_SLAVE_RET_CHECK_RETURN(ret);
 
     priv->state = SPI_SERVICE_EVENT_CTRL;
@@ -451,7 +451,7 @@ static void spi_slave_data_handle(void)
 #ifdef SPI_SLAVE_DEBUG
             spi_slave_debug_add();
 #endif
-            os_printf(LM_OS, LL_DBG, "%s[%d]evt 0x%x len 0x%x type 0x%x\n", __FUNCTION__, __LINE__, cfg->evt, cfg->len, cfg->type);
+            os_printf(LM_OS, LL_DBG, "%s[%d]evt 0x%x net %d len 0x%x type 0x%x\n", __FUNCTION__, __LINE__, cfg->evt, cfg->net, cfg->len, cfg->type);
             switch (cfg->type) {
                 case SPI_SLAVE_TYPE_READ:
                     spi_slave_read_host();
@@ -460,7 +460,7 @@ static void spi_slave_data_handle(void)
                     spi_slave_send_host();
                     break;
                 default:
-                    os_printf(LM_OS, LL_ERR, "%s[%d]evt 0x%x len 0x%x type 0x%x\n", __FUNCTION__, __LINE__, cfg->evt, cfg->len, cfg->type);
+                    os_printf(LM_OS, LL_ERR, "%s[%d]evt 0x%x net %d len 0x%x type 0x%x\n", __FUNCTION__, __LINE__, cfg->evt, cfg->net, cfg->len, cfg->type);
 #ifdef SPI_SLAVE_DEBUG
                     spi_slave_debug_dump();
 #endif

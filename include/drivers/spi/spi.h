@@ -198,6 +198,7 @@ typedef struct _spi_regs {
 extern unsigned int new_len;
 extern unsigned int remain_read ;
 extern unsigned int spi_flag ;
+extern int bits_msb;
 
 
 typedef struct{ 
@@ -286,6 +287,8 @@ int spi_init_cfg(spi_interface_config_t *spi_master_dev);
 int spi_master_write(unsigned char *bufptr,spi_transaction_t* trans_desc );
 int spi_master_read(unsigned char *bufptr, spi_transaction_t* trans_desc );
 int spi_master_read_buffer( spi_transaction_t* trans_desc );
+int spi_config_at(spi_interface_config_t *spi_master_dev);
+int drv_spi_master_close(void);
 
 
 int spi_init_slave_cfg(spi_slave_interface_config_t *spi_slave_dev);

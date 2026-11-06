@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="release-token" content="__SESSION_TOKEN__">
+  <title>Release Notes · __PROJECT_NAME__</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main>
+    <header><div class="brand">__PROJECT_NAME__</div><span class="badge">本地发布工具</span></header>
+    <section class="intro"><p class="eyebrow">RELEASE NOTES</p><h1>两个版本，一份清晰的变更记录。</h1>
+      <p>自动查询 JIRA、整理变更，并将概要中标注「【重要】」的事项突出展示。</p></section>
+    <section class="card">
+      <form id="generate-form">
+        <div class="fields">
+          <label for="from-ref">基线版本<span>上次发布的 tag 或 commit ID</span><input id="from-ref" name="from" required maxlength="256" placeholder="__FROM_PLACEHOLDER__" autocomplete="off" spellcheck="false"></label>
+          <label for="to-ref">目标版本<span>本次发布的 tag 或 commit ID</span><input id="to-ref" name="to" required maxlength="256" placeholder="__TO_PLACEHOLDER__" autocomplete="off" spellcheck="false"></label>
+        </div>
+        <label class="scope-field" for="status-scope">发布说明范围<select id="status-scope" name="statusScope">
+          <option value="all" selected>全部记录（默认）</option>
+          <option value="accepted">仅包含指定 JIRA 状态的记录</option>
+        </select><span>指定状态：__ACCEPTED_STATUSES__。筛选仅影响发布说明，工程记录保留全部提交。</span></label>
+        <div class="form-footer"><p>范围包含基线之后、截至目标版本的提交。<br>默认适用芯片：__DEFAULT_SCOPE__；日期取系统当天。</p><button id="generate" type="submit">生成 Release Notes <span aria-hidden="true">→</span></button></div>
+      </form>
+    </section>
+    <section id="job-panel" class="card" hidden aria-live="polite">
+      <div class="section-title"><h2 id="job-title">准备生成</h2><span id="job-state" class="badge"></span></div>
+      <p id="job-range" class="muted"></p><div id="progress" class="progress" hidden><span></span></div>
+      <p id="error" class="error" hidden></p><div id="statistics" class="statistics"></div>
+      <p id="result-note" class="muted" hidden></p>
+      <div id="actions" class="actions"></div><details id="more-files" hidden><summary>其他生成文件</summary><div id="downloads" class="actions"></div></details>
+      <p id="batch-path" class="path"></p>
+    </section>
+    <details id="jira-panel" class="card" hidden>
+      <summary>查看未提交状态 JIRA <span class="badge">研发参考</span></summary>
+      <p id="jira-note" class="muted"></p>
+      <div id="jira-list" class="table-scroll"></div>
+      <details id="unknown-panel" hidden><summary>状态未知及未取得的事项</summary><div id="unknown-list" class="table-scroll"></div></details>
+      <details id="no-issue-panel" hidden><summary>无 JIRA 编号的提交</summary><ul id="no-issue-list"></ul></details>
+      <div id="jira-actions" class="actions"></div>
+    </details>
+    <section id="preview-panel" class="card" hidden><div class="section-title"><h2 id="preview-title">Release Notes 预览</h2><button id="close-preview" class="secondary" type="button">收起预览</button></div><article id="preview"></article></section>
+    <footer>每次生成独立归档，保留完整提交依据。页面不会发布或修改 JIRA 事项。</footer>
+  </main>
+</body>
+</html>

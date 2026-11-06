@@ -1,5 +1,5 @@
 #if !defined(MBEDTLS_CONFIG_FILE)
-#include "mbedtls/config.h"
+#include "mbedtls/mbedtls_config.h"
 #else
 #include MBEDTLS_CONFIG_FILE
 #endif
@@ -8,8 +8,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-
-#include "mbedtls/entropy_poll.h"
+#define MBEDTLS_ALLOW_PRIVATE_ACCESS
+//#include "mbedtls/entropy_poll.h"
 #include "oshal.h"
 
 

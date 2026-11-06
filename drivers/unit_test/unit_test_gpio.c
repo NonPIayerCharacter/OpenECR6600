@@ -13,44 +13,7 @@
 static unsigned int data = 0;
 static T_GPIO_ISR_CALLBACK p_callback;
 
-static unsigned int set_gpio_function(unsigned int gpio_num)
-{
-	unsigned int reg,offset;
-	unsigned int bit = 7;
-
-	//must set first 
-	if((gpio_num >= 0) && (gpio_num <= 7))
-	{
-		reg = CHIP_SMU_PD_PIN_MUX_0;
-	}
-	else if((gpio_num >= 8) && (gpio_num <= 15))
-	{
-		reg = CHIP_SMU_PD_PIN_MUX_1;
-	}
-	else if((gpio_num >= 16) && (gpio_num <= 23) && (gpio_num != 19))
-	{
-		reg = CHIP_SMU_PD_PIN_MUX_2;
-		if(gpio_num == 18)
-		{
-			bit = 3;
-		}
-	}
-	else if((gpio_num >= 24) && (gpio_num <= 25))
-	{
-		reg = CHIP_SMU_PD_PIN_MUX_3;
-	}
-	else
-	{
-		os_printf(LM_CMD,LL_INFO,"this num = [%d] no GPIO function! \n",gpio_num);
-		return CMD_RET_FAILURE;
-	}
-	
-	offset = ((gpio_num % 8) * 4);
-	PIN_MUX_SET(reg, bit,offset,1);
-	return CMD_RET_SUCCESS;
-}
-
-static int utest_gpio_dbtset(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_gpio_dbtset( int argc, char *argv[])
 {
 	int ret = 0;
  	unsigned int gpio_num;
@@ -86,7 +49,7 @@ static int utest_gpio_dbtset(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_gpio, dbtset, utest_gpio_dbtset, "unit test gpio DB time set", "ut_gpio dbtset [num] [ns]");
 
 
-static int utest_gpio_dbclose(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_gpio_dbclose( int argc, char *argv[])
 {
 	int ret = 0;
  	unsigned int gpio_num;
@@ -119,7 +82,7 @@ static int utest_gpio_dbclose(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_gpio, dbclose, utest_gpio_dbclose, "unit test gpio DB time close", "ut_gpio dbclose [num]");
 
 
-static int utest_gpio_dirction_set(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_gpio_dirction_set( int argc, char *argv[])
 {
 	int ret = 0;
  	unsigned int gpio_num;
@@ -156,7 +119,7 @@ static int utest_gpio_dirction_set(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_gpio, dirction_set, utest_gpio_dirction_set, "unit test gpio dirction set", "ut_gpio dirction_set [num] [dir(0--in,1--out)]");
 
 
-static int utest_gpio_dirction_get(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_gpio_dirction_get( int argc, char *argv[])
 {
 	int ret = 0;
  	unsigned int gpio_num;
@@ -190,7 +153,7 @@ static int utest_gpio_dirction_get(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_gpio, dirction_get, utest_gpio_dirction_get, "unit test gpio dirction get", "ut_gpio dirction_get [num]");
 
 
-static int utest_gpio_read(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_gpio_read( int argc, char *argv[])
 {
 	int ret = 0;
  	unsigned int gpio_num  = strtoul(argv[1], NULL, 0);
@@ -226,7 +189,7 @@ static int utest_gpio_read(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_gpio, read, utest_gpio_read, "unit test gpio read get", "ut_gpio read [num]");
 
 
-static int utest_gpio_write(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_gpio_write( int argc, char *argv[])
 {
 	int ret = 0;
 	unsigned int value = 0;
@@ -280,7 +243,7 @@ static int utest_gpio_write(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_gpio, write, utest_gpio_write, "unit test gpio write", "ut_gpio write [num] ['high'/'low']");
 
 
-static int utest_gpio_pull(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_gpio_pull( int argc, char *argv[])
 {
 	unsigned int ret = 0;
  	unsigned int gpio_num; 
@@ -327,7 +290,7 @@ static void gpio_isr_withdata_test(void * data_d)
 	
 }
 
-static int utest_gpio_interrupt(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_gpio_interrupt( int argc, char *argv[])
 {
 	unsigned int ret = 0;
  	unsigned int gpio_num; 
@@ -368,7 +331,7 @@ static int utest_gpio_interrupt(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_gpio, interrupt, utest_gpio_interrupt, "unit test gpio interrupt", "ut_gpio interrupt [num] [0:nop/2:high/3:low/5:N/6:P/7:D]");
 
 
-static int utest_gpio_interrupt_withdata(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_gpio_interrupt_withdata( int argc, char *argv[])
 {
 	unsigned int ret = 0;
  	unsigned int gpio_num; 

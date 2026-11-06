@@ -19,6 +19,7 @@
 
 static bool promiscuous_en = false;
 static wifi_promiscuous_cfg_t  promiscuous_cfg = {{WIFI_PROMIS_FILTER_MASK_ALL}, NULL};
+static wifi_fcs_error_cb_t fcs_error_cb = NULL;
 
 typedef struct _GenericMacHeader {
     // Word 0 : MAC Header Word 0
@@ -157,6 +158,13 @@ int process_promiscuous_frame(void* rx_head, void* mac_head, uint8_t *frame, uin
 			goto process;
 		}
     }
+
+    if(promiscuous_cfg.filter.filter_mask & WIFI_PROMIS_FILTER_MASK_BEACON_PROBE_RESP){
+		if(gmh->type == 0) {
+			type = WIFI_PKT_MGMT;
+			goto process;
+		}
+    }
 	if(match == false){
 		goto drop;
 	}
@@ -165,11 +173,47 @@ process:
 	if(promiscuous_cfg.promisc_cb != NULL){
 		memcpy(&sniffer_pkt.rx_ctrl, rx_head, 4 * 6); /* rxvetor 6words */
 		sniffer_pkt.payload = frame;
+		// Packets reaching here have already passed FCS check in rxl layer
+		// FCS error packets are handled separately in rxl_cntrl_evt
+		sniffer_pkt.fcs_ok = 1;
 		promiscuous_cfg.promisc_cb(&sniffer_pkt,len,type);
-		return 0; 
+		return 0;
 	}
 
 drop:
 	return 0;
+}
+
+int wifi_set_fcs_error_cb(wifi_fcs_error_cb_t cb)
+{
+    fcs_error_cb = cb;
+    return 0;
+}
+
+int wifi_fcs_error_handler(void* rx_head)
+{
+    if (fcs_error_cb != NULL) {
+        return fcs_error_cb(rx_head);
+    }
+    return 0;
+}
+
+int process_fcs_error_frame(void* rx_head)
+{
+    wifi_promiscuous_pkt_t sniffer_pkt = {0};
+
+    if (!promiscuous_en) {
+        return -1;
+    }
+
+    // FCS error packets are captured early in rxl layer, reported as WIFI_PKT_NULL
+    if (promiscuous_cfg.promisc_cb != NULL) {
+        memcpy(&sniffer_pkt.rx_ctrl, rx_head, 4 * 6); /* rxvetor 6words */
+        sniffer_pkt.payload = NULL;
+        sniffer_pkt.fcs_ok = 0;
+        promiscuous_cfg.promisc_cb(&sniffer_pkt, 0, WIFI_PKT_NULL);
+    }
+
+    return 0;
 }
 

@@ -3,3 +3,9 @@ menuconfig FATFS
 	bool "FATFS Component Support"
 	select SDCARD
 	default n
+menuconfig LFS
+	bool "LittleFS Component Support"
+	select NV
+	default n
+	help
+		Enable littlefs on the SPI flash partition named "fs".

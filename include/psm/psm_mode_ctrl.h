@@ -65,4 +65,5 @@ bool psm_gpio_wakeup_config(unsigned int pin, unsigned int enable);
 void psm_soc_sleep_distribute(unsigned int mode);
 void psm_set_wakeup_mode();
 void psm_enter_sleep(unsigned int mode);
+bool wakeup_gpio_iscan_sleep();
 #endif

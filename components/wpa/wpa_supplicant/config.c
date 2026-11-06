@@ -14,6 +14,7 @@
 #include "crypto/sha1.h"
 #include "rsn_supp/wpa.h"
 #include "config.h"
+#include "eap_peer/eap.h"
 
 
 #if !defined(CONFIG_CTRL_IFACE) && defined(CONFIG_NO_CONFIG_WRITE)
@@ -1342,7 +1343,6 @@ static int wpa_config_parse_eap(const struct parse_data *data,
 	return errors ? -1 : 0;
 }
 
-
 #ifndef NO_CONFIG_WRITE
 static char * wpa_config_write_eap(const struct parse_data *data,
 				   struct wpa_ssid *ssid)
@@ -1378,7 +1378,6 @@ static char * wpa_config_write_eap(const struct parse_data *data,
 	return buf;
 }
 #endif /* NO_CONFIG_WRITE */
-
 
 static int wpa_config_parse_password(const struct parse_data *data,
 				     struct wpa_ssid *ssid, int line,
@@ -1466,7 +1465,6 @@ static int wpa_config_parse_password(const struct parse_data *data,
 
 	return 0;
 }
-
 
 #ifndef NO_CONFIG_WRITE
 static char * wpa_config_write_password(const struct parse_data *data,
@@ -1876,49 +1874,49 @@ static const struct parse_data ssid_fields[] = {
 	//{ INT_RANGE(max_oper_chwidth, VHT_CHANWIDTH_USE_HT,
 	//	    VHT_CHANWIDTH_80P80MHZ) },
 #ifdef IEEE8021X_EAPOL
-	//{ FUNC(eap) },
-	//{ STR_LENe(identity) },
-	//{ STR_LENe(anonymous_identity) },
-	//{ FUNC_KEY(password) },
-	//{ STRe(ca_cert) },
-	//{ STRe(ca_path) },
-	//{ STRe(client_cert) },
-	//{ STRe(private_key) },
-	//{ STR_KEYe(private_key_passwd) },
-	//{ STRe(dh_file) },
-	//{ STRe(subject_match) },
-	//{ STRe(altsubject_match) },
-	//{ STRe(domain_suffix_match) },
-	//{ STRe(domain_match) },
-	//{ STRe(ca_cert2) },
-	//{ STRe(ca_path2) },
-	//{ STRe(client_cert2) },
-	//{ STRe(private_key2) },
-	//{ STR_KEYe(private_key2_passwd) },
-	//{ STRe(dh_file2) },
-	//{ STRe(subject_match2) },
-	//{ STRe(altsubject_match2) },
-	//{ STRe(domain_suffix_match2) },
-	//{ STRe(domain_match2) },
-	//{ STRe(phase1) },
-	//{ STRe(phase2) },
-	//{ STRe(pcsc) },
-	//{ STR_KEYe(pin) },
-	//{ STRe(engine_id) },
-	//{ STRe(key_id) },
-	//{ STRe(cert_id) },
-	//{ STRe(ca_cert_id) },
-	//{ STR_KEYe(pin2) },
-	//{ STRe(engine2_id) },
-	//{ STRe(key2_id) },
-	//{ STRe(cert2_id) },
-	//{ STRe(ca_cert2_id) },
-	//{ INTe(engine) },
-	//{ INTe(engine2) },
-	//{ INT(eapol_flags) },
-	//{ INTe(sim_num) },
-	//{ STRe(openssl_ciphers) },
-	//{ INTe(erp) },
+	{ FUNC(eap) },
+	{ STR_LENe(identity) },
+	{ STR_LENe(anonymous_identity) },
+	{ FUNC_KEY(password) },
+	{ STRe(ca_cert) },
+	{ STRe(ca_path) },
+	{ STRe(client_cert) },
+	{ STRe(private_key) },
+	{ STR_KEYe(private_key_passwd) },
+	{ STRe(dh_file) },
+	{ STRe(subject_match) },
+	{ STRe(altsubject_match) },
+	{ STRe(domain_suffix_match) },
+	{ STRe(domain_match) },
+	{ STRe(ca_cert2) },
+	{ STRe(ca_path2) },
+	{ STRe(client_cert2) },
+	{ STRe(private_key2) },
+	{ STR_KEYe(private_key2_passwd) },
+	{ STRe(dh_file2) },
+	{ STRe(subject_match2) },
+	{ STRe(altsubject_match2) },
+	{ STRe(domain_suffix_match2) },
+	{ STRe(domain_match2) },
+	{ STRe(phase1) },
+	{ STRe(phase2) },
+	{ STRe(pcsc) },
+	{ STR_KEYe(pin) },
+	{ STRe(engine_id) },
+	{ STRe(key_id) },
+	{ STRe(cert_id) },
+	{ STRe(ca_cert_id) },
+	{ STR_KEYe(pin2) },
+	{ STRe(engine2_id) },
+	{ STRe(key2_id) },
+	{ STRe(cert2_id) },
+	{ STRe(ca_cert2_id) },
+	{ INTe(engine) },
+	{ INTe(engine2) },
+	{ INT(eapol_flags) },
+	{ INTe(sim_num) },
+	{ STRe(openssl_ciphers) },
+	{ INTe(erp) },
 #endif /* IEEE8021X_EAPOL */
 	{ FUNC_KEY(wep_key0) },
 	{ FUNC_KEY(wep_key1) },
@@ -1927,10 +1925,10 @@ static const struct parse_data ssid_fields[] = {
 	{ INT(wep_tx_keyidx) },
 	//{ INT(priority) },
 #ifdef IEEE8021X_EAPOL
-	//{ INT(eap_workaround) },
-	//{ STRe(pac_file) },
-	//{ INTe(fragment_size) },
-	//{ INTe(ocsp) },
+	{ INT(eap_workaround) },
+	{ STRe(pac_file) },
+	{ INTe(fragment_size) },
+	{ INTe(ocsp) },
 #endif /* IEEE8021X_EAPOL */
 #ifdef CONFIG_MESH
 	{ INT_RANGE(mode, 0, 5) },
@@ -2364,11 +2362,20 @@ struct wpa_ssid * wpa_config_add_network(struct wpa_config *config)
 
 	id = -1;
 	ssid = config->ssid;
+	struct wpa_ssid *start = config->ssid;
+	struct wpa_ssid *ssid_temp = config->ssid;
+	int ssid_cnt = 0;
 
-    if (ssid) {
-        return NULL;
-    }
-    
+	while (ssid_temp) {
+		ssid_temp = ssid_temp->next;
+		ssid_cnt++;
+		if (ssid_temp == start)
+			break;
+	}
+	if (ssid_cnt >= 2) {
+		return NULL;
+	}
+
 	while (ssid) {
 		if (ssid->id > id)
 			id = ssid->id;
@@ -3109,7 +3116,7 @@ static int wpa_config_process_country(const struct global_parse_data *data,
 
 
 #ifdef CONFIG_WPS
-
+#if 0
 static int wpa_config_process_uuid(const struct global_parse_data *data,
 				   struct wpa_config *config, int line,
 				   const char *pos)
@@ -3123,7 +3130,6 @@ static int wpa_config_process_uuid(const struct global_parse_data *data,
 	wpa_printf(MSG_DEBUG, "uuid=%s", buf);
 	return 0;
 }
-
 
 static int wpa_config_process_device_type(
 	const struct global_parse_data *data,
@@ -3182,7 +3188,7 @@ static int wpa_config_process_wps_vendor_ext_m1(
 
 	return 0;
 }
-
+#endif
 #endif /* CONFIG_WPS */
 
 #ifdef CONFIG_P2P

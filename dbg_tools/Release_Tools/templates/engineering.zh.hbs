@@ -1,0 +1,36 @@
+# 工程变更记录
+
+{{#each releases}}
+## {{title}}
+
+{{#if tag}}标签日期：{{isoDate}}{{/if}}
+
+Git 范围：`{{diff}}`
+
+{{#if href}}[版本比较]({{href}}){{/if}}
+
+{{#if merges}}
+### 合并记录
+
+{{#each merges}}
+- {{#if commit.breaking}}**不兼容变更：** {{/if}}{{message}}（`{{commit.hash}}`）{{#if href}} [合并请求]({{href}}){{/if}}
+{{/each}}
+{{/if}}
+
+{{#if fixes}}
+### 关联事项
+
+{{#each fixes}}
+- {{#if commit.breaking}}**不兼容变更：** {{/if}}{{commit.subject}}（`{{commit.hash}}`）{{#each fixes}} {{#if href}}[{{id}}]({{href}}){{else}}{{id}}{{/if}}{{/each}}
+{{/each}}
+{{/if}}
+
+{{#if commits}}
+### 其他提交
+
+{{#each commits}}
+- {{#if breaking}}**不兼容变更：** {{/if}}{{subject}}（`{{hash}}`）{{#if href}} [提交]({{href}}){{/if}}
+{{/each}}
+{{/if}}
+
+{{/each}}

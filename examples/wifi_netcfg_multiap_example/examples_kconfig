@@ -1,0 +1,18 @@
+menu "WiFi Netcfg Multi-AP Example"
+
+config WIFI_NETCFG_MULTIAP_EXAMPLE
+	bool "Enable wifi_netcfg multi-AP example"
+	default y
+	select WIFI_NETCFG
+	select WIFI_SMARTCONFIG
+	help
+	  Build the standalone wifi_netcfg multi-AP example.
+	  The example keeps WiFi ownership inside the shared wifi_netcfg
+	  framework and exposes the `sc_test` CLI command to:
+	  - store multiple AP credentials
+	  - trigger scan and fast connect
+	  - simulate BLE provisioning input
+	  - bridge real smartconfig credentials into wifi_netcfg
+	  - exercise disconnect and reconnect flows
+
+endmenu

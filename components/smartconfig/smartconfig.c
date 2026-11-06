@@ -1,5 +1,4 @@
 #include "wifi_sniffer.h"
-#include "system_wifi.h"
 #include "smartconfig.h"
 #include "smartconfig_notify.h"
 #include "freertos/FreeRTOS.h"
@@ -21,6 +20,14 @@
 #define CHANNEL_LOCK_TIME 3000   //15000ms
 #define DEBUG 0
 #define SC_TASK_PRIORITY 5
+
+#ifdef CONFIG_CMD_AT
+extern void at_printf(const char *f, ...);
+#else
+#define at_printf(f, ...) \
+    do {           \
+    } while (0);
+#endif
 
 extern uint16_t g_ssidIndex;
 typedef struct sc_head
@@ -106,7 +113,7 @@ typedef struct _sc_config
     TimerHandle_t channel_timer;
     // TimerHandle_t lock_chn_timer;
     TimerHandle_t task_timer;
-}sc_config;
+} sc_config;
 
 const char sc_vers[] = "V1.0";
 static sc_head_t sc_head = {{0},{0}};
@@ -120,7 +127,33 @@ int g_current_channel;
 int g_round;
 int g_hiddenSsid;
 int g_mutilFlag;
+wifi_auth_mode_e sc_authmode_floor = AUTH_OPEN;
 unsigned char g_mutilAddr[6] = {0};
+
+void smartconfig_set_authmode_floor(wifi_auth_mode_e authmode_floor)
+{
+    sc_authmode_floor = authmode_floor;
+}
+
+wifi_auth_mode_e smartconfig_get_authmode_floor(void)
+{
+    return sc_authmode_floor;
+}
+
+int smartconfig_set_timeout(uint8_t time_s)
+{
+    if (time_s == 0) {
+        return -1;
+    }
+
+    sc_cf.timeout_s = time_s;
+
+    if (sc_cf.task_timer) {
+        os_timer_changeperiod(sc_cf.task_timer, (uint32_t)time_s * 1000);
+    }
+
+    return 0;
+}
 
 const char* smartconfig_version(void)
 {
@@ -1026,6 +1059,9 @@ void sc_task(void* parameter)
                     wifi_set_promiscuous_filter(&filter);
                     break;
                 case SC_STATUS_GOT_SSID_PSWD:
+                    at_printf("Smart get Wi-Fi info\r\n");
+                    at_printf("ssid:\"%s\"\r\n", sc_result.ssid);
+                    at_printf("password:\"%s\"\r\n", sc_result.pwd);
                     if(sc_cf.callback != NULL){
                         sc_cf.callback(SC_STATUS_GOT_SSID_PSWD,&sc_result);
                     }
@@ -1053,13 +1089,16 @@ void sc_task(void* parameter)
                     if(sc_cf.callback != NULL){
                         sc_cf.callback(SC_STATUS_STOP,NULL);
                     }
+                    break;
+                case SC_STATUS_GOT_IP:
+                    at_printf("Smartconfig connected Wi-Fi\r\n");
                     goto stop;
             }
         }
     }
 stop:
     if(g_event_queue) {
-        os_queue_destory(g_event_queue);
+        os_queue_destroy(g_event_queue);
     }   
     g_event_queue = NULL;
     os_task_delete(0);
@@ -1118,13 +1157,20 @@ void sc_timeout_func(void* param)
         // xTimerDelete(sc_cf.lock_chn_timer,0);
         msg = SC_STATUS_TIMEOUT;
         if(g_event_queue) {
+			#ifdef CONFIG_PSM_SURPORT
+			psm_set_device_status(PSM_DEVICE_SMART_CONFIG, PSM_DEVICE_STATUS_IDLE);
+			#endif
             os_queue_send(g_event_queue, (char *)&msg, sizeof(msg), portMAX_DELAY);
         }
     } else {
         return;
     }
 }
-
+static int smartconfig_is_already_started_flag = 0;
+int smartconfig_is_already_started()
+{
+    return smartconfig_is_already_started_flag;
+}
 
 int smartconfig_start(sc_callback_t cb)
 {
@@ -1135,7 +1181,9 @@ int smartconfig_start(sc_callback_t cb)
     }
 
     if (sc_context->sc_state == SC_STATE_STOPED) {
+        #ifdef CONFIG_PSM_SURPORT
 		psm_set_device_status(PSM_DEVICE_SMART_CONFIG, PSM_DEVICE_STATUS_ACTIVE);
+        #endif
         wifi_stop_station();
         g_mutilFlag = 0;
         g_hiddenSsid = 0;
@@ -1164,6 +1212,7 @@ int smartconfig_start(sc_callback_t cb)
                 os_timer_delete(sc_cf.task_timer);
             }
         }
+        smartconfig_is_already_started_flag = 1;
         return 0;
     } else {
         sc_error("smartconfig is already started,can't start it twice\n");
@@ -1198,9 +1247,12 @@ int smartconfig_stop(void)
             os_queue_send(g_event_queue, (char *)&msg, sizeof(msg), portMAX_DELAY);
         }
         awss_deinit_ieee80211_aplist();
+        #ifdef CONFIG_PSM_SURPORT
 		psm_set_device_status(PSM_DEVICE_SMART_CONFIG, PSM_DEVICE_STATUS_IDLE);
+        #endif
         sc_context->sc_state = SC_STATE_STOPED;
         result = 0;
+        smartconfig_is_already_started_flag = 0;
     } else {
         sc_error("smartconfig is already stopped,can't stop it twice\n");
         result =  -1;
@@ -1238,20 +1290,39 @@ void connect_wifi_timeout_func(void* param)
     }
 }
 
-void connect_wifi_task(void *param) 
+void connect_wifi_task(void *param)
 {
     unsigned int sta_ip = 0;
     sc_notify_t msg = {0};
-    wifi_config_u config={0};
+    int ip_msg;
+    wifi_config_u config = {0};
+    wifi_scan_config_t scan_config = {0};
+    wifi_info_t ap_info = {0};
+    int scan_num;
 
     g_connectWifiTimeoutFlag = false;
-    /* 创建一个30s的超时检测，30s没有获取到ip，删除connect_wifi_task */
     connect_wifi_timer = os_timer_create("ConnectWifiTimer", 30 * 1000, pdFALSE, connect_wifi_timeout_func, NULL);
     os_timer_start(connect_wifi_timer);
 
     memcpy(config.sta.ssid, result.ssid, result.ssid_length);
     memcpy(config.sta.password, result.pwd, result.pwd_length);
-    wifi_start_station(&config);
+    if (smartconfig_get_authmode_floor() > AUTH_OPEN) {
+        memcpy(scan_config.ssid, result.ssid, strlen(result.ssid));
+        wifi_scan_start(true, &scan_config);
+        scan_num = wpa_get_scan_num();
+        if (scan_num > 0) {
+            for (int i = 0; i < scan_num; i++) {
+                wifi_get_scan_result(i, &ap_info);
+                if (ap_info.auth >= smartconfig_get_authmode_floor()) {
+                    memcpy(config.sta.bssid, ap_info.bssid, 6);
+                    wifi_start_station(&config);
+                    break;
+                }
+            }
+        }
+    } else {
+        wifi_start_station(&config);
+    }
 
     while (1) {
         wifi_get_ip_addr(STATION_IF, &sta_ip);
@@ -1260,6 +1331,10 @@ void connect_wifi_task(void *param)
             os_timer_delete(connect_wifi_timer);
             msg.random = result.random;
             sc_notify_send(&msg);
+            ip_msg = SC_STATUS_GOT_IP;
+            if (g_event_queue) {
+                os_queue_send(g_event_queue, (char *)&ip_msg, sizeof(ip_msg), portMAX_DELAY);
+            }
             break;
         } else if (g_connectWifiTimeoutFlag) {
             sc_error("connect_wifi_timeout!\n");

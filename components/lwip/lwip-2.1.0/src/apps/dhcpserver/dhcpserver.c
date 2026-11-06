@@ -30,20 +30,33 @@
 static const u32_t magic_cookie   = 0x63538263;
 static struct udp_pcb* pcb_dhcps = NULL;
 static ip_addr_t broadcast_dhcps;
-static ip_addr_t server_address;
 static ip_addr_t client_address;//added
 static ip_addr_t client_address_plus;
 
-static struct dhcps_lease dhcps_lease;
-static ip_addr_t dhcps_dns_server[2];
+static struct dhcps_lease g_dhcps_lease;
 static list_node* plist = NULL;
 static u8_t offer = 0xFF;
 static bool renew = false;
 #define DHCPS_LEASE_TIME_DEF	(120)
-u32_t dhcps_lease_time = DHCPS_LEASE_TIME_DEF;  //minute
 s32_t dhcps_max_lease_time = -((60 * DHCPS_LEASE_TIME_DEF) / DHCPS_COARSE_TIMER_SECS);
 static u8_t softap_if_id = SOFTAP_IF; // index of SOFTAP_IF
 struct netif* dhcps_netif = NULL;
+static os_mutex_handle_t dhcps_pool_mutex = NULL;
+
+static bool dhcps_pool_lock(void)
+{
+	if (dhcps_pool_mutex != NULL) {
+		return os_mutex_lock(dhcps_pool_mutex, WAIT_FOREVER) == 0;
+	}
+	return false;
+}
+
+static void dhcps_pool_unlock(bool locked)
+{
+	if (locked) {
+		os_mutex_unlock(dhcps_pool_mutex);
+	}
+}
 
 /******************************************************************************
  * FunctionName : node_insert_to_list
@@ -149,13 +162,11 @@ static u8_t* add_msg_type(u8_t* optptr, u8_t type)
 *******************************************************************************/
 static u8_t* add_offer_options(u8_t* optptr)
 {
-	ip_addr_t ipadd;
+    ip_addr_t ipadd;
+    struct ip_info info = {0};
 
-	#if LWIP_IPV4 && LWIP_IPV6
-	ipadd.u_addr.ip4.addr = *((u32_t*) &server_address.u_addr.ip4.addr);
-	#elif LWIP_IPV4
-	ipadd.addr = *((u32_t*) &server_address);
-	#endif
+    wifi_get_ip_info(softap_if_id, &info);
+    ipadd = info.ip;
 
 #ifdef USE_CLASS_B_NET
 	*optptr++ = DHCP_OPTION_SUBNET_MASK;
@@ -175,10 +186,10 @@ static u8_t* add_offer_options(u8_t* optptr)
 
 	*optptr++ = DHCP_OPTION_LEASE_TIME;
 	*optptr++ = 4;
-	*optptr++ = ((DHCPS_LEASE_TIMER * 60) >> 24) & 0xFF;
-	*optptr++ = ((DHCPS_LEASE_TIMER * 60) >> 16) & 0xFF;
-	*optptr++ = ((DHCPS_LEASE_TIMER * 60) >> 8) & 0xFF;
-	*optptr++ = ((DHCPS_LEASE_TIMER * 60) >> 0) & 0xFF;
+	*optptr++ = ((g_dhcps_lease.dhcps_lease * 60) >> 24) & 0xFF;
+	*optptr++ = ((g_dhcps_lease.dhcps_lease * 60) >> 16) & 0xFF;
+	*optptr++ = ((g_dhcps_lease.dhcps_lease * 60) >> 8) & 0xFF;
+	*optptr++ = ((g_dhcps_lease.dhcps_lease * 60) >> 0) & 0xFF;
 
 	*optptr++ = DHCP_OPTION_SERVER_ID;
 	*optptr++ = 4;
@@ -218,27 +229,15 @@ static u8_t* add_offer_options(u8_t* optptr)
 #ifdef USE_DNS
 	*optptr++ = DHCP_OPTION_DNS_SERVER;
 #if defined ENABLE_LWIP_NAPT
-	*optptr++ = 8;
+    int idx;
 
-	#if LWIP_IPV4 && LWIP_IPV6
-	*optptr++ = ip4_addr1(&dhcps_dns_server[0].u_addr.ip4);
-	*optptr++ = ip4_addr2(&dhcps_dns_server[0].u_addr.ip4);
-	*optptr++ = ip4_addr3(&dhcps_dns_server[0].u_addr.ip4);
-	*optptr++ = ip4_addr4(&dhcps_dns_server[0].u_addr.ip4);
-	*optptr++ = ip4_addr1(&dhcps_dns_server[1].u_addr.ip4);
-	*optptr++ = ip4_addr2(&dhcps_dns_server[1].u_addr.ip4);
-	*optptr++ = ip4_addr3(&dhcps_dns_server[1].u_addr.ip4);
-	*optptr++ = ip4_addr4(&dhcps_dns_server[1].u_addr.ip4);
-	#elif LWIP_IPV4
-	*optptr++ = ip4_addr1(&dhcps_dns_server[0]);
-	*optptr++ = ip4_addr2(&dhcps_dns_server[0]);
-	*optptr++ = ip4_addr3(&dhcps_dns_server[0]);
-	*optptr++ = ip4_addr4(&dhcps_dns_server[0]);
-	*optptr++ = ip4_addr1(&dhcps_dns_server[1]);
-	*optptr++ = ip4_addr2(&dhcps_dns_server[1]);
-	*optptr++ = ip4_addr3(&dhcps_dns_server[1]);
-	*optptr++ = ip4_addr4(&dhcps_dns_server[1]);
-	#endif
+    *optptr++ = 4*DNS_MAX_SERVERS;
+    for (idx = 0; idx < DNS_MAX_SERVERS; idx++) {
+        *optptr++ = ip4_addr1(ip_2_ip4(&g_dhcps_lease.dnsserver[idx]));
+        *optptr++ = ip4_addr2(ip_2_ip4(&g_dhcps_lease.dnsserver[idx]));
+        *optptr++ = ip4_addr3(ip_2_ip4(&g_dhcps_lease.dnsserver[idx]));
+        *optptr++ = ip4_addr4(ip_2_ip4(&g_dhcps_lease.dnsserver[idx]));
+    }
 #else
 	*optptr++ = 4;
 
@@ -553,9 +552,10 @@ static void send_ack(struct dhcps_msg* m, struct dhcps_pool* pool)
  * Description  : parse DHCP message options
  * Parameters   : optptr -- DHCP message option info
  *                len -- DHCP message option length
+ *                pool -- DHCP lease associated with the message
  * Returns      : none
 *******************************************************************************/
-static u8_t parse_options(u8_t* optptr, s16_t len)
+static u8_t parse_options(u8_t* optptr, s16_t len, struct dhcps_pool* pool)
 {
 	ip_addr_t client;
 	bool is_dhcp_parse_end = false;
@@ -595,6 +595,22 @@ static u8_t parse_options(u8_t* optptr, s16_t len)
 					s.state = DHCPS_STATE_NAK;
 				}
 
+				break;
+
+			case DHCP_OPTION_HOSTNAME:
+				if (pool != NULL && end - optptr >= 2) {
+					u16_t copy_len = optptr[1];
+					u16_t available_len = end - optptr - 2;
+
+					if (copy_len > available_len) {
+						copy_len = available_len;
+					}
+					if (copy_len >= sizeof(pool->hostname)) {
+						copy_len = sizeof(pool->hostname) - 1;
+					}
+					os_memcpy(pool->hostname, optptr + 2, copy_len);
+					pool->hostname[copy_len] = '\0';
+				}
 				break;
 
 				case DHCP_OPTION_END: {
@@ -655,13 +671,14 @@ static u8_t parse_options(u8_t* optptr, s16_t len)
 #if LWIP_IPV4 && LWIP_IPV6
 static s16_t parse_msg(struct dhcps_msg* m, struct dhcps_pool** pool, u16_t len)
 {
-	u32_t lease_timer = (dhcps_lease_time * 60) / DHCPS_COARSE_TIMER_SECS;
+	u32_t lease_timer = (g_dhcps_lease.dhcps_lease * 60) / DHCPS_COARSE_TIMER_SECS;
 	*pool = NULL;
 
 	if (memcmp((char*)m->options,
 	&magic_cookie,
 	sizeof(magic_cookie)) == 0) {
 		LWIP_DEBUGF(DHCPS_DEBUG | LWIP_DBG_TRACE, ("dhcps: len = %d\n", len));
+		bool pool_locked = dhcps_pool_lock();
 
 		ip_addr_t addr_tmp;
 
@@ -671,7 +688,7 @@ static s16_t parse_msg(struct dhcps_msg* m, struct dhcps_pool** pool, u16_t len)
 		ip_addr_t first_address;
 		bool flag = false;
 
-		first_address.u_addr.ip4.addr = dhcps_lease.start_ip.u_addr.ip4.addr;
+		first_address.u_addr.ip4.addr = g_dhcps_lease.start_ip.u_addr.ip4.addr;
 		client_address.u_addr.ip4.addr = client_address_plus.u_addr.ip4.addr;
 		renew = false;
 
@@ -713,29 +730,30 @@ static s16_t parse_msg(struct dhcps_msg* m, struct dhcps_pool** pool, u16_t len)
 				}
 			}
 		} else {
-			client_address.u_addr.ip4.addr = dhcps_lease.start_ip.u_addr.ip4.addr;
+			client_address.u_addr.ip4.addr = g_dhcps_lease.start_ip.u_addr.ip4.addr;
 		}
 
-		if (client_address_plus.u_addr.ip4.addr > dhcps_lease.end_ip.u_addr.ip4.addr) {
+		if (client_address_plus.u_addr.ip4.addr > g_dhcps_lease.end_ip.u_addr.ip4.addr) {
 			client_address.u_addr.ip4.addr = first_address.u_addr.ip4.addr;
 		}
 
-		if (client_address.u_addr.ip4.addr > dhcps_lease.end_ip.u_addr.ip4.addr) {
-			client_address_plus.u_addr.ip4.addr = dhcps_lease.start_ip.u_addr.ip4.addr;
+		if (client_address.u_addr.ip4.addr > g_dhcps_lease.end_ip.u_addr.ip4.addr) {
+			client_address_plus.u_addr.ip4.addr = g_dhcps_lease.start_ip.u_addr.ip4.addr;
 			pdhcps_pool = NULL;
 			pnode = NULL;
 		} else {
 			pdhcps_pool = (struct dhcps_pool*)mem_malloc(sizeof(struct dhcps_pool));
 			pdhcps_pool->ip.u_addr.ip4.addr = client_address.u_addr.ip4.addr;
 			os_memcpy(pdhcps_pool->mac, m->chaddr, sizeof(pdhcps_pool->mac));
+			pdhcps_pool->hostname[0] = '\0';
 			pdhcps_pool->lease_timer = lease_timer;
 			pnode = (list_node*)mem_malloc(sizeof(list_node));
 			pnode->pnode = pdhcps_pool;
 			pnode->pnext = NULL;
 			node_insert_to_list(&plist, pnode);
 
-			if (client_address.u_addr.ip4.addr == dhcps_lease.end_ip.u_addr.ip4.addr) {
-				client_address_plus.u_addr.ip4.addr = dhcps_lease.start_ip.u_addr.ip4.addr;
+			if (client_address.u_addr.ip4.addr == g_dhcps_lease.end_ip.u_addr.ip4.addr) {
+				client_address_plus.u_addr.ip4.addr = g_dhcps_lease.start_ip.u_addr.ip4.addr;
 			} else {
 				addr_tmp.u_addr.ip4.addr = htonl(client_address.u_addr.ip4.addr);
 				addr_tmp.u_addr.ip4.addr++;
@@ -745,7 +763,7 @@ static s16_t parse_msg(struct dhcps_msg* m, struct dhcps_pool** pool, u16_t len)
 
 		POOL_CHECK:
 
-		if ((client_address.u_addr.ip4.addr > dhcps_lease.end_ip.u_addr.ip4.addr) ){//|| (ip_addr_isany(&client_address))) {
+		if ((client_address.u_addr.ip4.addr > g_dhcps_lease.end_ip.u_addr.ip4.addr) ){//|| (ip_addr_isany(&client_address))) {
 			if (pnode != NULL) {
 				node_remove_from_list(&plist, pnode);
 				mem_free(pnode);
@@ -757,10 +775,11 @@ static s16_t parse_msg(struct dhcps_msg* m, struct dhcps_pool** pool, u16_t len)
 				pdhcps_pool = NULL;
 			}
 
+			dhcps_pool_unlock(pool_locked);
 			return 4;
 		}
 
-		s16_t ret = parse_options(&m->options[4], len);
+		s16_t ret = parse_options(&m->options[4], len, pdhcps_pool);
 
 		if (ret == DHCPS_STATE_RELEASE) {
 #if 0
@@ -785,6 +804,7 @@ static s16_t parse_msg(struct dhcps_msg* m, struct dhcps_pool** pool, u16_t len)
 #endif
 		LWIP_DEBUGF(DHCPS_DEBUG | LWIP_DBG_TRACE, ("dhcps: xid changed\n"));
 		LWIP_DEBUGF(DHCPS_DEBUG | LWIP_DBG_TRACE, ("dhcps: client_address.addr = %x\n", client_address.u_addr.ip4.addr));
+		dhcps_pool_unlock(pool_locked);
 		return ret;
 	}
 
@@ -795,13 +815,14 @@ static s16_t parse_msg(struct dhcps_msg* m, struct dhcps_pool** pool, u16_t len)
 
 static s16_t parse_msg(struct dhcps_msg* m, struct dhcps_pool** pool, u16_t len)
 {
-	u32_t lease_timer = (dhcps_lease_time * 60) / DHCPS_COARSE_TIMER_SECS;
+	u32_t lease_timer = (g_dhcps_lease.dhcps_lease * 60) / DHCPS_COARSE_TIMER_SECS;
 	*pool = NULL;
 
 	if (memcmp((char*)m->options,
 	&magic_cookie,
 	sizeof(magic_cookie)) == 0) {
 		LWIP_DEBUGF(DHCPS_DEBUG | LWIP_DBG_TRACE, ("dhcps: len = %d\n", len));
+		bool pool_locked = dhcps_pool_lock();
 
 		ip_addr_t addr_tmp;
 
@@ -811,7 +832,7 @@ static s16_t parse_msg(struct dhcps_msg* m, struct dhcps_pool** pool, u16_t len)
 		ip_addr_t first_address;
 		bool flag = false;
 
-		first_address.addr = dhcps_lease.start_ip.addr;
+		first_address.addr = g_dhcps_lease.start_ip.addr;
 		client_address.addr = client_address_plus.addr;
 		renew = false;
 
@@ -853,29 +874,30 @@ static s16_t parse_msg(struct dhcps_msg* m, struct dhcps_pool** pool, u16_t len)
 				}
 			}
 		} else {
-			client_address.addr = dhcps_lease.start_ip.addr;
+			client_address.addr = g_dhcps_lease.start_ip.addr;
 		}
 
-		if (client_address_plus.addr > dhcps_lease.end_ip.addr) {
+		if (client_address_plus.addr > g_dhcps_lease.end_ip.addr) {
 			client_address.addr = first_address.addr;
 		}
 
-		if (client_address.addr > dhcps_lease.end_ip.addr) {
-			client_address_plus.addr = dhcps_lease.start_ip.addr;
+		if (client_address.addr > g_dhcps_lease.end_ip.addr) {
+			client_address_plus.addr = g_dhcps_lease.start_ip.addr;
 			pdhcps_pool = NULL;
 			pnode = NULL;
 		} else {
 			pdhcps_pool = (struct dhcps_pool*)mem_malloc(sizeof(struct dhcps_pool));
 			pdhcps_pool->ip.addr = client_address.addr;
 			os_memcpy(pdhcps_pool->mac, m->chaddr, sizeof(pdhcps_pool->mac));
+			pdhcps_pool->hostname[0] = '\0';
 			pdhcps_pool->lease_timer = lease_timer;
 			pnode = (list_node*)mem_malloc(sizeof(list_node));
 			pnode->pnode = pdhcps_pool;
 			pnode->pnext = NULL;
 			node_insert_to_list(&plist, pnode);
 
-			if (client_address.addr == dhcps_lease.end_ip.addr) {
-				client_address_plus.addr = dhcps_lease.start_ip.addr;
+			if (client_address.addr == g_dhcps_lease.end_ip.addr) {
+				client_address_plus.addr = g_dhcps_lease.start_ip.addr;
 			} else {
 				addr_tmp.addr = htonl(client_address.addr);
 				addr_tmp.addr++;
@@ -885,7 +907,7 @@ static s16_t parse_msg(struct dhcps_msg* m, struct dhcps_pool** pool, u16_t len)
 
 POOL_CHECK:
 
-		if ((client_address.addr > dhcps_lease.end_ip.addr) ){//|| (ip_addr_isany(&client_address))) {
+		if ((client_address.addr > g_dhcps_lease.end_ip.addr) ){//|| (ip_addr_isany(&client_address))) {
 			if (pnode != NULL) {
 				node_remove_from_list(&plist, pnode);
 				mem_free(pnode);
@@ -897,10 +919,11 @@ POOL_CHECK:
 				pdhcps_pool = NULL;
 			}
 
+			dhcps_pool_unlock(pool_locked);
 			return 4;
 		}
 
-		s16_t ret = parse_options(&m->options[4], len);
+		s16_t ret = parse_options(&m->options[4], len, pdhcps_pool);
 
 		if (ret == DHCPS_STATE_RELEASE) {
 #if 0
@@ -926,6 +949,7 @@ POOL_CHECK:
 #endif
 		LWIP_DEBUGF(DHCPS_DEBUG | LWIP_DBG_TRACE, ("dhcps: xid changed\n"));
 		LWIP_DEBUGF(DHCPS_DEBUG | LWIP_DBG_TRACE, ("dhcps: client_address.addr = %x\n", client_address.addr));
+		dhcps_pool_unlock(pool_locked);
 		return ret;
 	}
 
@@ -1033,66 +1057,54 @@ static void handle_dhcp(void* arg,
 }
 
 /******************************************************************************
- * FunctionName : wifi_softap_init_dhcps_lease
+ * FunctionName : dhcps_lease_init
  * Description  : init ip lease from start to end for station
  * Parameters   : ip -- The current ip addr
  * Returns      : none
 *******************************************************************************/
-static void wifi_softap_init_dhcps_lease(u32_t ip)
+static int dhcps_lease_info_init(void)
 {
-	u32_t softap_ip = 0, local_ip = 0;
-	u32_t start_ip = 0;
-	u32_t end_ip = 0;
+    unsigned int sip, eip, apip, apmask, lastip;
+    struct ip_info info = {0};
 
-	if (dhcps_lease.enable == true) {
-		softap_ip = htonl(ip);
-		#if LWIP_IPV4 && LWIP_IPV6
-		start_ip = htonl(dhcps_lease.start_ip.u_addr.ip4.addr);
-		end_ip = htonl(dhcps_lease.end_ip.u_addr.ip4.addr);
-		#elif LWIP_IPV4
-		start_ip = htonl(dhcps_lease.start_ip.addr);
-		end_ip = htonl(dhcps_lease.end_ip.addr);
-		#endif
+    if ((g_dhcps_lease.mask & DHCP_SERVER_MASK_INIT) != 0) {
+        return 0;
+    }
+    wifi_get_ip_info(softap_if_id, &info);
+    apip = ntohl(ip4_addr_get_u32(ip_2_ip4(&info.ip)));
+    apmask = ntohl(ip4_addr_get_u32(ip_2_ip4(&info.netmask)));
+    sip = ntohl(ip4_addr_get_u32(ip_2_ip4(&g_dhcps_lease.start_ip)));
+    eip = ntohl(ip4_addr_get_u32(ip_2_ip4(&g_dhcps_lease.end_ip)));
 
-		/*config ip information can't contain local ip*/
-		if ((start_ip <= softap_ip) && (softap_ip <= end_ip)) {
-			dhcps_lease.enable = false;
-		} else {
-			/*config ip information must be in the same segment as the local ip*/
-			softap_ip >>= 8;
+    if ((apip & apmask) == apip) {
+        os_printf(LM_APP, LL_ERR, "%s[%d] ip&mask=ip, no ip range\n", __FUNCTION__, __LINE__);
+        return -1;
+    }
 
-			if (((start_ip >> 8 != softap_ip) || (end_ip >> 8 != softap_ip))
-			|| (end_ip - start_ip > DHCPS_MAX_LEASE)) {
-				dhcps_lease.enable = false;
-			}
-		}
-	}
+    os_printf(LM_APP, LL_DBG, "%s[%d]startip 0x%x endip 0x%x apip 0x%x apmask 0x%x lease 0x%x mask 0x%x\n", __FUNCTION__, __LINE__,
+        sip, eip, apip, apmask, g_dhcps_lease.dhcps_lease, g_dhcps_lease.mask);
+    lastip = (apip & 0xFF);
+    if (lastip > 0x80) {
+        lastip -= DHCPS_MAX_LEASE;
+    } else {
+        lastip++;
+    }
 
-	if (dhcps_lease.enable == false) {
-		local_ip = softap_ip = htonl(ip);
-		softap_ip &= 0xFFFFFF00;
-		local_ip &= 0xFF;
+    if (sip == 0 && eip == 0) {
+        sip = htonl((apip & apmask) | lastip);
+        eip = htonl((apip & apmask) | (lastip + DHCPS_MAX_LEASE - 1));
+        os_printf(LM_APP, LL_DBG, "%s[%d]startip 0x%x endip 0x%x", sip, eip);
+        sip = (sip == apip) ? (sip + 1) : sip;
+        ip4_addr_set_u32(ip_2_ip4(&g_dhcps_lease.start_ip), htonl((apip & apmask) | lastip));
+        ip4_addr_set_u32(ip_2_ip4(&g_dhcps_lease.end_ip), htonl((apip & apmask) | (lastip + DHCPS_MAX_LEASE - 1)));
+    }
 
-		if (local_ip >= 0x80) {
-			local_ip -= DHCPS_MAX_LEASE;
-		} else {
-			local_ip ++;
-		}
+    if (g_dhcps_lease.dhcps_lease == 0) {
+        g_dhcps_lease.dhcps_lease = DHCPS_LEASE_TIME_DEF;
+    }
+    g_dhcps_lease.mask |= DHCP_SERVER_MASK_INIT;
 
-		bzero(&dhcps_lease, sizeof(dhcps_lease));
-		#if LWIP_IPV4 && LWIP_IPV6
-		dhcps_lease.start_ip.u_addr.ip4.addr = softap_ip | local_ip;
-		dhcps_lease.end_ip.u_addr.ip4.addr = softap_ip | (local_ip + DHCPS_MAX_LEASE - 1);
-		dhcps_lease.start_ip.u_addr.ip4.addr = htonl(dhcps_lease.start_ip.u_addr.ip4.addr);
-		dhcps_lease.end_ip.u_addr.ip4.addr = htonl(dhcps_lease.end_ip.u_addr.ip4.addr);
-		#elif LWIP_IPV4
-		dhcps_lease.start_ip.addr = softap_ip | local_ip;
-		dhcps_lease.end_ip.addr = softap_ip | (local_ip + DHCPS_MAX_LEASE - 1);
-		dhcps_lease.start_ip.addr = htonl(dhcps_lease.start_ip.addr);
-		dhcps_lease.end_ip.addr = htonl(dhcps_lease.end_ip.addr);
-		#endif
-	}
-
+    return 0;
 }
 
 /******************************************************************************
@@ -1102,15 +1114,19 @@ static void wifi_softap_init_dhcps_lease(u32_t ip)
  *              : info  -- The current ip info
  * Returns      : none
 *******************************************************************************/
-void dhcps_start(struct netif *netif, struct ip_info* info)
+void dhcps_start(struct netif *netif)
 {
-	if (netif->dhcps_pcb != NULL) {
-		udp_remove(netif->dhcps_pcb);
-	}
+    if (dhcps_pool_mutex == NULL) {
+        dhcps_pool_mutex = os_mutex_create();
+    }
 
-	pcb_dhcps = udp_new();
+    if (netif->dhcps_pcb != NULL) {
+        udp_remove(netif->dhcps_pcb);
+    }
 
-	if (pcb_dhcps == NULL || info == NULL) {
+    pcb_dhcps = udp_new();
+
+	if (pcb_dhcps == NULL) {
 		LWIP_DEBUGF(DHCPS_DEBUG | LWIP_DBG_TRACE, ("dhcps_start(): could not obtain pcb\n"));
         return;
 	}
@@ -1119,25 +1135,10 @@ void dhcps_start(struct netif *netif, struct ip_info* info)
     pcb_dhcps->netif_idx = netif->num+1;
 	netif->dhcps_pcb = pcb_dhcps;
 	
-	#if LWIP_IPV4 && LWIP_IPV6
-	IP4_ADDR(&broadcast_dhcps.u_addr.ip4, 255, 255, 255, 255);
+	IP4_ADDR(ip_2_ip4(&broadcast_dhcps), 255, 255, 255, 255);
 
-	server_address.u_addr.ip4.addr = info->ip.u_addr.ip4.addr;
-    dhcps_dns_server[0].u_addr.ip4.addr  = info->dns1.u_addr.ip4.addr;
-    dhcps_dns_server[1].u_addr.ip4.addr  = info->dns2.u_addr.ip4.addr;
-
-	wifi_softap_init_dhcps_lease(server_address.u_addr.ip4.addr);
-	client_address_plus.u_addr.ip4.addr = dhcps_lease.start_ip.u_addr.ip4.addr;
-	#elif LWIP_IPV4
-	IP4_ADDR(&broadcast_dhcps, 255, 255, 255, 255);
-	
-	server_address = info->ip;
-	dhcps_dns_server[0]  = info->dns1;
-	dhcps_dns_server[1]  = info->dns2;
-
-	wifi_softap_init_dhcps_lease(server_address.addr);
-	client_address_plus.addr = dhcps_lease.start_ip.addr;
-	#endif
+	dhcps_lease_info_init();
+	client_address_plus = g_dhcps_lease.start_ip;
     udp_bind(pcb_dhcps, &netif->ip_addr, DHCPS_SERVER_PORT);
 	udp_recv(pcb_dhcps, handle_dhcp, NULL);
 	LWIP_DEBUGF(DHCPS_DEBUG | LWIP_DBG_TRACE, ("dhcps:dhcps_start->udp_recv function Set a receive callback handle_dhcp for UDP_PCB pcb_dhcps\n"));
@@ -1168,6 +1169,7 @@ void dhcps_stop(void)
 
 	list_node* pnode = NULL;
 	list_node* pback_node = NULL;
+	bool pool_locked = dhcps_pool_lock();
 	pnode = plist;
 
 	while (pnode != NULL) {
@@ -1180,87 +1182,84 @@ void dhcps_stop(void)
 		pback_node = NULL;
 	}
 	plist = NULL;
+	dhcps_pool_unlock(pool_locked);
 }
 
-bool wifi_softap_set_dhcps_lease(struct dhcps_lease* please)
+int dhcps_lease_info_set(struct dhcps_lease *lease)
 {
-	    struct ip_info info;
-	    u32_t softap_ip = 0;
-	    u32_t start_ip = 0;
-	    u32_t end_ip = 0;
-        
-	    if (please == NULL || wifi_softap_dhcps_status(softap_if_id) == TCPIP_DHCP_STARTED) 
-			return false;
-	    if (please->enable) {
-		        bzero(&info, sizeof(struct ip_info));
-		        wifi_get_ip_info(softap_if_id, &info);
-				#if LWIP_IPV4 && LWIP_IPV6
-				softap_ip = htonl(info.ip.u_addr.ip4.addr);
-		        start_ip = htonl(please->start_ip.u_addr.ip4.addr);
-		        end_ip = htonl(please->end_ip.u_addr.ip4.addr);
-				#elif LWIP_IPV4
-		        softap_ip = htonl(info.ip.addr);
-		        start_ip = htonl(please->start_ip.addr);
-		        end_ip = htonl(please->end_ip.addr);
-				#endif
+    struct ip_info info = {0};
+    unsigned int startip = ntohl(ip4_addr_get_u32(ip_2_ip4(&lease->start_ip)));
+    unsigned int endip = ntohl(ip4_addr_get_u32(ip_2_ip4(&lease->end_ip)));
+    unsigned int leasetime = lease->dhcps_lease;
+    unsigned int apip, apmask;
 
-		        /*config ip information can't contain local ip*/
-		        if ((start_ip <= softap_ip) && (softap_ip <= end_ip)) {
-				return false;
-		        }
+    wifi_get_ip_info(softap_if_id, &info);
+    apip = ntohl(ip4_addr_get_u32(ip_2_ip4(&info.ip)));
+    apmask = ntohl(ip4_addr_get_u32(ip_2_ip4(&info.netmask)));
 
-		        /*config ip information must be in the same segment as the local ip*/
-		        softap_ip >>= 8;
+    os_printf(LM_APP, LL_DBG, "%s[%d]startip 0x%x endip 0x%x apip 0x%x apmask 0x%x lease 0x%x mask 0x%x\n", __FUNCTION__, __LINE__,
+        startip, endip, apip, apmask, leasetime, lease->mask);
+    if (startip == 0 && endip == 0 && lease->dhcps_lease == 0) {
+        /* restore to default */
+        memset(&g_dhcps_lease, 0, sizeof(g_dhcps_lease));
+        return dhcps_lease_info_init();
+    } else {
+        if (lease->mask & DHCP_SERVER_MASK_IP) {
+            if (endip <= startip || endip - startip > DHCPS_MAX_LEASE) {
+                os_printf(LM_APP, LL_DBG, "ip not correct\n");
+                return -1;
+            }
 
-		        if ((start_ip >> 8 != softap_ip)
-		                || (end_ip >> 8 != softap_ip)) {
-				return false;
-		        }
+            /* apip cannot alloc to station */
+            if (apip >= startip && apip <= endip) {
+                os_printf(LM_APP, LL_DBG, "ip range not correct\n");
+                return -1;
+            }
 
-		        if (end_ip - start_ip > DHCPS_MAX_LEASE) {
-				return false;
-		        }
-		        bzero(&dhcps_lease, sizeof(dhcps_lease));
-				#if LWIP_IPV4 && LWIP_IPV6
-		        dhcps_lease.start_ip.u_addr.ip4.addr = please->start_ip.u_addr.ip4.addr;
-		        dhcps_lease.end_ip.u_addr.ip4.addr = please->end_ip.u_addr.ip4.addr;
-				#elif LWIP_IPV4
-		        dhcps_lease.start_ip.addr = please->start_ip.addr;
-		        dhcps_lease.end_ip.addr = please->end_ip.addr;
-				#endif
-	    }
+            if ((startip & apmask) != (apip & apmask)) {
+                os_printf(LM_APP, LL_DBG, "sip not correct with apip\n");
+                return -1;
+            }
 
-	    dhcps_lease.enable = please->enable;
-	    return true;
+            if ((endip & apmask) != (apip & apmask)) {
+                os_printf(LM_APP, LL_DBG, "eip not correct with apip\n");
+                return -1;
+            }
+
+            g_dhcps_lease.start_ip = lease->start_ip;
+            g_dhcps_lease.end_ip = lease->end_ip;
+        }
+
+        if (lease->mask & DHCP_SERVER_MASK_IP) {
+            if (lease->dhcps_lease != 0) {
+                g_dhcps_lease.dhcps_lease = lease->dhcps_lease;
+            } else {
+                g_dhcps_lease.dhcps_lease = DHCPS_LEASE_TIME_DEF;
+            }
+        }
+
+        if (lease->mask & DHCP_SERVER_MASK_DNS) {
+            int idx;
+
+            for (idx = 0; idx < DNS_MAX_SERVERS; idx++) {
+                g_dhcps_lease.dnsserver[idx] = lease->dnsserver[idx];
+            }
+        }
+    }
+
+    return 0;
 }
 
-/******************************************************************************
- * FunctionName : wifi_softap_get_dhcps_lease
- * Description  : get the lease information of DHCP server
- * Parameters   : please -- Additional argument to get the lease information,
- * 							Little-Endian.
- * Returns      : true or false
-*******************************************************************************/
-bool wifi_softap_get_dhcps_lease(struct dhcps_lease* please)
+int dhcps_lease_info_get(struct dhcps_lease *lease)
 {
-	if (NULL == please) {
-		return false;
-	}
+    if (lease == NULL) {
+        return -1;
+    }
 
-	if (dhcps_lease.enable == false) {
-		if (wifi_softap_dhcps_status(softap_if_id) == TCPIP_DHCP_STOPPED) {
-			return false;
-		}
-	}
-	#if LWIP_IPV4 && LWIP_IPV6
-	please->start_ip.u_addr.ip4.addr = dhcps_lease.start_ip.u_addr.ip4.addr;
-	please->end_ip.u_addr.ip4.addr = dhcps_lease.end_ip.u_addr.ip4.addr;
-	#elif LWIP_IPV4
-	please->start_ip.addr = dhcps_lease.start_ip.addr;
-	please->end_ip.addr = dhcps_lease.end_ip.addr;
-	#endif
-	
-	return true;
+    dhcps_lease_info_init();
+    memcpy(lease, &g_dhcps_lease, sizeof(struct dhcps_lease));
+
+    return 0;
 }
 
 /******************************************************************************
@@ -1311,6 +1310,7 @@ void dhcps_coarse_tmr(void)
 	list_node* pback_node = NULL;
 	list_node* pnode = NULL;
 	struct dhcps_pool* pdhcps_pool = NULL;
+	bool pool_locked = dhcps_pool_lock();
 	pnode = plist;
 
 	while (pnode != NULL) {
@@ -1334,6 +1334,7 @@ void dhcps_coarse_tmr(void)
 	if (num_dhcps_pool > MAX_STATION_NUM) {
 		kill_oldest_dhcps_pool();
 	}
+	dhcps_pool_unlock(pool_locked);
 }
 
 bool wifi_softap_set_dhcps_offer_option(u8_t level, void* optarg)
@@ -1362,41 +1363,13 @@ bool wifi_softap_set_dhcps_offer_option(u8_t level, void* optarg)
 	return offer_flag;
 }
 
-bool wifi_softap_set_dhcps_lease_time(u32_t minute)
-{
-	if (wifi_softap_dhcps_status(softap_if_id) == TCPIP_DHCP_STARTED) {
-		return false;
-	}
-
-	if (minute == 0) {
-		return false;
-	}
-
-	dhcps_lease_time = minute;
-	return true;
-}
-
-bool wifi_softap_reset_dhcps_lease_time(void)
-{
-	if (wifi_softap_dhcps_status(softap_if_id) == TCPIP_DHCP_STARTED) {
-		return false;
-	}
-
-	dhcps_lease_time = DHCPS_LEASE_TIME_DEF;
-	return true;
-}
-
-u32_t wifi_softap_get_dhcps_lease_time(void) // minute
-{
-	return dhcps_lease_time;
-}
-
 // Called by hostapd_ctrl_iface_sta in ctrl_iface_ap.c
 unsigned int wifi_get_sta_ip_from_mac(unsigned char *mac)
 {
 	list_node *node;
 	struct dhcps_pool *dhcps;
 	unsigned int ip_addr = 0;
+	bool pool_locked = dhcps_pool_lock();
 
 	if (plist)
 	{
@@ -1414,8 +1387,37 @@ unsigned int wifi_get_sta_ip_from_mac(unsigned char *mac)
 			}
 		}
 	}
+	dhcps_pool_unlock(pool_locked);
 
 	return ip_addr;
+}
+
+void dhcps_get_sta_hostname(const u8_t *mac, char *hostname, u16_t hostname_len)
+{
+	list_node *node;
+	bool pool_locked;
+
+	if (mac == NULL || hostname == NULL || hostname_len == 0) {
+		return;
+	}
+
+	hostname[0] = '\0';
+	pool_locked = dhcps_pool_lock();
+	for (node = plist; node != NULL; node = node->pnext) {
+		struct dhcps_pool *dhcps = node->pnode;
+
+		if (memcmp(dhcps->mac, mac, sizeof(dhcps->mac)) == 0) {
+			u16_t copy_len = strlen(dhcps->hostname);
+
+			if (copy_len >= hostname_len) {
+				copy_len = hostname_len - 1;
+			}
+			os_memcpy(hostname, dhcps->hostname, copy_len);
+			hostname[copy_len] = '\0';
+			break;
+		}
+	}
+	dhcps_pool_unlock(pool_locked);
 }
 
 #endif

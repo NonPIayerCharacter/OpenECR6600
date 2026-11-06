@@ -330,6 +330,21 @@ int drv_uart_tx_fifo_and_tsr_empty()
 	return status;
 }
 
+#ifdef CONFIG_CUSTOM_YED
+int drv_uart_tx_fifo_and_tsr_empty_by_num(E_DRV_UART_NUM uart_num)
+{
+	T_UART_REG_MAP *p_uart_reg;
+
+	if (uart_num >= E_UART_NUM_MAX || !uart_dev[uart_num])
+	{
+		return 0;
+	}
+
+	p_uart_reg = (T_UART_REG_MAP *)uart_dev[uart_num]->uart_reg_base;
+	return (p_uart_reg->LSR & DRV_UART_LSR_TEMT) ? 1 : 0;
+}
+#endif
+
 /**    @brief       Uart tx put.
  *     @details     Put the data into the Transmitter Holding Register and transfer it out.
  *     @param[in]   uart_base  Uart base address
@@ -649,6 +664,7 @@ unsigned int drv_uart_receive_dma_looplist(E_DRV_UART_NUM uart_num, unsigned int
 *	   @details 	Default uart tx/rx interrupts before uart tx/rx starts.
 *	   @param[in]	vector  Register interrupt vector number
 */
+static void drv_uart_default_isr(int vector) __attribute__((section(".ilm_text_drv")));
 static void drv_uart_default_isr(int vector)
 {
 	#ifdef CONFIG_SYSTEM_IRQ
@@ -846,6 +862,7 @@ int  drv_uart_open(E_DRV_UART_NUM uart_num, T_DRV_UART_CONFIG * cfg)
 			WRITE_REG(SOFTWARE_RESET_REG, READ_REG(SOFTWARE_RESET_REG) | DRV_UART0_RESET_ON);
 			p_uart_dev->uart_reg_base = (T_UART_REG_MAP * )MEM_BASE_UART0;
 			p_uart_dev->uart_vector_num = VECTOR_NUM_UART0;
+			uart_dev_config[0] = *cfg;
 			break;
 
 		case E_UART_NUM_1:
@@ -855,6 +872,7 @@ int  drv_uart_open(E_DRV_UART_NUM uart_num, T_DRV_UART_CONFIG * cfg)
 			WRITE_REG(SOFTWARE_RESET_REG, READ_REG(SOFTWARE_RESET_REG) | DRV_UART1_RESET_ON);
 			p_uart_dev->uart_reg_base = (T_UART_REG_MAP * )MEM_BASE_UART1;
 			p_uart_dev->uart_vector_num = VECTOR_NUM_UART1;
+			uart_dev_config[1] = *cfg;
 			break;
 			
 		case E_UART_NUM_2:
@@ -864,6 +882,7 @@ int  drv_uart_open(E_DRV_UART_NUM uart_num, T_DRV_UART_CONFIG * cfg)
 		    WRITE_REG(SOFTWARE_RESET_REG, READ_REG(SOFTWARE_RESET_REG) | DRV_UART2_RESET_ON);
 			p_uart_dev->uart_reg_base = (T_UART_REG_MAP * )MEM_BASE_UART2;
 			p_uart_dev->uart_vector_num = VECTOR_NUM_UART2;
+			uart_dev_config[2] = *cfg;
 			break;
 
 		default:
@@ -1002,6 +1021,22 @@ int drv_uart_close(E_DRV_UART_NUM uart_num)
 		drv_dma_ch_release(p_uart_dev->uart_rx_dma_chn);
 	}
 
+	if (p_uart_dev->uart_tx_mode == UART_TX_MODE_DMA )
+	{
+		drv_dma_stop(p_uart_dev->uart_tx_dma_chn);
+		drv_dma_ch_release(p_uart_dev->uart_tx_dma_chn);
+	}
+	#ifdef CONFIG_TOMCAT
+	if(p_uart_dev->uart_rx_sem)
+	{
+	    os_sem_post(p_uart_dev->uart_rx_sem);
+	}
+
+	if(p_uart_dev->uart_tx_sem)
+	{
+	    os_sem_post(p_uart_dev->uart_tx_sem);
+	}
+	#endif
 	while(drv_uart_rx_tstc((unsigned int)p_uart_reg));
 	while(drv_uart_tx_ready((unsigned int)p_uart_reg));
 	os_msdelay(1);
@@ -1249,6 +1284,14 @@ int drv_uart_ioctrl(E_DRV_UART_NUM uart_num, int event, void * arg)
 			drv_uart_set_baud(p_uart_dev, *((unsigned int *)arg));
 			break;
 
+        case DRV_UART_CTRL_GET_RX_CALLBACK:
+            if (arg) {
+                T_UART_ISR_CALLBACK *p_callback = (T_UART_ISR_CALLBACK *)arg;
+                p_callback->uart_callback = p_uart_dev->uart_rx_callback.uart_callback;
+                p_callback->uart_data = p_uart_dev->uart_rx_callback.uart_data;
+            }
+            break;
+
 		case DRV_UART_CTRL_REGISTER_RX_CALLBACK:
 #ifdef USE_NEW_USER_MODE
 			if (arg)
@@ -1307,6 +1350,7 @@ int drv_uart_get_recv_len(E_DRV_UART_NUM uart_num)
 	return len;
 }
 
+#if 0
 static int at_get_stopbit(int databits,int stopbits)
 {
 	if(stopbits == 0){
@@ -1319,6 +1363,7 @@ static int at_get_stopbit(int databits,int stopbits)
 	}
 	return 1;
 }
+#endif
 
 void drv_uart_set_lineControl(unsigned int regBase, 
 			unsigned int databits,	/* 0--5bits, 1--6bits, 2--7bits, 3--8bits */
@@ -1344,17 +1389,17 @@ void drv_uart_set_lineControl(unsigned int regBase,
 
 	WRITE_REG(regBase + 0x2c, value);
 	if(regBase == MEM_BASE_UART0){
-	uart_dev_config[0].uart_data_bits = databits+5;
+	uart_dev_config[0].uart_data_bits = databits;
 	uart_dev_config[0].uart_parity_bit   = parity;
-	uart_dev_config[0].uart_stop_bits = at_get_stopbit(databits,stopbits);
+	uart_dev_config[0].uart_stop_bits = stopbits;
 	} else if(regBase == MEM_BASE_UART1){
-	uart_dev_config[1].uart_data_bits = databits+5;
+	uart_dev_config[1].uart_data_bits = databits;
 	uart_dev_config[1].uart_parity_bit	 = parity;
-	uart_dev_config[1].uart_stop_bits = at_get_stopbit(databits,stopbits);
+	uart_dev_config[1].uart_stop_bits = stopbits;
 	} else if(regBase == MEM_BASE_UART2){
-	uart_dev_config[2].uart_data_bits = databits+5;
+	uart_dev_config[2].uart_data_bits = databits;
 	uart_dev_config[2].uart_parity_bit	 = parity;
-	uart_dev_config[2].uart_stop_bits = at_get_stopbit(databits,stopbits);
+	uart_dev_config[2].uart_stop_bits = stopbits;
 	}
 }
 
@@ -1374,18 +1419,26 @@ int drv_uart_get_config(unsigned int regBase, T_DRV_UART_CONFIG * config)
 
 void drv_uart_set_baudrate(unsigned int regBase, unsigned int baud)
 {
-	int uart_baud = UART_RATE(baud);
+	unsigned int uart_baud = UART_RATE(baud);
 	unsigned int value = READ_REG(regBase + 0x2c);
-	int osc;
-	
-	if(regBase == MEM_BASE_UART0){
+	unsigned int osc;
+	unsigned int flags;
+
+	if(regBase == MEM_BASE_UART0)
+	{
 		uart_dev_config[0].uart_baud_rate = baud;
-	} else if(regBase == MEM_BASE_UART1){
+	} 
+	else if(regBase == MEM_BASE_UART1)
+	{
 		uart_dev_config[1].uart_baud_rate = baud;
-	} else if(regBase == MEM_BASE_UART2){
+	}
+	else if(regBase == MEM_BASE_UART2)
+	{
 		uart_dev_config[2].uart_baud_rate = baud;
 	}
-	
+
+	osc = UART_OSCR_8;
+
 #if !defined (CONFIG_CPU_CLK_SRC_40m)
 	if(baud == BAUD_RATE_806400)
 	{
@@ -1402,17 +1455,26 @@ void drv_uart_set_baudrate(unsigned int regBase, unsigned int baud)
 		osc = UART_OSCR_18;
 		uart_baud = UART_DIVISOR_VALUE_3;
 	}
-	else
 #endif
-	{
-		osc = UART_OSCR_8;
-	}
 
-	WRITE_REG(regBase + 0x14, osc);	
-	WRITE_REG(regBase + 0x2c, 0x80|value);	
-	WRITE_REG(regBase + 0x20, (uart_baud >> 0) & 0xff);
-	WRITE_REG(regBase + 0x24, (uart_baud >> 8) & 0xff);
-	WRITE_REG(regBase + 0x2c, value & 0xFFFFFF7F);
+	while(1)
+	{
+		flags = system_irq_save();
+		if (READ_REG(regBase + 0x34) & DRV_UART_LSR_TEMT)
+		{
+			WRITE_REG(regBase + 0x14, osc); 
+			WRITE_REG(regBase + 0x2c, 0x80|value);	
+			WRITE_REG(regBase + 0x20, (uart_baud >> 0) & 0xff);
+			WRITE_REG(regBase + 0x24, (uart_baud >> 8) & 0xff);
+			WRITE_REG(regBase + 0x2c, value & 0xFFFFFF7F);
+			system_irq_restore(flags);
+			break;
+		}
+		else
+		{
+			system_irq_restore(flags);
+		}	
+	}
 }
 
 int drv_uart_set_flowcontrol(unsigned int regBase,unsigned int m_flow_control)

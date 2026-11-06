@@ -250,7 +250,7 @@ int httpd_resp_send(httpd_req_t *r, const char *buf, ssize_t buf_len)
 
     /* Size of essential headers is limited by scratch buffer size */
     if (snprintf(ra->scratch, sizeof(ra->scratch), httpd_hdr_str,
-                 ra->status, ra->content_type, buf_len) >= sizeof(ra->scratch)) {
+                 ra->status, ra->content_type, (int)buf_len) >= sizeof(ra->scratch)) {
         return ERR_HTTPD_RESP_HDR;
     }
 
@@ -355,8 +355,8 @@ int httpd_resp_send_chunk(httpd_req_t *r, const char *buf, ssize_t buf_len)
     }
 
     /* Sending chunked content */
-    char len_str[10];
-    snprintf(len_str, sizeof(len_str), "%x\r\n", buf_len);
+    char len_str[11];
+    snprintf(len_str, sizeof(len_str), "%x\r\n", (unsigned int)buf_len);
     if (httpd_send_all(r, len_str, strlen(len_str)) != OS_SUCCESS) {
         return ERR_HTTPD_RESP_SEND;
     }

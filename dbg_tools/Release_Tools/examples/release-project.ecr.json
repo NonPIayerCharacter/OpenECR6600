@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "defaultScope": "ECR6600",
+  "webTitle": "ECR6600 SDK",
+  "fromPlaceholder": "基线 tag 或 commit ID",
+  "toPlaceholder": "目标 tag 或 commit ID",
+  "acceptedJiraStatuses": ["等待确认", "已解决", "已关闭"]
+}

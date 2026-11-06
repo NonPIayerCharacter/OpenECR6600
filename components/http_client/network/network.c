@@ -5,7 +5,6 @@
  * @LastEditTime: 2020-05-25 19:38:17
  * @Description: the code belongs to jiejie, please keep the author information and source code according to the license.
  */
-#include <routing.h>
 #include "platform_timer.h"
 #include "platform_memory.h"
 #include "nettype_tcp.h"
@@ -88,14 +87,18 @@ int network_set_ca(network_t *n, const char *ca)
 #ifndef HTTP_NETWORK_TYPE_NO_TLS
     if ((NULL == n) || (NULL == ca)) {
         n->channel = NETWORK_CHANNEL_TLS;
-        n->timeout_ms = HTTP_TLS_HANDSHAKE_TIMEOUT;
+        if (n->timeout_ms == 0) {
+            n->timeout_ms = HTTP_TLS_HANDSHAKE_TIMEOUT;
+        }
         RETURN_ERROR(HTTP_NULL_VALUE_ERROR);
     }
 
     n->ca_crt = ca;
     n->ca_crt_len = strlen(ca);
     n->channel = NETWORK_CHANNEL_TLS;
-    n->timeout_ms = HTTP_TLS_HANDSHAKE_TIMEOUT;
+    if (n->timeout_ms == 0) {
+        n->timeout_ms = HTTP_TLS_HANDSHAKE_TIMEOUT;
+    }
 #endif
     RETURN_ERROR(HTTP_SUCCESS_ERROR);
 }

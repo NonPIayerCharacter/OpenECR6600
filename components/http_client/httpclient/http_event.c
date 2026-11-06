@@ -20,6 +20,10 @@ http_event_t *http_event_init(void)
     len = sizeof(http_event_t);
 
     event = (http_event_t *)platform_memory_alloc(len);
+    if (event == NULL) {
+        HTTP_LOG_E("alloc http_event_t failed");
+        return NULL;
+    }
     memset(event, 0, len);
 
     return event;

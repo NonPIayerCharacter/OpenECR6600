@@ -60,6 +60,14 @@ define COMPILE
 endef
 
 
+# COMPILE - Default macro to compile one CPP file
+# Example: $(call COMPILE, in-file, out-file)
+
+define COMPILE_CPP
+	@echo "CPP: $1" 
+	$(Q) $(CXX) -MD -c $(CPPFLAGS) $(TOP_CPPFLAGS) $($(strip $1)_CPPFLAGS) $1 -o $2
+endef
+
 # ASSEMBLE - Default macro to assemble one assembly language file
 # Example: $(call ASSEMBLE, in-file, out-file)
 
@@ -90,7 +98,9 @@ endef
 define SUBDIR_MAKE
 	$(Q)for dir in $(SUBDIRS) ; do \
 		if [ -e $$dir/Makefile ]; then \
-			make $(PARALLEL) -C $$dir TOPDIR=$(TOPDIR_ABSPATH) OUTPUTDIR=$(OUTPUTDIR_ABSPATH) BOARD_DIR=$(BOARD_DIR_ABSPATH) GENERATED_DIR=$(GENERATED_DIR_ABSPATH) $(1) || exit $$? ; \
+			make $(PARALLEL) -C $$dir TOPDIR=$(TOPDIR_ABSPATH) OUTPUTDIR=$(OUTPUTDIR_ABSPATH) BOARD_DIR=$(BOARD_DIR_ABSPATH) BOARD_TOOL_DIR=$(BOARD_TOOL_DIR_ABSPATH) GENERATED_DIR=$(GENERATED_DIR_ABSPATH) $(1) || exit $$? ; \
+        elif [ -e $$dir/makefile ]; then \
+			make -C $$dir TOPDIR=$(TOPDIR_ABSPATH) OUTPUTDIR=$(OUTPUTDIR_ABSPATH) BOARD_DIR=$(BOARD_DIR_ABSPATH) BOARD_TOOL_DIR=$(BOARD_TOOL_DIR_ABSPATH) GENERATED_DIR=$(GENERATED_DIR_ABSPATH) $(1) || exit $$? ; \
 		fi \
 	done
 endef

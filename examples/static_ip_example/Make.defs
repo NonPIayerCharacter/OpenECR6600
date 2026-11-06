@@ -1,0 +1,7 @@
+CFLAGS += -DCONFIG_APP_EXAMPLE_BUILD=1
+
+VPATH += :$(TOPDIR)/examples/static_ip_example
+INCPATHS += $(TOPDIR)/examples/static_ip_example
+
+CSRCS += static_ip_example_app.c
+CSRCS += main.c

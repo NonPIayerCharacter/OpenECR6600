@@ -173,7 +173,9 @@ int set_ipinfo(int argc, char *argv[])
 
 	sprintf(buf, " %s", argv[1]);
 	for (i = 2; i < argc; i++) {
-        sprintf(buf, "%s %s", buf, argv[i]);
+        // Fix: Use strcat to avoid sprintf with overlapping source and destination
+        strcat(buf, " ");
+        strcat(buf, argv[i]);
 	}
 
     memset(&ipinfo, 0, sizeof(ipinfo));
@@ -231,7 +233,7 @@ const struct cli_cmd *cli_find_cmd(char *cmd, const struct cli_cmd *table, int n
 	return NULL;
 }
 
-static int cmd_test_set(cmd_tbl_t *t, int argc , char *argv[])
+static int cmd_test_set( int argc , char *argv[])
 {
 	const struct cli_cmd *cmd;
 
@@ -249,7 +251,7 @@ static int cmd_test_set(cmd_tbl_t *t, int argc , char *argv[])
 }
 SUBCMD(test, set, cmd_test_set, "system test set", "test set {name value}");
 
-static int cmd_test_get(cmd_tbl_t *t, int argc , char *argv[])
+static int cmd_test_get( int argc , char *argv[])
 {
 	const struct cli_cmd *cmd;
 
@@ -268,7 +270,7 @@ static int cmd_test_get(cmd_tbl_t *t, int argc , char *argv[])
 }
 SUBCMD(test, get, cmd_test_get, "system test get", "test get {name}");
 
-static int cmd_test_run(cmd_tbl_t *t, int argc , char *argv[])
+static int cmd_test_run( int argc , char *argv[])
 {
 	const struct cli_cmd *cmd;
 
@@ -429,7 +431,7 @@ set   sf      beacon      ch|mac|ssid      1|112233445566|test_8266
 set   sf    data/qosdata  ch|mac|len|mac2  1|112233445566|123|bc|mc|uc
 show  sf    
 *************************************************************************/
-static int set_sf_fun(cmd_tbl_t *t, int argc, char *argv[])
+static int set_sf_fun( int argc, char *argv[])
 {
     int i, ch=0, type=0;
 	char mac[12];
@@ -532,7 +534,7 @@ static int set_sf_fun(cmd_tbl_t *t, int argc, char *argv[])
 }
 
 
-static int show_sf_fun(cmd_tbl_t *t, int argc, char *argv[])
+static int show_sf_fun( int argc, char *argv[])
 {
 	unsigned int time;
 
@@ -551,7 +553,7 @@ static int show_sf_fun(cmd_tbl_t *t, int argc, char *argv[])
 SUBCMD(set,  sf, set_sf_fun,  "", "");
 SUBCMD(show, sf, show_sf_fun, "", "");
 
-static int set_mac_fun(cmd_tbl_t *t, int argc, char *argv[])
+static int set_mac_fun( int argc, char *argv[])
 {
 	char mac[12] = {0};
     unsigned char new_mac[6];
@@ -571,7 +573,7 @@ static int set_mac_fun(cmd_tbl_t *t, int argc, char *argv[])
 SUBCMD(set,   mac, set_mac_fun,  "", "");
 
 #if defined(STACK_LWIP)
-static int cmd_dhcp(cmd_tbl_t *t, int argc, char *argv[])
+static int cmd_dhcp( int argc, char *argv[])
 {
 	int vif = 0;
 
@@ -599,7 +601,7 @@ CMD(dhcp,
     "dhcp command",
     "dhcp ");
 
-static int cmd_dhcps(cmd_tbl_t *t, int argc, char *argv[])
+static int cmd_dhcps( int argc, char *argv[])
 {
 	int vif = 1;
 
@@ -627,7 +629,7 @@ CMD(dhcps,
 #endif
 
 #ifdef LWIP_IPERF
-static int cmd_iperf(cmd_tbl_t *t, int argc, char *argv[])
+static int cmd_iperf( int argc, char *argv[])
 {
 	int i = 0;
 	char buf[512] = {0,};
@@ -637,7 +639,9 @@ static int cmd_iperf(cmd_tbl_t *t, int argc, char *argv[])
 
 	sprintf(buf, "%s", argv[1]);
 	for (i = 2; i < argc; i++) {
-	        sprintf(buf, "%s %s", buf, argv[i]);
+        // Fix: Use strcat to avoid sprintf with overlapping source and destination
+        strcat(buf, " ");
+        strcat(buf, argv[i]);
 	}
 	iperf_run(buf);
 	return CMD_RET_SUCCESS;
@@ -649,7 +653,7 @@ CMD(iperf,
     "iperf [-s|-c host] [options]");
 #endif /* LWIP_IPERF */
 
-static int get_ap_rssi(cmd_tbl_t *t, int argc, char *argv[])
+static int get_ap_rssi( int argc, char *argv[])
 {
 	if(1 != argc)
 	{

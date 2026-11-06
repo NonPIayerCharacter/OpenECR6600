@@ -97,4 +97,5 @@ void i2s_master_write(unsigned char * bufptr, unsigned int length);
 */
 void i2s_master_read(unsigned   char *bufptr, unsigned int length);
 void i2s_master_read_loop(void);
-
+void i2s_master_read_stop();
+void i2s_master_write_stop();

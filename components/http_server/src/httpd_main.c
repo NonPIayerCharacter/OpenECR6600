@@ -20,6 +20,39 @@
 #include "httpd_priv.h"
 #include "http_sock.h"
 
+#define HTTPD_STOP_POLL_MS 100
+#define HTTPD_STOP_TIMEOUT_MS 10000
+
+static const int DEFAULT_KEEP_ALIVE_IDLE = 5;
+static const int DEFAULT_KEEP_ALIVE_INTERVAL= 5;
+static const int DEFAULT_KEEP_ALIVE_COUNT= 3;
+
+static int httpd_socket_keep_alive(struct httpd_data *hd, int fd)
+{
+    int keep_alive_enable = 1;
+    int keep_alive_idle = hd->config.keep_alive_idle ? hd->config.keep_alive_idle : DEFAULT_KEEP_ALIVE_IDLE;
+    int keep_alive_interval = hd->config.keep_alive_interval ? hd->config.keep_alive_interval : DEFAULT_KEEP_ALIVE_INTERVAL;
+    int keep_alive_count = hd->config.keep_alive_count ? hd->config.keep_alive_count : DEFAULT_KEEP_ALIVE_COUNT;
+    os_printf(LM_APP, LL_DBG, "Enable TCP keep alive. idle: %d, interval: %d, count: %d", keep_alive_idle, keep_alive_interval, keep_alive_count);
+    if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keep_alive_enable, sizeof(keep_alive_enable)) < 0) {
+        os_printf(LM_APP, LL_WARN, LOG_FMT("error in setsockopt SO_KEEPALIVE (%d)"), errno);
+        return OS_FAIL;
+    }
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &keep_alive_idle, sizeof(keep_alive_idle)) < 0) {
+        os_printf(LM_APP, LL_WARN,  LOG_FMT("error in setsockopt TCP_KEEPIDLE (%d)"), errno);
+        return OS_FAIL;
+    }
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &keep_alive_interval, sizeof(keep_alive_interval)) < 0) {
+        os_printf(LM_APP, LL_WARN, LOG_FMT("error in setsockopt TCP_KEEPINTVL (%d)"), errno);
+        return OS_FAIL;
+    }
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &keep_alive_count, sizeof(keep_alive_count)) < 0) {
+        os_printf(LM_APP, LL_WARN, LOG_FMT("error in setsockopt TCP_KEEPCNT (%d)"), errno);
+        return OS_FAIL;
+    }
+    return OS_SUCCESS;
+}
+
 static int httpd_accept_conn(struct httpd_data *hd, int listen_fd)
 {
     /* If no space is available for new session, close the least recently used one */
@@ -56,6 +89,9 @@ static int httpd_accept_conn(struct httpd_data *hd, int listen_fd)
     tv.tv_usec = 0;
     setsockopt(new_fd, SOL_SOCKET, SO_SNDTIMEO, (const char*)&tv, sizeof(tv));
 
+     if (hd->config.keep_alive_enable) {
+        httpd_socket_keep_alive(hd, new_fd);
+     }
     if (OS_SUCCESS != httpd_sess_new(hd, new_fd)) {
         os_printf(LM_APP, LL_WARN, LOG_FMT("session creation failed"));
         close(new_fd);
@@ -289,6 +325,10 @@ static int httpd_server_init(struct httpd_data *hd)
         os_printf(LM_APP, LL_WARN, LOG_FMT("error enabling SO_REUSEADDR (%d)"), errno);
     }
 
+    if (hd->config.keep_alive_enable) {
+        httpd_socket_keep_alive(hd, fd);
+     }
+
     int ret = bind(fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
     if (ret < 0) {
         os_printf(LM_APP, LL_ERR, LOG_FMT("error in bind (%d)"), errno);
@@ -442,11 +482,23 @@ int httpd_stop(httpd_handle_t handle)
     struct httpd_ctrl_data msg;
     memset(&msg, 0, sizeof(msg));
     msg.hc_msg = HTTPD_CTRL_SHUTDOWN;
-    cs_send_to_ctrl_sock(hd->msg_fd, hd->config.ctrl_port, &msg, sizeof(msg));
+    if (hd->hd_td.status != THREAD_STOPPED && hd->hd_td.status != THREAD_STOPPING) {
+        if (cs_send_to_ctrl_sock(hd->msg_fd, hd->config.ctrl_port, &msg, sizeof(msg)) != sizeof(msg)) {
+            os_printf(LM_APP, LL_ERR, LOG_FMT("failed to send shutdown (%d)"), errno);
+            return OS_FAIL;
+        }
+    }
 
     os_printf(LM_APP, LL_DBG, LOG_FMT("sent control msg to stop server"));
+    unsigned int waited_ms = 0;
     while (hd->hd_td.status != THREAD_STOPPED) {
-        httpd_os_thread_sleep(100);
+        if (waited_ms >= HTTPD_STOP_TIMEOUT_MS) {
+            /* The worker may still use hd and its contexts. Keep them for retry. */
+            os_printf(LM_APP, LL_ERR, LOG_FMT("timed out waiting for server shutdown"));
+            return ERR_TIMEOUT;
+        }
+        httpd_os_thread_sleep(HTTPD_STOP_POLL_MS);
+        waited_ms += HTTPD_STOP_POLL_MS;
     }
 
     /* Release global user context, if not NULL */

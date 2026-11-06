@@ -1,0 +1,9 @@
+menuconfig EWSS
+	bool "EWSS Wi-Fi Zeroconfig Support"
+	depends on ECR6600_WIFI
+	default n
+	if EWSS
+		config EWSS_CLI
+		bool "EWSS CLI Support"
+		default y
+	endif

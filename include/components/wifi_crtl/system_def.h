@@ -83,10 +83,12 @@ typedef unsigned short              uint16_t;
 typedef signed long long            int64_t;
 typedef unsigned long long          uint64_t;
 
+#ifdef __cplusplus
+#else
 #ifndef bool
 #define bool uint32_t
 #endif
-    
+#endif    
     
 typedef int32_t sys_err_t;
 

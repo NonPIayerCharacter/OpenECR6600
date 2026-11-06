@@ -27,17 +27,6 @@
 void hostapd_free_hw_features(struct hostapd_hw_modes *hw_features,
 			      size_t num_hw_features)
 {
-	size_t i;
-
-	if (hw_features == NULL)
-		return;
-
-	for (i = 0; i < num_hw_features; i++) {
-		os_free(hw_features[i].channels);
-		os_free(hw_features[i].rates);
-	}
-
-	os_free(hw_features);
 }
 
 
@@ -940,7 +929,7 @@ int hostapd_select_hw_mode(struct hostapd_iface *iface)
 	iface->current_mode = NULL;
 	for (i = 0; i < iface->num_hw_features; i++) {
 		struct hostapd_hw_modes *mode = &iface->hw_features[i];
-		if (mode->mode == iface->conf->hw_mode) {
+		if (mode->mode == iface->conf->hw_mode || (mode->mode == HOSTAPD_MODE_IEEE80211B)) {
 			iface->current_mode = mode;
 			break;
 		}

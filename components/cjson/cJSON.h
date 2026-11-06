@@ -85,6 +85,8 @@ extern cJSON *cJSON_GetObjectItem(cJSON *object,const char *string);
 extern int cJSON_HasObjectItem(cJSON *object,const char *string);
 /* For analysing failed parses. This returns a pointer to the parse error. You'll probably need to look a few chars back to make sense of it. Defined when cJSON_Parse() returns 0. 0 when cJSON_Parse() succeeds. */
 extern const char *cJSON_GetErrorPtr(void);
+extern char *cJSON_GetStringValue(cJSON *item) ;
+extern int cJSON_GetNumberValue(const cJSON *item) ;
 	
 /* These calls create a cJSON item of the appropriate type. */
 extern cJSON *cJSON_CreateNull(void);
@@ -159,6 +161,8 @@ CJSON_PUBLIC(cJSON_bool) cJSON_IsNumber(const cJSON * const item);
 CJSON_PUBLIC(cJSON_bool) cJSON_IsString(const cJSON * const item);
 CJSON_PUBLIC(cJSON_bool) cJSON_IsArray(const cJSON * const item);
 CJSON_PUBLIC(cJSON_bool) cJSON_IsObject(const cJSON * const item);
+CJSON_PUBLIC(cJSON_bool) cJSON_IsBool(const cJSON * const item) ;
+CJSON_PUBLIC(cJSON_bool) cJSON_IsTrue(const cJSON * const item) ;
 
 #ifdef __cplusplus
 }

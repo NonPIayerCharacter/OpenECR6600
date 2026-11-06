@@ -975,7 +975,7 @@ int auth_sae_init_committed(struct hostapd_data *hapd, struct sta_info *sta)
 static void handle_auth(struct hostapd_data *hapd,
 			const struct ieee80211_mgmt *mgmt, size_t len)
 {
-	u16 auth_alg, auth_transaction, status_code;
+	u16 auth_alg, auth_transaction, status_code __attribute__((unused));
 	u16 resp = WLAN_STATUS_SUCCESS;
 	struct sta_info *sta = NULL;
 	int reply_res;

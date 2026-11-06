@@ -38,7 +38,7 @@ int ull_cmp(unsigned long long *p_left, unsigned long long *p_right)
 
 //extern void os_hexdump(const void * addr, unsigned int size);
 
-static int test_ecc_mod_add(cmd_tbl_t *t, int argc, char *argv[])
+static int test_ecc_mod_add( int argc, char *argv[])
 {
 	unsigned long long data_tmp_ret[ECC_LONGS];
 
@@ -66,7 +66,7 @@ CLI_SUBCMD(ut_ecc, ma, test_ecc_mod_add, "unit test ecc mod add", "ut_ecc ma");
 
 
 
-static int test_ecc_mod_sub(cmd_tbl_t *t, int argc, char *argv[])
+static int test_ecc_mod_sub( int argc, char *argv[])
 {
 	unsigned long long data_tmp_ret[ECC_LONGS];
 
@@ -102,7 +102,7 @@ CLI_SUBCMD(ut_ecc, ms, test_ecc_mod_sub, "unit test ecc mod sub", "ut_ecc ms");
 
 
 
-static int test_ecc_mod_mult(cmd_tbl_t *t, int argc, char *argv[])
+static int test_ecc_mod_mult( int argc, char *argv[])
 {
 	unsigned long long data_tmp_ret[ECC_LONGS];
 
@@ -125,7 +125,7 @@ static int test_ecc_mod_mult(cmd_tbl_t *t, int argc, char *argv[])
 
 CLI_SUBCMD(ut_ecc, mm, test_ecc_mod_mult, "unit test ecc mod mult", "ut_ecc mm");
 
-static int test_ecc_mod_inv(cmd_tbl_t *t, int argc, char *argv[])
+static int test_ecc_mod_inv( int argc, char *argv[])
 {
 	unsigned long long data_tmp_ret[ECC_LONGS];
 
@@ -157,7 +157,7 @@ CLI_SUBCMD(ut_ecc, mi, test_ecc_mod_inv, "unit test ecc mod inv", "ut_ecc mi");
 
 
 
-static int test_ecc_point_mult(cmd_tbl_t *t, int argc, char *argv[])
+static int test_ecc_point_mult( int argc, char *argv[])
 {
 	unsigned int time_begin, time_end;
 
@@ -281,7 +281,7 @@ static int test_ecc_point_mult(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_ecc, pm, test_ecc_point_mult, "unit test ecc point mult", "ut_ecc pm");
 
 
-static int test_ecc_point_dbl(cmd_tbl_t *t, int argc, char *argv[])
+static int test_ecc_point_dbl( int argc, char *argv[])
 {
 	unsigned int time_begin, time_end;
 	T_ECC_POINT point_result;
@@ -327,7 +327,7 @@ static int test_ecc_point_dbl(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_ecc, pd, test_ecc_point_dbl, "unit test ecc point dbl", "ut_ecc pd");
 
 
-static int test_ecc_point_add(cmd_tbl_t *t, int argc, char *argv[])
+static int test_ecc_point_add( int argc, char *argv[])
 {
 	unsigned int time_begin, time_end;
 
@@ -380,7 +380,7 @@ static int test_ecc_point_add(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_ecc, pa, test_ecc_point_add, "unit test ecc point add", "ut_ecc pa");
 
 
-static int test_ecc_point_verify(cmd_tbl_t *t, int argc, char *argv[])
+static int test_ecc_point_verify( int argc, char *argv[])
 {
 	int ret;
 	unsigned char BasePoint_x_256[32] = {0x96,0xC2,0x98,0xD8,0x45,0x39,0xA1,0xF4,0xA0,0x33,0xEB,0x2D,0x81,0x7D,0x03,0x77,0xF2,0x40,0xA4,0x63,0xE5,0xE6,0xBC,0xF8,0x47,0x42,0x2C,0xE1,0xF2,0xD1,0x17,0x6B};
@@ -417,7 +417,7 @@ void test_eccc_point_mult_callback(void)
     	os_printf(LM_CMD,LL_INFO,">> test_eccc_point_mult_callback entry\r\n");
 }
 
-static int test_ecc_point_mult_begin(cmd_tbl_t *t, int argc, char *argv[])
+static int test_ecc_point_mult_begin( int argc, char *argv[])
 {
 	unsigned char BasePoint_x_256[32]      = {0x96,0xC2,0x98,0xD8,0x45,0x39,0xA1,0xF4,0xA0,0x33,0xEB,0x2D,0x81,0x7D,0x03,0x77,0xF2,0x40,0xA4,0x63,0xE5,0xE6,0xBC,0xF8,0x47,0x42,0x2C,0xE1,0xF2,0xD1,0x17,0x6B};
 	unsigned char BasePoint_y_256[32]      = {0xF5,0x51,0xBF,0x37,0x68,0x40,0xB6,0xCB,0xCE,0x5E,0x31,0x6B,0x57,0x33,0xCE,0x2B,0x16,0x9E,0x0F,0x7C,0x4A,0xEB,0xE7,0x8E,0x9B,0x7F,0x1A,0xFE,0xE2,0x42,0xE3,0x4F};
@@ -443,7 +443,7 @@ static int test_ecc_point_mult_begin(cmd_tbl_t *t, int argc, char *argv[])
 CLI_SUBCMD(ut_ecc, pmb, test_ecc_point_mult_begin, "unit test ecc point test_ecc_point_mult_begin", "ut_ecc pmb");
 
 
-static int test_ecc_point_mult_result(cmd_tbl_t *t, int argc, char *argv[])
+static int test_ecc_point_mult_result( int argc, char *argv[])
 {
 	T_ECC_POINT point_result;	
 
@@ -494,7 +494,7 @@ CLI_SUBCMD(ut_ecc, pmr, test_ecc_point_mult_result, "unit test ecc point test_ec
 
 
 
-static int test_ecc_point_mult_abort(cmd_tbl_t *t, int argc, char *argv[])
+static int test_ecc_point_mult_abort( int argc, char *argv[])
 {
 	unsigned char BasePoint_x_256[32]      = {0x96,0xC2,0x98,0xD8,0x45,0x39,0xA1,0xF4,0xA0,0x33,0xEB,0x2D,0x81,0x7D,0x03,0x77,0xF2,0x40,0xA4,0x63,0xE5,0xE6,0xBC,0xF8,0x47,0x42,0x2C,0xE1,0xF2,0xD1,0x17,0x6B};
 	unsigned char BasePoint_y_256[32]      = {0xF5,0x51,0xBF,0x37,0x68,0x40,0xB6,0xCB,0xCE,0x5E,0x31,0x6B,0x57,0x33,0xCE,0x2B,0x16,0x9E,0x0F,0x7C,0x4A,0xEB,0xE7,0x8E,0x9B,0x7F,0x1A,0xFE,0xE2,0x42,0xE3,0x4F};

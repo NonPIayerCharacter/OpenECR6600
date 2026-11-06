@@ -1,0 +1,9 @@
+
+menuconfig CMD
+	bool "CMD Component Support"
+	default y
+	
+if CMD
+	source "components/cmd/cmd_core/cmd_core_cli/Kconfig"
+	source "components/cmd/cmd_core/cmd_core_at/Kconfig"
+endif

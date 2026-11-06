@@ -51,6 +51,9 @@
 --------------------------------------------------------------------------*/
 int8_t hex2num(char c);
 int32_t hexToDec(char *source, uint8_t len);
+int32_t strToHex(char *source, uint8_t len);
+char num2hex(uint8_t n);
+
 
 
 

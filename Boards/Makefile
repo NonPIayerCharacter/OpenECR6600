@@ -14,8 +14,9 @@ SUBDIRS	:= $(filter-out $(CURDIR),$(SUBDIRS))
 OUTPUTDIR_OBJS:=$(OUTPUTDIR)/objs/board
 OUTPUTDIR_DEPS:=$(OUTPUTDIR)/deps/board
 OUTPUTDIR_LIB:=$(OUTPUTDIR)/libs
-BOARD_COMMON_DIR :=$(BOARD_DIR)/../common
-BOARD_PSM_DIR:=$(BOARD_DIR)/../common/psm
+BOARD_COMMON_DIR ?= $(BOARD_DIR)/../common
+BOARD_PSM_DIR ?= $(BOARD_COMMON_DIR)/psm
+BOARD_CPP_DIR ?= $(BOARD_COMMON_DIR)/cpp
 
 ###########################################
 #
@@ -24,13 +25,14 @@ BOARD_PSM_DIR:=$(BOARD_DIR)/../common/psm
 ###########################################
 ASRCS	:=
 CSRCS	:=
+CPPSRCS :=
 PSM_CSRCS:=
 INCPATHS:=
-MAKEDEFS:= $(BOARD_DIR)/Make.defs $(BOARD_COMMON_DIR)/Make.defs $(BOARD_PSM_DIR)/Make.defs
 
+MAKEDEFS:= $(BOARD_DIR)/Make.defs $(BOARD_COMMON_DIR)/Make.defs $(BOARD_PSM_DIR)/Make.defs $(BOARD_CPP_DIR)/Make.defs
 include $(BOARD_DIR)/Make.defs
 include $(BOARD_COMMON_DIR)/Make.defs
-
+include $(BOARD_CPP_DIR)/Make.defs
 
 CFLAGS := $(foreach incpath, $(INCPATHS), -I "$(incpath)") $(CFLAGS)
 AFLAGS += $(foreach incpath, $(INCPATHS), -I "$(incpath)")
@@ -48,11 +50,13 @@ LIBVERSION = libversion.a
 LIBPSM=libpsm.a
 ASRCS	:= $(wildcard $(foreach SRC, $(ASRCS), $(addsuffix /$(SRC), $(subst :, ,$(VPATH)))))
 CSRCS	:= $(wildcard $(foreach SRC, $(CSRCS), $(addsuffix /$(SRC), $(subst :, ,$(VPATH)))))
+CPPSRCS	:= $(wildcard $(foreach SRC, $(CPPSRCS), $(addsuffix /$(SRC), $(subst :, ,$(VPATH)))))
 AOBJS = $(addprefix $(OUTPUTDIR_OBJS)/,$(ASRCS:.S=.o))
 COBJS = $(addprefix $(OUTPUTDIR_OBJS)/,$(CSRCS:.c=.o))
-OBJS = $(AOBJS) $(COBJS)
+CPPOBJS = $(addprefix $(OUTPUTDIR_OBJS)/,$(CPPSRCS:.cpp=.o))
+OBJS = $(AOBJS) $(COBJS) $(CPPOBJS)
 HDEPS:=$(OBJS:.o=.d)
-DEPS := $(addprefix $(OUTPUTDIR_DEPS)/,$(CSRCS:.c=.deps))
+DEPS := $(addprefix $(OUTPUTDIR_DEPS)/,$(CSRCS:.c=.deps) $(CPPSRCS:.cpp=.deps))
 all: $(OUTPUTDIR_LIB)/$(LIBTARGET) $(OUTPUTDIR_LIB)/$(LIBVERSION) $(OUTPUTDIR_LIB)/$(LIBPSM)
 
 
@@ -61,8 +65,12 @@ all: $(OUTPUTDIR_LIB)/$(LIBTARGET) $(OUTPUTDIR_LIB)/$(LIBVERSION) $(OUTPUTDIR_LI
 #		generate ld script
 #
 ###########################################
-ifeq ($(CONFIG_FUNC_TRIM),y)
+ifeq ($(CONFIG_FUNC_TRIM_350KB_RAM),y)
+LD_SCRIPTS	:=ld_xip_yy.script_350kb_ram.S
+else ifeq ($(CONFIG_FUNC_TRIM),y)
 LD_SCRIPTS      :=ld_xip_yy.script.S
+else ifeq ($(CONFIG_MATTER),y)
+LD_SCRIPTS      :=ld_xip_matter.script.S
 else ifeq ($(CONFIG_LD_SCRIPT_XIP),y)
 LD_SCRIPTS	:=ld_xip.script.S
 else
@@ -96,7 +104,6 @@ endif
 #		generate lib psm
 #
 ###########################################
-
 psm_builtin = $(shell if [ -f $(BOARD_PSM_DIR)/Make.defs ]; then echo "y"; else echo "n"; fi;)
 ifeq ($(psm_builtin), y)
 include $(BOARD_PSM_DIR)/Make.defs
@@ -143,6 +150,10 @@ $(AOBJS): $(OUTPUTDIR_OBJS)/%.o: %.S
 	$(call ASSEMBLE, $<, $@)
 
 $(COBJS): $(OUTPUTDIR_OBJS)/%.o: %.c
+	$(Q) -mkdir -p $(dir $@)
+	$(call COMPILE, $<, $@)
+
+$(CPPOBJS): $(OUTPUTDIR_OBJS)/%.o: %.cpp
 	$(Q) -mkdir -p $(dir $@)
 	$(call COMPILE, $<, $@)
 

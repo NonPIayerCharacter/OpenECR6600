@@ -18,6 +18,7 @@
 #include "eloop.h"
 #include "wpa_i.h"
 #include "wpa_ie.h"
+#include "eapol_supp/eapol_supp_sm.h"
 #ifndef CONFIG_ECR6600
 #include "driver_wifi_tx.h"
 #else
@@ -79,6 +80,7 @@ int wpa_eapol_key_send(struct wpa_sm *sm, const u8 *kck, size_t kck_len,
 	//wpa_hexdump(MSG_DEBUG, "WPA: Derived Key MIC", key_mic, mic_len);
 	wpa_hexdump(MSG_MSGDUMP, "WPA: TX EAPOL-Key", msg, msg_len);
 	ret = wpa_sm_ether_send(sm, dest, proto, msg, msg_len);
+	eapol_sm_notify_tx_eapol_key(sm->eapol);
 out:
 	os_free(msg);
 	return ret;
@@ -440,10 +442,13 @@ static void wpa_supplicant_key_neg_complete(struct wpa_sm *sm,
 	wpa_sm_cancel_auth_timeout(sm);
 	wpa_sm_set_state(sm, WPA_COMPLETED);
 
-	//if (secure) {
+	if (secure) {
 		//wpa_sm_mlme_setprotection(
 		//	sm, addr, MLME_SETPROTECTION_PROTECT_TYPE_RX_TX,
 		//	MLME_SETPROTECTION_KEY_TYPE_PAIRWISE);
+		eapol_sm_notify_portValid(sm->eapol, TRUE);
+		if (wpa_key_mgmt_wpa_psk(sm->key_mgmt))
+			eapol_sm_notify_eap_success(sm->eapol, TRUE);
 		/*
 		 * Start preauthentication after a short wait to avoid a
 		 * possible race condition between the data receive and key
@@ -452,7 +457,7 @@ static void wpa_supplicant_key_neg_complete(struct wpa_sm *sm,
 		 * the target AP.
 		 */
 		//eloop_register_timeout(1, 0, wpa_sm_start_preauth, sm, NULL);
-	//}
+	}
 
 #ifdef CONFIG_IEEE80211R
 	if (wpa_key_mgmt_ft(sm->key_mgmt)) {
@@ -1158,13 +1163,12 @@ static void wpa_supplicant_process_3_of_4(struct wpa_sm *sm,
 	}
 #endif
 
-    #if 0
 	if (key_info & WPA_KEY_INFO_SECURE) {
 		wpa_sm_mlme_setprotection(
 			sm, sm->bssid, MLME_SETPROTECTION_PROTECT_TYPE_RX,
 			MLME_SETPROTECTION_KEY_TYPE_PAIRWISE);
+		eapol_sm_notify_portValid(sm->eapol, TRUE);
 	}
-    #endif
 	wpa_sm_set_state(sm, WPA_GROUP_HANDSHAKE);
 
 	if (sm->group_cipher == WPA_CIPHER_GTK_NOT_USED) {
@@ -1572,6 +1576,18 @@ static int wpa_supplicant_decrypt_key_data(struct wpa_sm *sm,
 	return 0;
 }
 
+/**
+ * wpa_sm_aborted_cached - Notify WPA that PMKSA caching was aborted
+ * @sm: Pointer to WPA state machine data from wpa_sm_init()
+ */
+void wpa_sm_aborted_cached(struct wpa_sm *sm)
+{
+	if (sm && sm->cur_pmksa) {
+		wpa_dbg(sm->ctx->msg_ctx, MSG_DEBUG,
+			"RSN: Cancelling PMKSA caching attempt");
+		sm->cur_pmksa = NULL;
+	}
+}
 
 static void wpa_eapol_key_dump(struct wpa_sm *sm,
 			       const struct wpa_eapol_key *key,
@@ -2339,6 +2355,16 @@ void wpa_sm_set_ifname(struct wpa_sm *sm, const char *ifname,
 	}
 }
 
+/**
+ * wpa_sm_set_eapol - Set EAPOL state machine pointer
+ * @sm: Pointer to WPA state machine data from wpa_sm_init()
+ * @eapol: Pointer to EAPOL state machine allocated with eapol_sm_init()
+ */
+void wpa_sm_set_eapol(struct wpa_sm *sm, struct eapol_sm *eapol)
+{
+	if (sm)
+		sm->eapol = eapol;
+}
 
 /**
  * wpa_sm_set_param - Set WPA state machine parameters

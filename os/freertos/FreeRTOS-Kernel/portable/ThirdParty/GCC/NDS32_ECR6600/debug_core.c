@@ -46,6 +46,18 @@
 #define IRQ_SWITCH_NUM     CONFIG_TASK_IRQ_SWITCH_TRACE_NUM
 #endif
 
+#ifndef configLIBC_PRINTF_BSS_TASK_LOCAL
+#define configLIBC_PRINTF_BSS_TASK_LOCAL    0
+#endif
+
+#ifndef configLIBC_PRINTF_BSS_IRQ_LOCAL
+#define configLIBC_PRINTF_BSS_IRQ_LOCAL    0
+#endif
+
+#ifndef configLIBC_PRINTF_BSS_IRQ_STACK_DEPTH
+#define configLIBC_PRINTF_BSS_IRQ_STACK_DEPTH    1
+#endif
+
 /*--------------------------------------------------------------------------
  *                                               Local Types
  *  --------------------------------------------------------------------------*/
@@ -85,6 +97,70 @@ struct irq_switch_s
     unsigned int          ulclk;
     struct isr_reg_layout cur_isr_layout;
 };
+
+#if (configLIBC_PRINTF_BSS_IRQ_LOCAL == 1)
+typedef struct
+{
+    uint32_t countNow;
+    uint32_t count;
+    uint32_t output_idx;
+    uint32_t output_buff;
+} LibcPrintfBssState_t;
+
+extern uint32_t __libandes_vsnprintf_countNow;
+extern uint32_t __libandes_vsnprintf_count;
+extern uint32_t __libandes_vprintf_output_idx;
+extern uint32_t __libandes_vprintf_output_buff;
+
+#define LIBC_PRINTF_BSS_WORD(xSymbol)    (*((volatile uint32_t *)&(xSymbol)))
+
+static LibcPrintfBssState_t s_libc_printf_irq_state[configLIBC_PRINTF_BSS_IRQ_STACK_DEPTH];
+static uint32_t             s_libc_printf_irq_depth;
+static uint32_t             s_libc_printf_irq_overflow_depth;
+
+static void libc_printf_bss_save(LibcPrintfBssState_t *state)
+{
+    state->countNow = LIBC_PRINTF_BSS_WORD(__libandes_vsnprintf_countNow);
+    state->count = LIBC_PRINTF_BSS_WORD(__libandes_vsnprintf_count);
+    state->output_idx = LIBC_PRINTF_BSS_WORD(__libandes_vprintf_output_idx);
+    state->output_buff = LIBC_PRINTF_BSS_WORD(__libandes_vprintf_output_buff);
+}
+
+static void libc_printf_bss_restore(const LibcPrintfBssState_t *state)
+{
+    LIBC_PRINTF_BSS_WORD(__libandes_vsnprintf_countNow) = state->countNow;
+    LIBC_PRINTF_BSS_WORD(__libandes_vsnprintf_count) = state->count;
+    LIBC_PRINTF_BSS_WORD(__libandes_vprintf_output_idx) = state->output_idx;
+    LIBC_PRINTF_BSS_WORD(__libandes_vprintf_output_buff) = state->output_buff;
+}
+
+static void libc_printf_bss_irq_enter(void)
+{
+    if (s_libc_printf_irq_depth < configLIBC_PRINTF_BSS_IRQ_STACK_DEPTH)
+    {
+        libc_printf_bss_save(&s_libc_printf_irq_state[s_libc_printf_irq_depth]);
+        s_libc_printf_irq_depth++;
+    }
+    else
+    {
+        s_libc_printf_irq_overflow_depth++;
+        configASSERT(0);
+    }
+}
+
+static void libc_printf_bss_irq_exit(void)
+{
+    if (s_libc_printf_irq_overflow_depth > 0)
+    {
+        s_libc_printf_irq_overflow_depth--;
+    }
+    else if (s_libc_printf_irq_depth > 0)
+    {
+        s_libc_printf_irq_depth--;
+        libc_printf_bss_restore(&s_libc_printf_irq_state[s_libc_printf_irq_depth]);
+    }
+}
+#endif
 
 /*--------------------------------------------------------------------------
  *                                               Local Constants
@@ -139,7 +215,7 @@ static unsigned int   g_irq_disable_duration;
 unsigned int          g_irq_disable_duration_ms;
 unsigned int          num_irq_1tick;
 unsigned int          tick_compensate;
-char                  g_task_name[configMAX_TASK_NAME_LEN];
+//char                  g_task_name[configMAX_TASK_NAME_LEN];
 
 #if defined(CONFIG_TASK_IRQ_SWITCH_TRACE)
 struct task_switch_s  xTaskSwitchStats[TASK_SWITCH_NUM];
@@ -275,6 +351,9 @@ void irq_status_track(unsigned int ulIrqEnable)
 
 int irq_in(unsigned int irq, uint32_t stack)
 {
+#if (configLIBC_PRINTF_BSS_IRQ_LOCAL == 1)
+    libc_printf_bss_irq_enter();
+#endif
 #if defined(CONFIG_TASK_IRQ_RUN_NUM)
     g_uIrqRunNum[irq]++;
 #endif
@@ -300,6 +379,9 @@ int irq_out(uint32_t stack)
         system_assert(0);
     }
     g_cur_irq = NULL;
+#endif
+#if (configLIBC_PRINTF_BSS_IRQ_LOCAL == 1)
+    libc_printf_bss_irq_exit();
 #endif
     return(0);
 }
@@ -662,4 +744,3 @@ int runtime_print(int runtime_init_t)
 #endif//CONFIG_RUNTIME_DEBUG
 
 #endif  // defined(CONFIG_HEAP_DEBUG) || defined(CONFIG_RUNTIME_DEBUG)
-

@@ -74,8 +74,11 @@ interrupt_vectors_end:
 !******************************************************************
 !	Start Entry
 !******************************************************************
-
+#ifdef CONFIG_CPP
+	.section .init
+#else
 	.section .text
+#endif
 	.global _start
 	.type   _start, @function
 

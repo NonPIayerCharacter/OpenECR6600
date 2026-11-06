@@ -236,6 +236,10 @@ struct dns_table_entry {
 #if LWIP_DNS_SUPPORT_MDNS_QUERIES
   u8_t is_mdns;
 #endif
+
+#ifdef CONFIG_AI_VLLM
+  u8_t send_flag;
+#endif
 };
 
 /** DNS request table entry: used when dns_gehostbyname cannot answer the
@@ -767,6 +771,7 @@ dns_skip_name(struct pbuf *p, u16_t query_idx)
  * @param idx the DNS table entry index for which to send a request
  * @return ERR_OK if packet is sent; an err_t indicating the problem otherwise
  */
+#ifndef CONFIG_AI_VLLM
 static err_t
 dns_send(u8_t idx)
 {
@@ -832,8 +837,8 @@ dns_send(u8_t idx)
     query_idx++;
 
     /* fill dns query */
-    //if (LWIP_DNS_ADDRTYPE_IS_IPV6(entry->reqaddrtype)) 
-	if (IP_IS_V6(&dns_servers[entry->server_idx])){
+    if (LWIP_DNS_ADDRTYPE_IS_IPV6(entry->reqaddrtype)) {
+	//if (IP_IS_V6(&dns_servers[entry->server_idx])){
       qry.type = PP_HTONS(DNS_RRTYPE_AAAA);
     } else {
       qry.type = PP_HTONS(DNS_RRTYPE_A);
@@ -884,6 +889,208 @@ overflow_return:
   pbuf_free(p);
   return ERR_VAL;
 }
+#else
+static err_t
+dns_send(u8_t idx)
+{
+  err_t err;
+  struct dns_hdr hdr;
+  struct dns_query qry;
+  struct pbuf *p;
+  u16_t query_idx, copy_len;
+  const char *hostname, *hostname_part;
+  u8_t n;
+  u8_t pcb_idx;
+  u8_t servers_queried = 0;
+  struct dns_table_entry *entry = &dns_table[idx];
+
+  LWIP_DEBUGF(DNS_DEBUG, ("dns_send: dns_servers[%"U16_F"] \"%s\": request\n",
+                          (u16_t)(entry->server_idx), entry->name));
+  LWIP_ASSERT("dns server out of array", entry->server_idx < DNS_MAX_SERVERS);
+  
+  entry->send_flag = 0;
+
+#if LWIP_DNS_SUPPORT_MDNS_QUERIES
+	if(!entry->is_mdns)
+#endif
+	{
+	  for (u8_t srv_idx = 0; srv_idx < DNS_MAX_SERVERS; srv_idx++) {
+		  if (ip_addr_isany_val(dns_servers[srv_idx])) {
+		  	 continue;
+		  }
+
+		  /* if here, we have either a new query or a retry on a previous query to process */
+		  p = pbuf_alloc(PBUF_TRANSPORT, (u16_t)(SIZEOF_DNS_HDR + strlen(entry->name) + 2 +
+		                                         SIZEOF_DNS_QUERY), PBUF_RAM);
+		  if (p != NULL) {
+		    const ip_addr_t *dst;
+		    u16_t dst_port;
+		    /* fill dns header */
+		    memset(&hdr, 0, SIZEOF_DNS_HDR);
+		    hdr.id = lwip_htons(entry->txid);
+		    hdr.flags1 = DNS_FLAG1_RD;
+		    hdr.numquestions = PP_HTONS(1);
+		    pbuf_take(p, &hdr, SIZEOF_DNS_HDR);
+		    hostname = entry->name;
+		    --hostname;
+
+		    /* convert hostname into suitable query format. */
+		    query_idx = SIZEOF_DNS_HDR;
+		    do {
+		      ++hostname;
+		      hostname_part = hostname;
+		      for (n = 0; *hostname != '.' && *hostname != 0; ++hostname) {
+		        ++n;
+		      }
+		      copy_len = (u16_t)(hostname - hostname_part);
+		      if (query_idx + n + 1 > 0xFFFF) {
+		        /* u16_t overflow */
+			  	pbuf_free(p);
+		        return ERR_VAL;
+		      }
+		      pbuf_put_at(p, query_idx, n);
+		      pbuf_take_at(p, hostname_part, copy_len, (u16_t)(query_idx + 1));
+		      query_idx = (u16_t)(query_idx + n + 1);
+		    } while (*hostname != 0);
+		    pbuf_put_at(p, query_idx, 0);
+		    query_idx++;
+
+		    /* fill dns query */
+		    if (LWIP_DNS_ADDRTYPE_IS_IPV6(entry->reqaddrtype)) {
+			//if (IP_IS_V6(&dns_servers[entry->server_idx])){
+		      qry.type = PP_HTONS(DNS_RRTYPE_AAAA);
+		    } else {
+		      qry.type = PP_HTONS(DNS_RRTYPE_A);
+		    }
+		    qry.cls = PP_HTONS(DNS_RRCLASS_IN);
+		    pbuf_take_at(p, &qry, SIZEOF_DNS_QUERY, query_idx);
+
+#if ((LWIP_DNS_SECURE & LWIP_DNS_SECURE_RAND_SRC_PORT) != 0)
+		    pcb_idx = entry->pcb_idx;
+#else
+		    pcb_idx = 0;
+#endif
+		    /* send dns packet */
+		    LWIP_DEBUGF(DNS_DEBUG, ("sending DNS request ID %d for name \"%s\" to server %d\r\n",
+		                            entry->txid, entry->name, srv_idx));
+		    {
+		      dst_port = DNS_SERVER_PORT;
+		      dst = &dns_servers[srv_idx];
+		    }
+		    
+		    if (entry->send_flag == 0xFF || !dns_pcbs[pcb_idx]) {
+				pbuf_free(p);
+				return ERR_OK;
+			}
+			
+		    err = udp_sendto(dns_pcbs[pcb_idx], p, dst, dst_port);
+			if (err == ERR_OK) {
+		      servers_queried++;
+		      LWIP_DEBUGF(DNS_DEBUG, ("Sent to server %d\n", srv_idx));
+		    }
+		    /* free pbuf */
+		    pbuf_free(p);
+		  } else {
+		    err = ERR_MEM;
+			continue;
+		  }
+	  }
+
+	  if (servers_queried == 0) {
+	    /* DNS server not valid anymore, e.g. PPP netif has been shut down */
+	    /* call specified callback function if provided */
+	    dns_call_found(idx, NULL);
+	    /* flush this entry */
+	    entry->state = DNS_STATE_UNUSED;
+	    return ERR_OK;
+	  }
+  }
+#if LWIP_DNS_SUPPORT_MDNS_QUERIES
+  else {
+	  /* if here, we have either a new query or a retry on a previous query to process */
+	  p = pbuf_alloc(PBUF_TRANSPORT, (u16_t)(SIZEOF_DNS_HDR + strlen(entry->name) + 2 +
+	                                         SIZEOF_DNS_QUERY), PBUF_RAM);
+	  if (p != NULL) {
+	    const ip_addr_t *dst;
+	    u16_t dst_port;
+	    /* fill dns header */
+	    memset(&hdr, 0, SIZEOF_DNS_HDR);
+	    hdr.id = lwip_htons(entry->txid);
+	    hdr.flags1 = DNS_FLAG1_RD;
+	    hdr.numquestions = PP_HTONS(1);
+	    pbuf_take(p, &hdr, SIZEOF_DNS_HDR);
+	    hostname = entry->name;
+	    --hostname;
+
+	    /* convert hostname into suitable query format. */
+	    query_idx = SIZEOF_DNS_HDR;
+	    do {
+	      ++hostname;
+	      hostname_part = hostname;
+	      for (n = 0; *hostname != '.' && *hostname != 0; ++hostname) {
+	        ++n;
+	      }
+	      copy_len = (u16_t)(hostname - hostname_part);
+	      if (query_idx + n + 1 > 0xFFFF) {
+	        /* u16_t overflow */
+	        pbuf_free(p);
+	  		return ERR_VAL;
+	      }
+	      pbuf_put_at(p, query_idx, n);
+	      pbuf_take_at(p, hostname_part, copy_len, (u16_t)(query_idx + 1));
+	      query_idx = (u16_t)(query_idx + n + 1);
+	    } while (*hostname != 0);
+	    pbuf_put_at(p, query_idx, 0);
+	    query_idx++;
+
+	    /* fill dns query */
+	    if (LWIP_DNS_ADDRTYPE_IS_IPV6(entry->reqaddrtype)) {
+		//if (IP_IS_V6(&dns_servers[entry->server_idx])){
+	      qry.type = PP_HTONS(DNS_RRTYPE_AAAA);
+	    } else {
+	      qry.type = PP_HTONS(DNS_RRTYPE_A);
+	    }
+	    qry.cls = PP_HTONS(DNS_RRCLASS_IN);
+	    pbuf_take_at(p, &qry, SIZEOF_DNS_QUERY, query_idx);
+
+#if ((LWIP_DNS_SECURE & LWIP_DNS_SECURE_RAND_SRC_PORT) != 0)
+	    pcb_idx = entry->pcb_idx;
+#else
+	    pcb_idx = 0;
+#endif
+	    /* send dns packet */
+	    LWIP_DEBUGF(DNS_DEBUG, ("sending DNS request ID %d for name \"%s\" to server %d\r\n",
+	                            entry->txid, entry->name, entry->server_idx));
+		{
+	      dst_port = DNS_MQUERY_PORT;
+#if LWIP_IPV6
+	      if (LWIP_DNS_ADDRTYPE_IS_IPV6(entry->reqaddrtype)) {
+	        dst = &dns_mquery_v6group;
+	      }
+#endif
+#if LWIP_IPV4 && LWIP_IPV6
+	      else
+#endif
+#if LWIP_IPV4
+	      {
+	        dst = &dns_mquery_v4group;
+	      }
+#endif
+	    }
+	    
+	    err = udp_sendto(dns_pcbs[pcb_idx], p, dst, dst_port);
+
+	    /* free pbuf */
+	    pbuf_free(p);
+	  } else {
+	    err = ERR_MEM;
+	  } 
+  }
+#endif
+
+  return err;  
+}
+#endif
 
 #if ((LWIP_DNS_SECURE & LWIP_DNS_SECURE_RAND_SRC_PORT) != 0)
 static struct udp_pcb *
@@ -1053,7 +1260,8 @@ dns_backupserver_available(struct dns_table_entry *pentry)
   	//dns (3(v4) + 3(v6))
     if (((pentry->server_idx + 1 < DNS_MAX_SERVERS) 
 			&& !ip_addr_isany_val(dns_servers[pentry->server_idx + 1]))
-		|| ((pentry->server_idx + LWIP_DHCP6_DNS_SERVERS < DNS_MAX_SERVERS) 
+		|| ((LWIP_DHCP6_DNS_SERVERS > 0)
+			&& (pentry->server_idx + LWIP_DHCP6_DNS_SERVERS < DNS_MAX_SERVERS)
 			&& !ip_addr_isany_val(dns_servers[pentry->server_idx + LWIP_DHCP6_DNS_SERVERS]))){
       ret = 1;
     }
@@ -1098,10 +1306,18 @@ dns_check_entry(u8_t i)
     case DNS_STATE_ASKING:
       if (--entry->tmr == 0) {
         if (++entry->retries == DNS_MAX_RETRIES) {
+#ifdef CONFIG_AI_VLLM
+          LWIP_DEBUGF(DNS_DEBUG, ("dns_check_entry: \"%s\": timeout\n", entry->name));
+          /* call specified callback function if provided */
+          dns_call_found(i, NULL);
+          /* flush this entry */
+          entry->state = DNS_STATE_UNUSED;
+          break;
+#else
           if (dns_backupserver_available(entry)
-#if LWIP_DNS_SUPPORT_MDNS_QUERIES
+		  #if LWIP_DNS_SUPPORT_MDNS_QUERIES
               && !entry->is_mdns
-#endif /* LWIP_DNS_SUPPORT_MDNS_QUERIES */
+		  #endif /* LWIP_DNS_SUPPORT_MDNS_QUERIES */
              ) {
             /* change of server */
 			//entry->server_idx++;
@@ -1123,6 +1339,7 @@ dns_check_entry(u8_t i)
             entry->state = DNS_STATE_UNUSED;
             break;
           }
+#endif
         } else {
           /* wait longer for the next retry */
           entry->tmr = entry->retries;
@@ -1247,10 +1464,10 @@ dns_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, 
           LWIP_DEBUGF(DNS_DEBUG, ("dns_recv: \"%s\": response not match to query\n", entry->name));
           goto ignore_packet; /* ignore this packet */
         }
-
-#if LWIP_DNS_SUPPORT_MDNS_QUERIES
+#ifndef CONFIG_AI_VLLM
+		#if LWIP_DNS_SUPPORT_MDNS_QUERIES
         if (!entry->is_mdns)
-#endif /* LWIP_DNS_SUPPORT_MDNS_QUERIES */
+		#endif /* LWIP_DNS_SUPPORT_MDNS_QUERIES */
         {
           /* Check whether response comes from the same network address to which the
              question was sent. (RFC 5452) */
@@ -1258,6 +1475,28 @@ dns_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_addr_t *addr, 
             goto ignore_packet; /* ignore this packet */
           }
         }
+#else
+		#if LWIP_DNS_SUPPORT_MDNS_QUERIES
+		if (!entry->is_mdns)
+		#endif /* LWIP_DNS_SUPPORT_MDNS_QUERIES */	
+		{
+	  	    u8_t valid_server = 0;
+	  	    u8_t srv_idx = 0;
+	  	    for (srv_idx = 0; srv_idx < DNS_MAX_SERVERS; srv_idx++) {
+  		      if (ip_addr_cmp(addr, &dns_servers[srv_idx])) {
+  		        valid_server = 1;
+  		        break;
+  		      }
+	  	    }
+			
+	  	    if (!valid_server) {
+	  		  LWIP_DEBUGF(DNS_DEBUG, ("Response from unauthorized server\n"));
+	  		  goto ignore_packet;
+	  	    }
+	  	    
+	  	    entry->send_flag = 0xFF;
+		}
+#endif
 
         /* Check if the name in the "question" part match with the name in the entry and
            skip it if equal. */

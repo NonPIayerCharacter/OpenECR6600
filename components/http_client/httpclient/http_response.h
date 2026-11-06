@@ -12,8 +12,8 @@
 #include <http_general.h>
 #include <http_message_buffer.h>
 
-
 typedef enum http_response_status {
+    /**/
     http_response_status_continue                           = 100,      /* informational 1xx  */
     http_response_status_switching_protocols                = 101,
     http_response_status_ok                                 = 200,      /* successful 2xx */

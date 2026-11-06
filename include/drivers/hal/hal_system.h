@@ -1,7 +1,10 @@
 #ifndef __HAL_SYSTEM_H__
 #define __HAL_SYSTEM_H__
 
-
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 
 typedef enum {
     RST_TYPE_POWER_ON = 0,
@@ -31,6 +34,7 @@ void func_before_restore();
 //int hal_system_get_mac(unsigned char type, unsigned char *mac);
 int hal_system_register_reset_handler(reset_handler_t handle, void *arg);
 int hal_system_unregister_reset_handler(reset_handler_t handle);
+void hal_system_cleanall_reset_handler(void);
 
 #ifdef __cplusplus
 }

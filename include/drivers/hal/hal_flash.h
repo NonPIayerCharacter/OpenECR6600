@@ -20,8 +20,7 @@ int hal_flash_otp_write_aes(unsigned int addr, unsigned char * buff, unsigned in
 
 int hal_flash_otp_lock(unsigned char LB);
 
-
-
+int hal_flash_get_tail_space(char* partition_name, unsigned int *addr_out, unsigned int *size_out);
 
 #endif /*HAL_FLASH_H*/
 

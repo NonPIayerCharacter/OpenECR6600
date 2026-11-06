@@ -66,10 +66,6 @@ u16_t lwip_standard_chksum(const void *dataptr, int len);
 #endif
 
 #if (LWIP_CHKSUM_ALGORITHM == 1) /* Version #1 */
-
-#if 1
-//u16_t lwip_standard_chksum(const void *dataptr, int len)   __attribute__((used,section(".rom.lwip")));
-
 /**
  * lwip checksum
  *
@@ -116,7 +112,6 @@ lwip_standard_chksum(const void *dataptr, int len)
      The caller must invert bits for Internet sum ! */
   return lwip_htons((u16_t)acc);
 }
-#endif
 #endif
 
 #if (LWIP_CHKSUM_ALGORITHM == 2) /* Alternative version #2 */
@@ -260,12 +255,8 @@ lwip_standard_chksum(const void *dataptr, int len)
 }
 #endif
 
-
-#if 1
-//u16_t inet_cksum_pseudo_base(struct pbuf *p, u8_t proto, u16_t proto_len, u32_t acc)  __attribute__((used,section(".rom.lwip")));
-
-/** Parts of the pseudo checksum which are common to IPv4 and IPv6 */
 extern uint16_t fhost_ip_chksum(const void *dataptr, int len);
+/** Parts of the pseudo checksum which are common to IPv4 and IPv6 */
 static u16_t
 inet_cksum_pseudo_base(struct pbuf *p, u8_t proto, u16_t proto_len, u32_t acc)
 {
@@ -302,7 +293,6 @@ inet_cksum_pseudo_base(struct pbuf *p, u8_t proto, u16_t proto_len, u32_t acc)
   LWIP_DEBUGF(INET_DEBUG, ("inet_chksum_pseudo(): pbuf chain lwip_chksum()=%"X32_F"\n", acc));
   return (u16_t)~(acc & 0xffffUL);
 }
-#endif
 
 #if LWIP_IPV4
 /* inet_chksum_pseudo:
@@ -317,10 +307,6 @@ inet_cksum_pseudo_base(struct pbuf *p, u8_t proto, u16_t proto_len, u32_t acc)
  * @param proto_len length of the ip data part (used for checksum of pseudo header)
  * @return checksum (as u16_t) to be saved directly in the protocol header
  */
-
-#if 1
-///u16_t inet_chksum_pseudo(struct pbuf *p, u8_t proto, u16_t proto_len, const ip4_addr_t *src, const ip4_addr_t *dest)  __attribute__((used,section(".rom.lwip")));
-
 u16_t
 inet_chksum_pseudo(struct pbuf *p, u8_t proto, u16_t proto_len,
                    const ip4_addr_t *src, const ip4_addr_t *dest)
@@ -340,7 +326,6 @@ inet_chksum_pseudo(struct pbuf *p, u8_t proto, u16_t proto_len,
 
   return inet_cksum_pseudo_base(p, proto, proto_len, acc);
 }
-#endif
 #endif /* LWIP_IPV4 */
 
 #if LWIP_IPV6
@@ -567,11 +552,6 @@ ip_chksum_pseudo_partial(struct pbuf *p, u8_t proto, u16_t proto_len,
  * @return checksum (as u16_t) to be saved directly in the protocol header
  */
 
-
-#if 1
-//u16_t inet_chksum(const void *dataptr, u16_t len)  __attribute__((used,section(".rom.lwip")));
-//u16_t inet_chksum_pbuf(struct pbuf *p)  __attribute__((used,section(".rom.lwip")));
-
 u16_t
 inet_chksum(const void *dataptr, u16_t len)
 {
@@ -607,7 +587,6 @@ inet_chksum_pbuf(struct pbuf *p)
   }
   return (u16_t)~(acc & 0xffffUL);
 }
-#endif
 
 /* These are some implementations for LWIP_CHKSUM_COPY, which copies data
  * like MEMCPY but generates a checksum at the same time. Since this is a

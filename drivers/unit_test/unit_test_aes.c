@@ -130,7 +130,7 @@ static const unsigned char utest_aes_cipher_text_2_cbc_256[16] =
 	
 
 
-static int utest_aes_lock(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_aes_lock( int argc, char *argv[])
 {
 	if (hal_aes_lock() == 0)
 	{
@@ -146,7 +146,7 @@ static int utest_aes_lock(cmd_tbl_t *t, int argc, char *argv[])
 
 CLI_SUBCMD(ut_aes, lock, utest_aes_lock, "unit test aes lock", "ut_aes lock");
 
-static int utest_aes_unlock(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_aes_unlock( int argc, char *argv[])
 {
 	if (hal_aes_unlock() == 0)
 	{
@@ -170,7 +170,7 @@ CLI_SUBCMD(ut_aes, unlock, utest_aes_unlock, "unit test aes unlock", "ut_aes unl
            Finally, encrypt the two sets of test data and verify that they are correct
 @return    0--End of calculation  
 */
-static int utest_aes_encryption(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_aes_encryption( int argc, char *argv[])
 {  
 	unsigned char cbuf[16];
 	int mode, keybits;
@@ -367,7 +367,7 @@ CLI_SUBCMD(ut_aes, enc, utest_aes_encryption, "unit test aes enc", "ut_aes enc [
            Finally, decrypt the two sets of test data and verify that they are correct
 @return    0--End of calculation  
 */
-static int utest_aes_decryption(cmd_tbl_t *t, int argc, char *argv[])
+static int utest_aes_decryption( int argc, char *argv[])
 {
 	unsigned char cbuf[16];
 	int mode, keybits;

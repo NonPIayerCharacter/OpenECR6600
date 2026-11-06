@@ -261,7 +261,7 @@ int tuya_os_adapt_bt_port_deinit(void)
 
     os_task_delete(ble_ctrl_task_handle);
     ble_ctrl_task_handle = 0;
-    os_queue_destory(task1_queue);
+    os_queue_destroy(task1_queue);
 
     ble_destory();
 

@@ -7,6 +7,10 @@ ifeq ($(CONFIG_SYSTEM_WIFI_CTRL),y)
 
 	CFLAGS += -DLWIP_PING
 
+	ifeq ($(CONFIG_LWIP_NAPT), y)
+	CFLAGS += -DENABLE_LWIP_NAPT
+	endif
+
 	INCPATHS += $(TOPDIR)/include/components/wifi_crtl \
 				$(TOPDIR)/components/lwip/lwip-2.1.0/src \
 				$(TOPDIR)/components/lwip/lwip-2.1.0/src/include \

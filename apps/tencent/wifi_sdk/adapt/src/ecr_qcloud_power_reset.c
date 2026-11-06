@@ -51,7 +51,6 @@
  ****************************************************************************/
 
 #define QCLOUD_SNTP_TIME_ZONE      1
-#define TIME_ZONE_IN_NV_STRING_LEN 6
 
 /****************************************************************************
  * Private Data
@@ -105,28 +104,27 @@ int ecr_get_stored_wifi_config(wifi_config_u *wifi_config)
  * the NV of the development environment does not have this field. If it can be read later, this code section can be deleted
  ****************************************************************************/
 #if QCLOUD_SNTP_TIME_ZONE
+#include "hal_sntp.h"
 #include "system_config.h"
 #endif
 void ecr_sntp(void)
 {
 #if QCLOUD_SNTP_TIME_ZONE
     int flag;
-    char time_zone_nv[TIME_ZONE_IN_NV_STRING_LEN] = {0};
-    //若单板时间不准，则有可能是之前代码问题导致的NV字段异常，打开注释将字段删除，下次烧录运行时关闭。
-    //customer_get_env_blob(CUSTOMER_NV_SNTP_TIMEZONE, time_zone_nv, sizeof(time_zone_nv), NULL);
-    flag = hal_system_get_config(CUSTOMER_NV_SNTP_TIMEZONE, time_zone_nv, sizeof(time_zone_nv));
+    sntp_ctrl_cfg_t sntp_cfg = {0};
+
+    flag = hal_system_get_config(CUSTOMER_NV_SNTP_CONFIG, &sntp_cfg, sizeof(sntp_cfg));
     if (flag == 0)
     {
         Log_e("fread  failed \n");
-        time_zone_nv[0] = '8';
-        flag = hal_system_set_config(CUSTOMER_NV_SNTP_TIMEZONE, time_zone_nv, sizeof(time_zone_nv)); 
+        sntp_cfg.timeZone = 8.0f;
+        flag = hal_system_set_config(CUSTOMER_NV_SNTP_CONFIG, &sntp_cfg, sizeof(sntp_cfg));
         if (flag == 0)
         {
              Log_i("set  ok \n");
         }
     } else {
-	int timezone = atoi(time_zone_nv);
-        Log_i("fread  succeed , time_zone is  %d\n", timezone);
+        Log_i("fread  succeed , time_zone is  %f\n", sntp_cfg.timeZone);
     }
 #endif  /* QCLOUD_SNTP_TIME_ZONE */
     return;

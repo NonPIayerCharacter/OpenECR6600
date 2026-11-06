@@ -101,6 +101,7 @@ enum bt_error
 	BT_ERROR_OPERATION_CANCELED_BY_HOST 	 = 0x44,
 	BT_ERROR_PKT_TOO_LONG					 = 0x45,
 
+    BT_ERROR_TIMEOUT                         = 0xA1,
     BT_ERROR_INVALID_PARAM                   = 0xA2, /* Invalid parameters set.*/
     BT_ERROR_DISC_DONE                       = 0xFD,
 	BT_ERROR_CHAR_HANDLE_ERROR				 = 0xFE,

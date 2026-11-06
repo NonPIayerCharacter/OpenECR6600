@@ -203,18 +203,18 @@ void rtc_clear_pcu_int(void)
 /**    @brief		rtc interrupt except alarm.
 *	   @return  	none
 */
-static void drv_rtc_isr(void)
+void drv_rtc_isr(void)
 {
 	#ifdef CONFIG_SYSTEM_IRQ
 	unsigned long flags = system_irq_save();
 	#endif
 	
 	unsigned int rtcstatus = rtc_reg_base->St;
-	DRV_RTC_DEV *p_rtc_dev =&rtc_dev;
+	DRV_RTC_DEV *p_rtc_dev = &rtc_dev;
 	int i = 0;
-	for(i=0;i<DRV_RTC_ISR_MAX;i++)
+	for(i=0 ; i < DRV_RTC_ISR_MAX; i++)
 	{
-		if(((rtcstatus >>i) & 0x1) && (p_rtc_dev->cb[i] != NULL))
+		if(((rtcstatus >> i) & 0x1) && (p_rtc_dev->cb[i] != NULL))
 		{
 			p_rtc_dev->cb[i]();
 			//os_printf(LM_OS, LL_INFO, "rtc-[%d]-isr comes\r\n",i);
@@ -237,10 +237,10 @@ static void drv_rtc_alarm(void)
 	unsigned long flags = system_irq_save();
 	#endif
 	
-	DRV_RTC_DEV *p_rtc_dev =&rtc_dev;
+	DRV_RTC_DEV *p_rtc_dev = &rtc_dev;
 	arch_irq_mask(VECTOR_NUM_PCU);
 	//os_printf(LM_OS, LL_INFO, "pcu\r\n");
-	if(p_rtc_dev->cb[DRV_RTC_ALARM] !=NULL)
+	if(p_rtc_dev->cb[DRV_RTC_ALARM] != NULL)
 	{
 		p_rtc_dev->cb[DRV_RTC_ALARM]();
 	}
@@ -1175,7 +1175,7 @@ void calculate_rtc_task()
 	//os_task_delete(rtc_task_handle);
 }
 #if 0
-int cmd_cal_op(cmd_tbl_t *t, int argc, char *argv[])
+int cmd_cal_op( int argc, char *argv[])
 {
 	volatile int res,value = 0,j;
 	if(argc>1)
@@ -1190,7 +1190,7 @@ int cmd_cal_op(cmd_tbl_t *t, int argc, char *argv[])
 	return CMD_RET_SUCCESS;
 }
 CLI_CMD(cal, cmd_cal_op, "calculate", "rtc calculate");
-int cmd_rtc_add_sub(cmd_tbl_t *t, int argc, char *argv[])
+int cmd_rtc_add_sub( int argc, char *argv[])
 {
 	if(!strcmp(argv[1], "rtc"))
 	{

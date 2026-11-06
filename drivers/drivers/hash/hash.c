@@ -267,6 +267,7 @@ int drv_sha256_vector(unsigned int num_elem, const unsigned char * addr[], const
 			offset += len_cur;
 			if (offset == len_elem)
 			{
+				offset = 0;
 				index++;
 			}
 		}

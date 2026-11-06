@@ -62,11 +62,11 @@ int32_t jl_softap_enter_ap_mode(void)
     set_softap_ipconfig(&ip_info);
 
     struct dhcps_lease dhcp_cfg_info;
-    dhcp_cfg_info.enable = true;
+    dhcp_cfg_info.mask = DHCP_SERVER_MASK_IP;
     dhcp_cfg_info.start_ip.addr = DHCP_START_IP;
     dhcp_cfg_info.end_ip.addr = DHCP_END_IP;
 
-    wifi_softap_set_dhcps_lease(&dhcp_cfg_info);
+    dhcps_lease_info_set(&dhcp_cfg_info);
 
     return 0;
 }

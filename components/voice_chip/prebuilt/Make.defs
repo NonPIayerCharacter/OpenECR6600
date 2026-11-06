@@ -1,0 +1,53 @@
+VOICE_CHIP_PREBUILT_DIR := voice_chip/prebuilt
+VOICE_CHIP_PREBUILT_LIB :=
+
+VOICE_CHIP_SELECTED_BACKENDS := $(filter y,\
+	$(CONFIG_VOICE_CHIP_ES8311) \
+	$(CONFIG_VOICE_CHIP_GX8006) \
+	$(CONFIG_CI1302))
+
+ifneq ($(word 2,$(VOICE_CHIP_SELECTED_BACKENDS)),)
+$(error multiple voice chip backends cannot be enabled)
+endif
+
+ifeq ($(CONFIG_VOICE_CHIP_ES8311),y)
+VOICE_CHIP_PREBUILT_LIB := libpscomponents_voicechip_es8311.a
+else ifeq ($(CONFIG_VOICE_CHIP_GX8006),y)
+ifneq ($(CONFIG_SMARTBOT_FLOWCTRL_USING_IO),y)
+$(error standalone GX8006 prebuilt requires CONFIG_SMARTBOT_FLOWCTRL_USING_IO=y)
+endif
+ifneq ($(CONFIG_GX8006_EXAMPLES),y)
+$(error standalone GX8006 prebuilt requires CONFIG_GX8006_EXAMPLES=y)
+endif
+VOICE_CHIP_PREBUILT_LIB := libpscomponents_voicechip_gx8006.a
+endif
+
+VOICE_CHIP_OUTPUT_LIBS_TO_REMOVE := \
+	libpscomponents_voicechip.a \
+	libpscomponents_voicechip_es8311.a \
+	libpscomponents_voicechip_gx8006.a
+
+# CI1302 owns its source-built archive while selected. In all other modes,
+# remove it together with closed-source archives to make backend switching safe.
+ifneq ($(CONFIG_CI1302),y)
+VOICE_CHIP_OUTPUT_LIBS_TO_REMOVE += libpscomponents_voicechip_ci1302.a
+endif
+
+ifneq ($(strip $(VOICE_CHIP_PREBUILT_LIB)),)
+VOICE_CHIP_PREBUILT_SRC := \
+	$(TOPDIR)/components/$(VOICE_CHIP_PREBUILT_DIR)/$(VOICE_CHIP_PREBUILT_LIB)
+
+ifeq ($(wildcard $(VOICE_CHIP_PREBUILT_SRC)),)
+$(error voice chip prebuilt library missing: $(VOICE_CHIP_PREBUILT_SRC))
+endif
+endif
+
+.PHONY: voice_chip_prebuilt_sync
+all: voice_chip_prebuilt_sync
+
+voice_chip_prebuilt_sync:
+	$(Q) mkdir -p $(OUTPUTDIR_LIB)
+	$(Q) rm -f $(addprefix $(OUTPUTDIR_LIB)/,$(VOICE_CHIP_OUTPUT_LIBS_TO_REMOVE))
+ifneq ($(strip $(VOICE_CHIP_PREBUILT_LIB)),)
+	$(Q) cp -f $(VOICE_CHIP_PREBUILT_SRC) $(OUTPUTDIR_LIB)/$(VOICE_CHIP_PREBUILT_LIB)
+endif

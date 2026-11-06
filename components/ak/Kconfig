@@ -1,0 +1,4 @@
+menuconfig WIFI_AIRKISS
+	bool "Wifi AirKiss Config Component Support"
+	depends on WIFI_SMARTCONFIG
+	default n

@@ -4,7 +4,7 @@ menuconfig LWIP
 	default y
 	select WIRELESS_WPA_SUPPLICANT
 	select SYSTEM_WIFI_CTRL
-	select PHREAD
+	select PTHREAD
 	
 menuconfig IPV6
 	bool "LWIP IPV6 Component Support"
@@ -18,7 +18,7 @@ if LWIP
 
 	config LWIP_MEM_SIZE
 	int "lwip mem size"
-	range 16384 65536
+	range 11680 65536
 	default 25892
 
 	config LWIP_TCP_SND_BUF

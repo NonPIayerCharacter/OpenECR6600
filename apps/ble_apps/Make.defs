@@ -11,4 +11,42 @@ ifeq ($(CONFIG_BLE_PRODUCT_BLEFULL),y)
 		VPATH += ble_apps/src/ble_spi_server
 		INCPATHS += ble_apps/api ble_apps/src/ble_spi_server
 	endif
+
+	ifeq ($(CONFIG_BLE_EXAMPLES_BLUFI),y)
+		CSRCS += allocator.c \
+				 fixed_queue.c \
+				 hash_functions.c \
+				 hash_map.c \
+				 list.c \
+				 mutex.c \
+				 osi.c \
+				 semaphore.c \
+				 thread.c
+		VPATH += ble_apps/src/example_blufi/common/osi
+		
+		CSRCS += btc_alarm.c \
+				 btc_manage.c \
+				 btc_task.c
+		VPATH += ble_apps/src/example_blufi/common/btc/core
+		
+		CSRCS += esp_blufi_api.c
+		VPATH += ble_apps/src/example_blufi/common/api
+		
+		CSRCS += blufi_prf.c blufi_protocol.c
+		VPATH += ble_apps/src/example_blufi/common/btc/profile/esp/blufi
+		
+		CSRCS += example_blufi.c blufi_security.c esp_blufi.c esp_rom_crc.c
+		VPATH += ble_apps/src/example_blufi ble_apps/src/example_blufi/blufi \
+				 ble_apps/src/example_blufi/common/btc/profile/esp/blufi/eswin_host
+		
+		INCPATHS += ble_apps/src/example_blufi \
+					ble_apps/src/example_blufi/common/btc/include \
+					ble_apps/src/example_blufi/common/include \
+					ble_apps/src/example_blufi/common/osi/include \
+					ble_apps/src/example_blufi/common/btc/profile/esp/include \
+					ble_apps/src/example_blufi/common/btc/profile/esp/blufi/include \
+					ble_apps/src/example_blufi/common/api/include/api \
+					ble_apps/src/example_blufi/blufi \
+					../components/mbedtls/mbedtls/include
+	endif
 endif

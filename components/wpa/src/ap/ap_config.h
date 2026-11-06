@@ -92,7 +92,7 @@ struct hostapd_ssid {
 
 	struct hostapd_wpa_psk *wpa_psk;
 	char *wpa_passphrase;
-	//char *wpa_psk_file;
+	char *wpa_psk_file;
 
 	struct hostapd_wep_keys wep;
 
@@ -336,7 +336,7 @@ struct hostapd_bss_config {
 	//int pac_key_refresh_time;
 	//int eap_sim_aka_result_ind;
 	//int tnc;
-	//int fragment_size;
+	int fragment_size;
 	//u16 pwd_group;
 
 	//char *radius_server_clients;
@@ -404,7 +404,7 @@ struct hostapd_bss_config {
 	struct wpabuf *wps_nfc_dh_privkey;
 	struct wpabuf *wps_nfc_dev_pw;
 #endif /* CONFIG_WPS */
-	//int pbc_in_m1;
+	int pbc_in_m1;
 	//char *server_id;
 
 #define P2P_ENABLED BIT(0)
@@ -525,13 +525,13 @@ struct hostapd_bss_config {
 	u8 subscr_remediation_method;
 #endif /* CONFIG_HS20 */
 
-	//u8 wps_rf_bands; /* RF bands for WPS (WPS_RF_*) */
+	u8 wps_rf_bands; /* RF bands for WPS (WPS_RF_*) */
 
 #ifdef CONFIG_RADIUS_TEST
 	char *dump_msk_file;
 #endif /* CONFIG_RADIUS_TEST */
 
-	//struct wpabuf *vendor_elements;
+	struct wpabuf *vendor_elements;
 	//struct wpabuf *assocresp_elements;
 
 	unsigned int sae_anti_clogging_threshold;

@@ -93,7 +93,7 @@ typedef struct _T_I2C_REG_MAP{
 #define I2C_WAIT_FOREVER 0xffffffff
 #define DRV_I2C_FIFO_DEPTH		4
 #define I2C_BUF_SIZE	1024
-
+static int i2c_dma_enable = 0;
 
 volatile unsigned char completed=0;
 static unsigned char dma_i2c_src[I2C_BUF_SIZE] __attribute__((section(".dma.data")));
@@ -245,13 +245,17 @@ int  i2c_init_cfg(I2C_InitTypeDef* I2C_InitStruct)
 
 	if(I2C_InitStruct->I2C_Mode == I2C_Mode_Master)
 	{
+		/* 参照ECW6630工程的配置方式，简化时序参数 */
+		/* 注意：实际I2C工作时钟约20MHz，而非APB_CLOCK(24MHz) */
+		#define I2C_CLK_WORK  20000000
+
+		t_sp = 0;
+		t_sclratio = 0;  /* 不使用SCL比例 */
 		if(I2C_InitStruct->I2C_Speed == I2C_Speed_100K)
 		{
-			t_sp = 0;
-			t_sclratio = 1;
-			t_sudat = ((250*APB_CLOCK_BASE)/APB_MOD_BASE) - 4 - t_sp;
-            t_hddat = ((300*APB_CLOCK_BASE)/APB_MOD_BASE) - 4 - t_sp;
-			t_sclhi = (APB_CLOCK/I2C_Speed_100K - 8 - 2 * t_sp)/(1 + t_sclratio);
+			t_sudat = 4;  /* 固定值，参照6630 */
+			t_hddat = 6;  /* 固定值，参照6630 */
+			t_sclhi = I2C_CLK_WORK/I2C_Speed_100K - 8;  /* 20M/100K - 8 = 192 */
 		}
 		else if(I2C_InitStruct->I2C_Speed == I2C_Speed_400K)
 		{
@@ -263,12 +267,9 @@ int  i2c_init_cfg(I2C_InitTypeDef* I2C_InitStruct)
 		}
 		else if(I2C_InitStruct->I2C_Speed == I2C_Speed_1M)
 		{
-			t_sp = 1;
-			t_sclratio = 2;
-			t_sudat = ((50*APB_CLOCK_BASE)/APB_MOD_BASE) - 4 - t_sp;
-            t_hddat = 0;
-            t_sclratio = 1;	
-			t_sclhi = (APB_CLOCK/I2C_Speed_1M - 8 - 2 * t_sp)/(1 + t_sclratio);
+			t_sudat = 2;  /* 1M速度需要更小的建立时间 */
+			t_hddat = 0;
+			t_sclhi = I2C_CLK_WORK/I2C_Speed_1M - 8;  /* 20M/1M - 8 = 12 */
 		}
 		else
 		{
@@ -298,7 +299,7 @@ int  i2c_init_cfg(I2C_InitTypeDef* I2C_InitStruct)
 			return -1;
 		}
 		drv_dma_isr_register(g_i2c_dev.i2c_dma_chan, i2c_dma_callback_isr, NULL);
-		
+		i2c_dma_enable = 1;
 	}
 	else
 	{
@@ -307,6 +308,7 @@ int  i2c_init_cfg(I2C_InitTypeDef* I2C_InitStruct)
 		arch_irq_clean(VECTOR_NUM_I2C);
 		arch_irq_unmask(VECTOR_NUM_I2C);
 		#endif
+		i2c_dma_enable = 0;
 	}
 	arch_irq_restore(flags);
 	return 0;
@@ -329,13 +331,26 @@ int drv_i2c_close()
 	{
 		g_i2c_dev.i2c_init_flag = 0;
 	}
+	if(i2c_dma_enable){
+		drv_dma_stop(g_i2c_dev.i2c_dma_chan);
+		i2c_dma_enable = 0;
+	}
 
-	drv_dma_stop(g_i2c_dev.i2c_dma_chan);
+    // 等待I2C总线空闲
+	unsigned int timeout = 1000;
+	while((g_i2c_dev.i2c_reg_base->Status & I2C_FLAG_BusBusy) && timeout--) {
+		os_usdelay(1);
+	}
+	if(timeout == 0) {
+		os_printf(LM_OS,LL_ERR,"I2C bus busy timeout, force close\r\n");
+	}
+
 	chip_clk_disable(CLK_I2C);
 	if(g_i2c_dev.i2c_process)
 	{
-	    os_sem_destroy(g_i2c_dev.i2c_process);
+		os_sem_destroy(g_i2c_dev.i2c_process);
 	}
+
 	arch_irq_restore(flags);
 	return 0;
 }
@@ -354,7 +369,7 @@ int drv_i2c_close()
 */
 int i2c_master_read(unsigned int slave_addr,unsigned char *bufptr, unsigned int len,unsigned int cmd_len)
 {
-	if(len >255 || len <0 )
+	if(len >256 || len <0 )
 	{
 		os_printf(LM_OS, LL_ERR, "Tansfer length Error\n");
 		return -2;
@@ -369,7 +384,7 @@ int i2c_master_read(unsigned int slave_addr,unsigned char *bufptr, unsigned int 
 	    unsigned long flags = arch_irq_save();
 		if(cmd_len)
 		{
-			os_msdelay(1);
+			//os_msdelay(1);
 			I2C_TransConfig(I2C_Direction_Transmitter, cmd_len); 
 			I2C_Cmd(I2C_CMD_IssueDataTrans);
 			while(I2C_GetFlag(I2C_FLAG_FIFOFull) == I2C_FLAG_FIFOFull); 
@@ -377,7 +392,7 @@ int i2c_master_read(unsigned int slave_addr,unsigned char *bufptr, unsigned int 
 			while(I2C_GetFlag(I2C_FLAG_Cmpl) != I2C_FLAG_Cmpl); 
 			I2C_ClearFlag(I2C_FLAG_Cmpl); 
 		}
-		os_msdelay(2);
+		//os_msdelay(2);
 		I2C_TransConfig(I2C_Direction_Receiver, len);	
 		I2C_Cmd(I2C_CMD_IssueDataTrans);
 		for(i=0;i<len;i++)	
@@ -385,6 +400,7 @@ int i2c_master_read(unsigned int slave_addr,unsigned char *bufptr, unsigned int 
 			while(I2C_GetFlag(I2C_FLAG_FIFOEmpty) == I2C_FLAG_FIFOEmpty); 
 			*(bufptr++)=g_i2c_dev.i2c_reg_base->Data;
 		}
+		I2C_Flag_cmpl();
         arch_irq_restore(flags);
 	}
 	else
@@ -421,6 +437,21 @@ int i2c_master_read(unsigned int slave_addr,unsigned char *bufptr, unsigned int 
 	return 0;
 }
 
+
+int drv_i2c_master_check_ack()
+{
+    unsigned int time_out = 2000;
+    while (time_out--)
+    {
+        if (g_i2c_dev.i2c_reg_base->Status & BIT(3))
+        {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+
 /**
 @brief     Statement i2c master transmit data
 @details    	
@@ -433,7 +464,7 @@ int i2c_master_read(unsigned int slave_addr,unsigned char *bufptr, unsigned int 
 */
 int i2c_master_write(unsigned int slave_addr,unsigned char *bufptr, unsigned int len)
 {
-	if(len >255 || len <0 )
+	if(len >256 || len <0 )
 	{
 		os_printf(LM_OS, LL_ERR, "Tansfer length Error\n");
 		return -2;
@@ -445,13 +476,17 @@ int i2c_master_write(unsigned int slave_addr,unsigned char *bufptr, unsigned int
 	if(g_i2c_dev.i2c_reg_base->Status & BIT(11))
 		   return -1;
 
-	
+    
 	if(i2c_master.I2C_DMA == I2C_DMA_Disable)
 	{
 	    unsigned long flags = arch_irq_save();
 		I2C_TransConfig(I2C_Direction_Transmitter, len); 
 		I2C_Cmd(I2C_CMD_IssueDataTrans);
-
+        if (drv_i2c_master_check_ack())
+          {
+              arch_irq_restore(flags);
+              return -3;
+          }
 		for(i=0;i < len;i++)
 		{
 			while(I2C_GetFlag(I2C_FLAG_FIFOFull) == I2C_FLAG_FIFOFull); // wait for fifo not full

@@ -62,7 +62,12 @@ void ip_napt_enable(u32_t addr, int enable)
 {
     struct netif *netif;
     for (netif = netif_list; netif; netif = netif->next) {
-        if (netif_is_up(netif) && !ip_addr_isany(&netif->ip_addr) && netif->ip_addr.u_addr.ip4.addr == addr) {
+#ifdef CONFIG_IPV6
+	if (netif_is_up(netif) && !ip_addr_isany(&netif->ip_addr) && netif->ip_addr.u_addr.ip4.addr == addr) 
+#else
+	if (netif_is_up(netif) && !ip_addr_isany(&netif->ip_addr) && netif->ip_addr.addr == addr) 
+#endif
+		{
             netif->napt = !!enable;
             break;
         }
@@ -597,7 +602,12 @@ err_t ip_napt_forward(struct pbuf *p, struct ip_hdr *iphdr, struct netif *inp, s
             /* register src addr and iecho->id and dest info */
             ip_napt_add(IP_PROTO_ICMP, iphdr->src.addr, iecho->id, iphdr->dest.addr, iecho->id);
 
-            ip_napt_modify_addr(iphdr, (ip4_addr_p_t *)&iphdr->src, outp->ip_addr.u_addr.ip4.addr);
+            
+#ifdef CONFIG_IPV6
+			ip_napt_modify_addr(iphdr, (ip4_addr_p_t *)&iphdr->src, outp->ip_addr.u_addr.ip4.addr);
+#else
+			ip_napt_modify_addr(iphdr, (ip4_addr_p_t *)&iphdr->src, outp->ip_addr.addr);
+#endif
         }
         return ERR_OK;
     }
@@ -643,8 +653,14 @@ err_t ip_napt_forward(struct pbuf *p, struct ip_hdr *iphdr, struct netif *inp, s
         if (mport != tcphdr->src) {
             ip_napt_modify_port_tcp(tcphdr, 0, mport);
         }
-        ip_napt_modify_addr_tcp(tcphdr, (ip4_addr_p_t *)&iphdr->src, outp->ip_addr.u_addr.ip4.addr);
-        ip_napt_modify_addr(iphdr, (ip4_addr_p_t *)&iphdr->src, outp->ip_addr.u_addr.ip4.addr);
+
+#ifdef CONFIG_IPV6
+		ip_napt_modify_addr_tcp(tcphdr, (ip4_addr_p_t *)&iphdr->src, outp->ip_addr.u_addr.ip4.addr);
+		ip_napt_modify_addr(iphdr, (ip4_addr_p_t *)&iphdr->src, outp->ip_addr.u_addr.ip4.addr);
+#else
+        ip_napt_modify_addr_tcp(tcphdr, (ip4_addr_p_t *)&iphdr->src, outp->ip_addr.addr);
+        ip_napt_modify_addr(iphdr, (ip4_addr_p_t *)&iphdr->src, outp->ip_addr.addr);
+#endif
 
         return ERR_OK;
     }
@@ -662,8 +678,14 @@ err_t ip_napt_forward(struct pbuf *p, struct ip_hdr *iphdr, struct netif *inp, s
         if (mport != udphdr->src) {
             ip_napt_modify_port_udp(udphdr, 0, mport); 
         }
+
+#ifdef CONFIG_IPV6
         ip_napt_modify_addr_udp(udphdr, (ip4_addr_p_t *)&iphdr->src, outp->ip_addr.u_addr.ip4.addr);
         ip_napt_modify_addr(iphdr, (ip4_addr_p_t *)&iphdr->src, outp->ip_addr.u_addr.ip4.addr);
+#else
+        ip_napt_modify_addr_udp(udphdr, (ip4_addr_p_t *)&iphdr->src, outp->ip_addr.addr);
+        ip_napt_modify_addr(iphdr, (ip4_addr_p_t *)&iphdr->src, outp->ip_addr.addr);
+#endif
         
         return ERR_OK;
     }
@@ -702,3 +724,4 @@ void napt_debug_print(void)
 }
 
 #endif
+

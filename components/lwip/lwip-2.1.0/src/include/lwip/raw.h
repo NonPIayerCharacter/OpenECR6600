@@ -78,6 +78,10 @@ struct raw_pcb {
 
   struct raw_pcb *next;
 
+#ifdef CONFIG_MATTER
+  struct netif *intf_filter;
+#endif
+
   u8_t protocol;
   u8_t flags;
 
